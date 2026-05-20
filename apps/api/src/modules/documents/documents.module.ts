@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common'
-import { UdocumentsController } from './documents.controller'
-import { UdocumentsService } from './documents.service'
+import { DocumentsController } from './documents.controller'
+import { DocumentsService } from './documents.service'
+import { StorageModule } from '../storage/storage.module'
 
 @Module({
-  controllers: [UdocumentsController],
-  providers: [UdocumentsService],
-  exports: [UdocumentsService],
+  imports: [StorageModule],
+  controllers: [DocumentsController],
+  providers: [DocumentsService],
+  exports: [DocumentsService],
 })
-export class UdocumentsModule {}
+export class DocumentsModule {}

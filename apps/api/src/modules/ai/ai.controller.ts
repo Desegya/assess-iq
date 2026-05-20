@@ -1,7 +1,7 @@
 import { Controller } from '@nestjs/common'
-import { UaiService } from './ai.service'
+import { AiService } from './ai.service'
 
 @Controller('ai')
-export class UaiController {
-  constructor(private readonly aiService: UaiService) {}
+export class AiController {
+  constructor(private readonly aiService: AiService) {}
 }

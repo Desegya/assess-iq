@@ -1,6 +1,7 @@
 {
   "extends": "../../packages/config/typescript/nextjs.json",
   "compilerOptions": {
+    "composite": false,
     "outDir": "./.next",
     "baseUrl": ".",
     "paths": {

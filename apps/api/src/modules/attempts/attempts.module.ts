@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common'
-import { UattemptsController } from './attempts.controller'
-import { UattemptsService } from './attempts.service'
+import { AttemptsController } from './attempts.controller'
+import { AttemptsService } from './attempts.service'
 
 @Module({
-  controllers: [UattemptsController],
-  providers: [UattemptsService],
-  exports: [UattemptsService],
+  controllers: [AttemptsController],
+  providers: [AttemptsService],
+  exports: [AttemptsService],
 })
-export class UattemptsModule {}
+export class AttemptsModule {}

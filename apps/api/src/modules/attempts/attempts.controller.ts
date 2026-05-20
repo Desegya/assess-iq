@@ -1,7 +1,7 @@
 import { Controller } from '@nestjs/common'
-import { UattemptsService } from './attempts.service'
+import { AttemptsService } from './attempts.service'
 
 @Controller('attempts')
-export class UattemptsController {
-  constructor(private readonly attemptsService: UattemptsService) {}
+export class AttemptsController {
+  constructor(private readonly attemptsService: AttemptsService) {}
 }

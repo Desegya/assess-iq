@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common'
-import { UquestionsController } from './questions.controller'
-import { UquestionsService } from './questions.service'
+import { QuestionsController } from './questions.controller'
+import { QuestionsService } from './questions.service'
 
 @Module({
-  controllers: [UquestionsController],
-  providers: [UquestionsService],
-  exports: [UquestionsService],
+  controllers: [QuestionsController],
+  providers: [QuestionsService],
+  exports: [QuestionsService],
 })
-export class UquestionsModule {}
+export class QuestionsModule {}

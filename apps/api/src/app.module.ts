@@ -9,7 +9,7 @@ import { QuestionsModule } from './modules/questions/questions.module'
 import { AssessmentsModule } from './modules/assessments/assessments.module'
 import { AttemptsModule } from './modules/attempts/attempts.module'
 import { DocumentsModule } from './modules/documents/documents.module'
-import { AIModule } from './modules/ai/ai.module'
+import { AiModule } from './modules/ai/ai.module'
 import { AnalyticsModule } from './modules/analytics/analytics.module'
 import { StudyModule } from './modules/study/study.module'
 import { AdminModule } from './modules/admin/admin.module'
@@ -41,7 +41,7 @@ import { PrismaModule } from './modules/prisma/prisma.module'
     AssessmentsModule,
     AttemptsModule,
     DocumentsModule,
-    AIModule,
+    AiModule,
     AnalyticsModule,
     StudyModule,
     AdminModule,

@@ -1,7 +1,7 @@
 import { Controller } from '@nestjs/common'
-import { UanalyticsService } from './analytics.service'
+import { AnalyticsService } from './analytics.service'
 
 @Controller('analytics')
-export class UanalyticsController {
-  constructor(private readonly analyticsService: UanalyticsService) {}
+export class AnalyticsController {
+  constructor(private readonly analyticsService: AnalyticsService) {}
 }
