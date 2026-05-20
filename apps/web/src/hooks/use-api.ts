@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
@@ -63,21 +63,27 @@ export function useApi() {
     [accessToken, refreshAccessToken],
   )
 
-  return {
-    get: <T>(path: string, opts?: Omit<ApiOptions, 'body'>) =>
-      request<T>(path, { method: 'GET', ...opts }),
+  // Memoize the returned object so its reference is stable between renders.
+  // Without this, any component that puts `api` in a useEffect/useCallback
+  // dependency array would loop infinitely.
+  return useMemo(
+    () => ({
+      get: <T>(path: string, opts?: Omit<ApiOptions, 'body'>) =>
+        request<T>(path, { method: 'GET', ...opts }),
 
-    post: <T>(path: string, body: unknown, opts?: ApiOptions) =>
-      request<T>(path, { method: 'POST', body, ...opts }),
+      post: <T>(path: string, body: unknown, opts?: ApiOptions) =>
+        request<T>(path, { method: 'POST', body, ...opts }),
 
-    patch: <T>(path: string, body: unknown, opts?: ApiOptions) =>
-      request<T>(path, { method: 'PATCH', body, ...opts }),
+      patch: <T>(path: string, body: unknown, opts?: ApiOptions) =>
+        request<T>(path, { method: 'PATCH', body, ...opts }),
 
-    del: <T>(path: string, opts?: ApiOptions) =>
-      request<T>(path, { method: 'DELETE', ...opts }),
+      del: <T>(path: string, opts?: ApiOptions) =>
+        request<T>(path, { method: 'DELETE', ...opts }),
 
-    /** For multipart/form-data uploads */
-    upload: <T>(path: string, formData: FormData, opts?: ApiOptions) =>
-      request<T>(path, { method: 'POST', body: formData, ...opts }),
-  }
+      /** For multipart/form-data uploads */
+      upload: <T>(path: string, formData: FormData, opts?: ApiOptions) =>
+        request<T>(path, { method: 'POST', body: formData, ...opts }),
+    }),
+    [request],
+  )
 }

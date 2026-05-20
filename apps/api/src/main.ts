@@ -1,10 +1,16 @@
 import { NestFactory } from '@nestjs/core'
+import { NestExpressApplication } from '@nestjs/platform-express'
 import { ValidationPipe, VersioningType } from '@nestjs/common'
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
+import { join } from 'path'
 import { AppModule } from './app.module'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule)
+  const app = await NestFactory.create<NestExpressApplication>(AppModule)
+
+  // ─── Local file storage (dev fallback when R2 is not configured) ──────────
+  // Serves uploads/ as static files at /uploads/...
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' })
 
   // ─── Global prefix & versioning ───────────────────────────────────────────
   app.setGlobalPrefix('api')
@@ -19,9 +25,9 @@ async function bootstrap() {
   // ─── Global validation pipe ───────────────────────────────────────────────
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,        // Strip unknown properties
+      whitelist: true,
       forbidNonWhitelisted: true,
-      transform: true,        // Auto-transform payloads to DTO instances
+      transform: true,
       transformOptions: { enableImplicitConversion: true },
     }),
   )

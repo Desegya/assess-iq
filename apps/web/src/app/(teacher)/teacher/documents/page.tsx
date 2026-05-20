@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { DocumentUploader } from '@/components/documents/DocumentUploader'
 import { useApi } from '@/hooks/use-api'
 
@@ -36,18 +36,16 @@ export default function DocumentsPage() {
   const [showUploader, setShowUploader] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
 
-  const loadDocs = useCallback(async () => {
-    try {
-      const data = await api.get<DocumentItem[]>('/documents')
-      setDocs(data)
-    } catch {
-      // silently ignore on first load errors
-    } finally {
-      setLoading(false)
-    }
-  }, [api])
+  // Keep a stable ref to api so the effect only runs once on mount
+  const apiRef = useRef(api)
+  apiRef.current = api
 
-  useEffect(() => { void loadDocs() }, [loadDocs])
+  useEffect(() => {
+    void apiRef.current.get<DocumentItem[]>('/documents')
+      .then(data => setDocs(data))
+      .catch(() => undefined)
+      .finally(() => setLoading(false))
+  }, []) // run once on mount
 
   function onUploaded(doc: DocumentItem) {
     setDocs(prev => [doc, ...prev])
