@@ -1,0 +1,9 @@
+{
+  "name": "@assessiq/config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./typescript": "./typescript/base.json",
+    "./eslint": "./eslint/index.js"
+  }
+}

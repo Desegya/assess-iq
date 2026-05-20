@@ -1,0 +1,488 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// AssessIQ — Prisma Schema
+// All tables are scoped by organizationId for multi-tenancy.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum OrgType {
+  PRIMARY_SCHOOL
+  SECONDARY_SCHOOL
+  UNIVERSITY
+  TUTORIAL_CENTER
+  TRAINING_INSTITUTION
+  EXAM_BODY
+  OTHER
+}
+
+enum SubscriptionPlan {
+  FREE_TRIAL
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+}
+
+enum QuestionType {
+  MCQ
+  SHORT_ANSWER
+  THEORY
+  TRUE_FALSE
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuestionStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum BloomLevel {
+  REMEMBER
+  UNDERSTAND
+  APPLY
+  ANALYZE
+  EVALUATE
+  CREATE
+}
+
+enum AssessmentStatus {
+  DRAFT
+  PUBLISHED
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_SUBMITTED
+  GRADED
+  ABANDONED
+}
+
+enum DocumentStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum DocumentType {
+  PDF
+  DOCX
+  TXT
+}
+
+enum IntegrityEventType {
+  TAB_SWITCH
+  WINDOW_BLUR
+  FULLSCREEN_EXIT
+  COPY_ATTEMPT
+  PASTE_ATTEMPT
+  RIGHT_CLICK
+  DEV_TOOLS_OPEN
+  IDLE_WARNING
+}
+
+enum IntegritySeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum AIAction {
+  GENERATE_QUESTIONS
+  GENERATE_SUMMARY
+  GENERATE_FLASHCARDS
+  EXTRACT_TOPICS
+  REVIEW_QUALITY
+  WEAK_TOPIC_SUGGESTION
+}
+
+// ─── Organization ─────────────────────────────────────────────────────────────
+
+model Organization {
+  id           String           @id @default(cuid())
+  name         String
+  slug         String           @unique
+  type         OrgType
+  plan         SubscriptionPlan @default(FREE_TRIAL)
+  trialEndDate DateTime?
+  logoUrl      String?
+  website      String?
+  address      String?
+  country      String           @default("Nigeria")
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Relations
+  users        User[]
+  courses      Course[]
+  questions    Question[]
+  assessments  Assessment[]
+  documents    Document[]
+  aiUsageLogs  AIUsageLog[]
+  flashcards   Flashcard[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String?
+  name           String
+  email          String       @unique
+  passwordHash   String
+  role           UserRole
+  status         UserStatus   @default(PENDING)
+  avatarUrl      String?
+  lastLoginAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  teacherCourses Course[]      @relation("CourseTeacher")
+  uploadedDocs   Document[]    @relation("DocumentUploader")
+  createdQuestions Question[]  @relation("QuestionCreator")
+  createdAssessments Assessment[] @relation("AssessmentCreator")
+  attempts       Attempt[]
+  aiUsageLogs    AIUsageLog[]
+  flashcards     Flashcard[]
+  refreshTokens  RefreshToken[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("users")
+}
+
+// ─── Refresh Token ────────────────────────────────────────────────────────────
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+// ─── Course ───────────────────────────────────────────────────────────────────
+
+model Course {
+  id             String       @id @default(cuid())
+  organizationId String
+  teacherId      String
+  title          String
+  subject        String
+  description    String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teacher        User         @relation("CourseTeacher", fields: [teacherId], references: [id])
+  topics         Topic[]
+  documents      Document[]
+  questions      Question[]
+  assessments    Assessment[]
+
+  @@index([organizationId])
+  @@index([teacherId])
+  @@map("courses")
+}
+
+// ─── Topic ────────────────────────────────────────────────────────────────────
+
+model Topic {
+  id            String    @id @default(cuid())
+  courseId      String
+  name          String
+  description   String?
+  parentTopicId String?
+  order         Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  // Relations
+  course        Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  parentTopic   Topic?    @relation("TopicHierarchy", fields: [parentTopicId], references: [id])
+  subTopics     Topic[]   @relation("TopicHierarchy")
+  questions     Question[]
+
+  @@index([courseId])
+  @@map("topics")
+}
+
+// ─── Document ─────────────────────────────────────────────────────────────────
+
+model Document {
+  id             String         @id @default(cuid())
+  organizationId String
+  uploadedById   String
+  courseId       String?
+  fileName       String
+  fileType       DocumentType
+  fileUrl        String
+  fileSizeBytes  Int
+  status         DocumentStatus @default(UPLOADING)
+  extractedText  String?        @db.Text
+  pageCount      Int?
+  chunkCount     Int?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy     User           @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  course         Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  generatedQuestions Question[]
+  flashcards     Flashcard[]
+
+  @@index([organizationId])
+  @@index([uploadedById])
+  @@map("documents")
+}
+
+// ─── Question ─────────────────────────────────────────────────────────────────
+
+model Question {
+  id               String             @id @default(cuid())
+  organizationId   String
+  createdById      String
+  topicId          String?
+  courseId         String?
+  sourceDocumentId String?
+  questionText     String             @db.Text
+  questionType     QuestionType
+  options          Json?              // Array of { key, text } for MCQ
+  correctAnswer    String             @db.Text
+  explanation      String?            @db.Text
+  difficulty       QuestionDifficulty
+  bloomLevel       BloomLevel?
+  status           QuestionStatus     @default(DRAFT)
+  isAiGenerated    Boolean            @default(false)
+  aiGenerationId   String?            // AIUsageLog.id
+  tags             String[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  // Relations
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy        User               @relation("QuestionCreator", fields: [createdById], references: [id])
+  topic            Topic?             @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  course           Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  sourceDocument   Document?          @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  assessmentLinks  AssessmentQuestion[]
+  answers          Answer[]
+
+  @@index([organizationId])
+  @@index([courseId])
+  @@index([topicId])
+  @@index([status])
+  @@map("questions")
+}
+
+// ─── Assessment ───────────────────────────────────────────────────────────────
+
+model Assessment {
+  id              String           @id @default(cuid())
+  organizationId  String
+  courseId        String
+  createdById     String
+  title           String
+  description     String?
+  instructions    String?          @db.Text
+  durationMinutes Int
+  status          AssessmentStatus @default(DRAFT)
+  startTime       DateTime?
+  endTime         DateTime?
+  settings        Json             // AssessmentSettings object
+  totalQuestions  Int              @default(0)
+  totalMarks      Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  course          Course           @relation(fields: [courseId], references: [id])
+  createdBy       User             @relation("AssessmentCreator", fields: [createdById], references: [id])
+  questions       AssessmentQuestion[]
+  attempts        Attempt[]
+
+  @@index([organizationId])
+  @@index([courseId])
+  @@index([status])
+  @@map("assessments")
+}
+
+// ─── Assessment ↔ Question (join table) ──────────────────────────────────────
+
+model AssessmentQuestion {
+  id           String     @id @default(cuid())
+  assessmentId String
+  questionId   String
+  order        Int
+  scoreWeight  Float      @default(1)
+
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  question     Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, questionId])
+  @@index([assessmentId])
+  @@map("assessment_questions")
+}
+
+// ─── Attempt ──────────────────────────────────────────────────────────────────
+
+model Attempt {
+  id              String        @id @default(cuid())
+  assessmentId    String
+  studentId       String
+  status          AttemptStatus @default(IN_PROGRESS)
+  startedAt       DateTime      @default(now())
+  submittedAt     DateTime?
+  score           Float?
+  percentageScore Float?
+  totalFlags      Int           @default(0)
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  assessment      Assessment    @relation(fields: [assessmentId], references: [id])
+  student         User          @relation(fields: [studentId], references: [id])
+  answers         Answer[]
+  integrityEvents IntegrityEvent[]
+
+  @@index([assessmentId])
+  @@index([studentId])
+  @@map("attempts")
+}
+
+// ─── Answer ───────────────────────────────────────────────────────────────────
+
+model Answer {
+  id               String    @id @default(cuid())
+  attemptId        String
+  questionId       String
+  selectedAnswer   String?   // MCQ: option key (A/B/C/D)
+  textAnswer       String?   @db.Text
+  isCorrect        Boolean?
+  score            Float?
+  timeTakenSeconds Int?
+  createdAt        DateTime  @default(now())
+
+  attempt          Attempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question         Question  @relation(fields: [questionId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@map("answers")
+}
+
+// ─── Integrity Event ──────────────────────────────────────────────────────────
+
+model IntegrityEvent {
+  id          String             @id @default(cuid())
+  attemptId   String
+  eventType   IntegrityEventType
+  severity    IntegritySeverity  @default(LOW)
+  metadata    Json               @default("{}")
+  occurredAt  DateTime           @default(now())
+
+  attempt     Attempt            @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
+  @@index([eventType])
+  @@map("integrity_events")
+}
+
+// ─── AI Usage Log ─────────────────────────────────────────────────────────────
+
+model AIUsageLog {
+  id              String       @id @default(cuid())
+  organizationId  String
+  userId          String
+  action          AIAction
+  model           String       // e.g. "claude-sonnet-4-6"
+  inputTokens     Int
+  outputTokens    Int
+  costUsd         Float
+  durationMs      Int
+  success         Boolean      @default(true)
+  errorMessage    String?
+  relatedEntityId String?      // documentId, assessmentId, etc.
+  createdAt       DateTime     @default(now())
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  user            User         @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("ai_usage_logs")
+}
+
+// ─── Flashcard ────────────────────────────────────────────────────────────────
+
+model Flashcard {
+  id             String       @id @default(cuid())
+  organizationId String
+  studentId      String
+  documentId     String?
+  topicId        String?
+  front          String       @db.Text
+  back           String       @db.Text
+  createdAt      DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student        User         @relation(fields: [studentId], references: [id])
+  document       Document?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([studentId])
+  @@map("flashcards")
+}
