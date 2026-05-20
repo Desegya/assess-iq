@@ -3,10 +3,11 @@
   "compilerOptions": {
     "composite": false,
     "outDir": "./dist",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "baseUrl": ".",
     "paths": {
-      "@assessiq/types": ["../../packages/types/src"],
-      "@assessiq/db": ["../../packages/db/src"]
+      "@assessiq/types": ["../../packages/types/dist"],
+      "@assessiq/db": ["../../packages/db/generated/client"]
     }
   },
   "include": ["src/**/*"],

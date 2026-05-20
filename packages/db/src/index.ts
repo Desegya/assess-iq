@@ -1,4 +1,4 @@
-import { PrismaClient } from '../generated/client'
+import { PrismaClient } from '../generated/client/index.js'
 
 // Prevent multiple Prisma Client instances in development (hot reload)
 declare global {
@@ -16,4 +16,4 @@ if (process.env.NODE_ENV !== 'production') {
   global.__prisma = prisma
 }
 
-export * from '../generated/client'
+export * from '../generated/client/index.js'
