@@ -44,7 +44,8 @@ const USER_KEY = 'assessiq:user'
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
 
 function setTokenCookie(token: string, maxAge: number) {
-  document.cookie = `accessToken=${token}; path=/; max-age=${maxAge}; SameSite=Strict`
+  const secure = location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `accessToken=${token}; path=/; max-age=${maxAge}; SameSite=Strict${secure}`
 }
 
 function clearTokenCookie() {
@@ -74,9 +75,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const user = JSON.parse(storedUser) as AuthUser
 
     // Silently refresh access token (old one has likely expired)
-    doRefresh(storedRefresh).then(newAccessToken => {
-      if (newAccessToken) {
-        setState({ user, accessToken: newAccessToken, isLoading: false })
+    // Also re-fetches user from server to avoid stale data
+    doRefresh(storedRefresh).then(result => {
+      if (result) {
+        setState({ user: result.user, accessToken: result.accessToken, isLoading: false })
       } else {
         clearStoredAuth()
         setState({ user: null, accessToken: null, isLoading: false })
@@ -86,7 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ── Internal refresh helper (no dependency on state) ─────────────────────
-  async function doRefresh(refreshTok: string): Promise<string | null> {
+  async function doRefresh(
+    refreshTok: string,
+  ): Promise<{ accessToken: string; user: AuthUser } | null> {
     try {
       const res = await fetch(`${API_URL}/auth/refresh`, {
         method: 'POST',
@@ -102,7 +106,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Rotate: store the new refresh token
       localStorage.setItem(REFRESH_KEY, data.refreshToken)
       setTokenCookie(data.accessToken, data.expiresIn)
-      return data.accessToken
+
+      // Re-fetch user from server — never trust stale localStorage data
+      const meRes = await fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${data.accessToken}` },
+      })
+      if (!meRes.ok) return null
+      const freshUser = (await meRes.json()) as AuthUser
+      localStorage.setItem(USER_KEY, JSON.stringify(freshUser))
+
+      return { accessToken: data.accessToken, user: freshUser }
     } catch {
       return null
     }
@@ -153,9 +166,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedRefresh = localStorage.getItem(REFRESH_KEY)
     if (!storedRefresh) return false
 
-    const newToken = await doRefresh(storedRefresh)
-    if (newToken) {
-      setState(s => ({ ...s, accessToken: newToken }))
+    const result = await doRefresh(storedRefresh)
+    if (result) {
+      setState(s => ({ ...s, accessToken: result.accessToken, user: result.user }))
       return true
     }
 

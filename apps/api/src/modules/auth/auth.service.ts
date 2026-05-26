@@ -196,13 +196,34 @@ export class AuthService {
       },
     )
 
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    // Parse config value instead of hardcoding 7 days
+    const expiresAt = this.parseExpiryToDate(refreshExpiresIn)
+    const accessExpiresIn = this.parseDurationToSeconds(jwtExpiresIn)
 
     await this.prisma.refreshToken.create({
       data: { userId: authUser.id, token: rawRefreshToken, expiresAt },
     })
 
-    return { accessToken, refreshToken: rawRefreshToken, expiresIn: 15 * 60 }
+    return { accessToken, refreshToken: rawRefreshToken, expiresIn: accessExpiresIn }
+  }
+
+  /**
+   * Parse a JWT duration string like "15m", "7d", "1h" into seconds.
+   */
+  private parseDurationToSeconds(duration: string): number {
+    const match = duration.match(/^(\d+)([smhd])$/)
+    if (!match) return 15 * 60 // fallback 15 minutes
+    const n = parseInt(match[1]!, 10)
+    const unit = match[2]!
+    const multiplier: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 }
+    return n * (multiplier[unit] ?? 60)
+  }
+
+  /**
+   * Convert a JWT duration string to a concrete expiry Date.
+   */
+  private parseExpiryToDate(duration: string): Date {
+    return new Date(Date.now() + this.parseDurationToSeconds(duration) * 1000)
   }
 
   private generateSlug(name: string): string {
