@@ -1,19 +1,29 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { LoginForm } from '@/components/auth/LoginForm'
 
 export const metadata: Metadata = { title: 'Sign In' }
 
 export default function LoginPage() {
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-8">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-1">Welcome back</h2>
-      <p className="text-gray-500 text-sm mb-6">Sign in to your account to continue</p>
-      <LoginForm />
-      <p className="text-center text-xs text-gray-400 mt-6">
+    <div>
+      {/* Card */}
+      <div className="bg-white rounded-3xl shadow-card border border-slate-200 p-8 animate-scale-in">
+        <div className="mb-8">
+          <h2 className="font-heading text-2xl font-bold text-slate-900">Welcome back</h2>
+          <p className="text-slate-500 text-sm mt-1.5">
+            Sign in to your account to continue
+          </p>
+        </div>
+
+        <LoginForm />
+      </div>
+
+      <p className="text-center text-sm text-slate-500 mt-6">
         Setting up a new school?{' '}
-        <a href="/register" className="text-indigo-600 hover:underline font-medium">
+        <Link href="/register" className="text-violet-600 hover:text-violet-700 font-semibold transition-colors">
           Register your institution
-        </a>
+        </Link>
       </p>
     </div>
   )

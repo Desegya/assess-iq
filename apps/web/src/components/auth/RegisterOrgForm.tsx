@@ -16,28 +16,28 @@ interface RegisterResponse {
 }
 
 const ORG_TYPE_LABELS: Record<OrgType, string> = {
-  [OrgType.PRIMARY_SCHOOL]: 'Primary School',
-  [OrgType.SECONDARY_SCHOOL]: 'Secondary School',
-  [OrgType.UNIVERSITY]: 'University',
-  [OrgType.TUTORIAL_CENTER]: 'Tutorial Centre',
+  [OrgType.PRIMARY_SCHOOL]:       'Primary School',
+  [OrgType.SECONDARY_SCHOOL]:     'Secondary School',
+  [OrgType.UNIVERSITY]:           'University',
+  [OrgType.TUTORIAL_CENTER]:      'Tutorial Centre',
   [OrgType.TRAINING_INSTITUTION]: 'Training Institution',
-  [OrgType.EXAM_BODY]: 'Exam Body',
-  [OrgType.OTHER]: 'Other',
+  [OrgType.EXAM_BODY]:            'Exam Body',
+  [OrgType.OTHER]:                'Other',
 }
 
 export function RegisterOrgForm() {
-  const router = useRouter()
+  const router   = useRouter()
   const { login } = useAuth()
 
   const [form, setForm] = useState({
-    orgName: '',
-    orgType: OrgType.SECONDARY_SCHOOL as OrgType,
-    adminName: '',
+    orgName:    '',
+    orgType:    OrgType.SECONDARY_SCHOOL as OrgType,
+    adminName:  '',
     adminEmail: '',
-    password: '',
-    country: 'Nigeria',
+    password:   '',
+    country:    'Nigeria',
   })
-  const [error, setError] = useState<string | null>(null)
+  const [error,   setError]   = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   function set(field: keyof typeof form) {
@@ -65,7 +65,6 @@ export function RegisterOrgForm() {
       const data = (await res.json()) as RegisterResponse
       login(data.user, data.accessToken, data.refreshToken, data.expiresIn)
 
-      // Org admins land on teacher dashboard initially
       const dest =
         data.user.role === UserRole.SUPER_ADMIN ? '/admin/dashboard' : '/teacher/dashboard'
       router.push(dest)
@@ -77,28 +76,37 @@ export function RegisterOrgForm() {
   }
 
   const inputClass =
-    'w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm ' +
-    'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent ' +
-    'disabled:bg-gray-50 disabled:text-gray-400'
+    'w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 ' +
+    'placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 ' +
+    'focus:border-violet-500 transition-all duration-150 disabled:bg-slate-50 disabled:text-slate-400'
+
+  const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+        <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700
+                        text-sm rounded-xl px-4 py-3 animate-slide-up">
+          <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
           {error}
         </div>
       )}
 
-      {/* ── Institution ────────────────────────────────────── */}
-      <div className="space-y-3">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-          Institution Details
-        </p>
+      {/* ── Institution ───────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="h-px flex-1 bg-slate-100" />
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">
+            Institution
+          </p>
+          <div className="h-px flex-1 bg-slate-100" />
+        </div>
 
         <div>
-          <label htmlFor="orgName" className="block text-sm font-medium text-gray-700 mb-1">
-            Institution name
-          </label>
+          <label htmlFor="orgName" className={labelClass}>Institution name</label>
           <input
             id="orgName"
             type="text"
@@ -111,52 +119,50 @@ export function RegisterOrgForm() {
           />
         </div>
 
-        <div>
-          <label htmlFor="orgType" className="block text-sm font-medium text-gray-700 mb-1">
-            Institution type
-          </label>
-          <select
-            id="orgType"
-            required
-            value={form.orgType}
-            onChange={set('orgType')}
-            disabled={loading}
-            className={inputClass}
-          >
-            {Object.entries(ORG_TYPE_LABELS).map(([val, label]) => (
-              <option key={val} value={val}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="orgType" className={labelClass}>Type</label>
+            <select
+              id="orgType"
+              required
+              value={form.orgType}
+              onChange={set('orgType')}
+              disabled={loading}
+              className={inputClass}
+            >
+              {Object.entries(ORG_TYPE_LABELS).map(([val, label]) => (
+                <option key={val} value={val}>{label}</option>
+              ))}
+            </select>
+          </div>
 
-        <div>
-          <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-1">
-            Country
-          </label>
-          <input
-            id="country"
-            type="text"
-            value={form.country}
-            onChange={set('country')}
-            placeholder="Nigeria"
-            disabled={loading}
-            className={inputClass}
-          />
+          <div>
+            <label htmlFor="country" className={labelClass}>Country</label>
+            <input
+              id="country"
+              type="text"
+              value={form.country}
+              onChange={set('country')}
+              placeholder="Nigeria"
+              disabled={loading}
+              className={inputClass}
+            />
+          </div>
         </div>
       </div>
 
-      {/* ── Admin account ───────────────────────────────────── */}
-      <div className="space-y-3 pt-2">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-          Your Admin Account
-        </p>
+      {/* ── Admin account ─────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="h-px flex-1 bg-slate-100" />
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">
+            Your Admin Account
+          </p>
+          <div className="h-px flex-1 bg-slate-100" />
+        </div>
 
         <div>
-          <label htmlFor="adminName" className="block text-sm font-medium text-gray-700 mb-1">
-            Full name
-          </label>
+          <label htmlFor="adminName" className={labelClass}>Full name</label>
           <input
             id="adminName"
             type="text"
@@ -170,9 +176,7 @@ export function RegisterOrgForm() {
         </div>
 
         <div>
-          <label htmlFor="adminEmail" className="block text-sm font-medium text-gray-700 mb-1">
-            Email address
-          </label>
+          <label htmlFor="adminEmail" className={labelClass}>Email address</label>
           <input
             id="adminEmail"
             type="email"
@@ -187,8 +191,9 @@ export function RegisterOrgForm() {
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-            Password <span className="text-gray-400 font-normal">(min 8 characters)</span>
+          <label htmlFor="password" className={labelClass}>
+            Password{' '}
+            <span className="text-slate-400 font-normal">(min 8 characters)</span>
           </label>
           <input
             id="password"
@@ -208,9 +213,9 @@ export function RegisterOrgForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400
-                   text-white font-medium py-2.5 px-4 rounded-lg text-sm
-                   transition-colors duration-150 flex items-center justify-center gap-2"
+        className="w-full bg-violet-600 hover:bg-violet-700 active:scale-[0.98] disabled:opacity-60
+                   text-white font-semibold py-3 px-5 rounded-xl text-sm transition-all duration-150
+                   shadow-sm flex items-center justify-center gap-2"
       >
         {loading ? (
           <>
@@ -225,12 +230,9 @@ export function RegisterOrgForm() {
         )}
       </button>
 
-      <p className="text-center text-xs text-gray-400">
+      <p className="text-center text-xs text-slate-400">
         By registering you agree to our{' '}
-        <a href="/terms" className="text-indigo-600 hover:underline">
-          Terms of Service
-        </a>
-        .
+        <a href="/terms" className="text-violet-600 hover:underline">Terms of Service</a>.
       </p>
     </form>
   )

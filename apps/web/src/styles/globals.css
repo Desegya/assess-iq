@@ -4,8 +4,9 @@
 
 @layer base {
   :root {
-    --color-primary: 79 70 229;     /* indigo-600 */
-    --color-primary-dark: 67 56 202; /* indigo-700 */
+    --color-primary:      124 58 237;   /* violet-600 */
+    --color-primary-dark: 109 40 217;   /* violet-700 */
+    --color-accent:       245 158 11;   /* amber-500 */
   }
 
   * {
@@ -15,5 +16,128 @@
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  /* ── Custom scrollbar ───────────────────────────────────────── */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #c4b5fd;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #7c3aed;
+  }
+
+  /* ── Text selection ──────────────────────────────────────────── */
+  ::selection {
+    background: rgba(124, 58, 237, 0.18);
+    color: #4c1d95;
+  }
+
+  /* ── Focus rings ─────────────────────────────────────────────── */
+  :focus-visible {
+    outline: 2px solid #7c3aed;
+    outline-offset: 2px;
+  }
+
+  body {
+    background-color: #F7F8FC;
+    color: #0f172a;
+  }
+}
+
+@layer components {
+  /* ── Shimmer skeleton ────────────────────────────────────────── */
+  .skeleton {
+    background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+    border-radius: 0.5rem;
+  }
+
+  /* ── Page transition ─────────────────────────────────────────── */
+  .page-enter {
+    animation: slideUp 0.35s ease-out;
+  }
+
+  /* ── Input base ──────────────────────────────────────────────── */
+  .input-base {
+    @apply w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900
+           placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20
+           focus:border-violet-500 transition-all duration-150;
+  }
+
+  /* ── Button primary ──────────────────────────────────────────── */
+  .btn-primary {
+    @apply bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white font-semibold
+           py-3 px-5 rounded-xl text-sm transition-all duration-150 shadow-sm
+           flex items-center justify-center gap-2 disabled:opacity-60 disabled:pointer-events-none;
+  }
+
+  /* ── Button secondary ────────────────────────────────────────── */
+  .btn-secondary {
+    @apply bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 font-medium
+           py-3 px-5 rounded-xl text-sm transition-all duration-150 border border-slate-200
+           flex items-center justify-center gap-2 disabled:opacity-60 disabled:pointer-events-none;
+  }
+
+  /* ── Card ────────────────────────────────────────────────────── */
+  .card {
+    @apply bg-white rounded-2xl border border-slate-200 shadow-card
+           hover:shadow-card-hover transition-all duration-200;
+  }
+
+  /* ── Badge ───────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  /* ── Sidebar nav item ────────────────────────────────────────── */
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium
+           transition-all duration-150 relative;
+  }
+
+  .nav-item-active {
+    @apply bg-white/10 text-white border-l-2 border-violet-400 pl-[14px];
+  }
+
+  .nav-item-inactive {
+    @apply text-white/60 hover:bg-white/5 hover:text-white/90;
+  }
+}
+
+@layer utilities {
+  /* ── Stagger animation delays ────────────────────────────────── */
+  .delay-75  { animation-delay: 75ms; }
+  .delay-100 { animation-delay: 100ms; }
+  .delay-150 { animation-delay: 150ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+
+  /* ── Text gradient ───────────────────────────────────────────── */
+  .text-gradient {
+    background: linear-gradient(135deg, #7c3aed, #4f46e5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Glass effect ────────────────────────────────────────────── */
+  .glass {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
   }
 }
