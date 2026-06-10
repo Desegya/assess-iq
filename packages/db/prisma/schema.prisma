@@ -137,6 +137,7 @@ model Organization {
   id           String           @id @default(cuid())
   name         String
   slug         String           @unique
+  joinCode     String           @unique
   type         OrgType
   plan         SubscriptionPlan @default(FREE_TRIAL)
   trialEndDate DateTime?

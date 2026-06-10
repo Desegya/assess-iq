@@ -8,6 +8,7 @@ import * as bcrypt from 'bcryptjs'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { CreateStudentDto } from './dto/create-student.dto'
+import { BulkCreateStudentsDto } from './dto/bulk-create-students.dto'
 
 @Injectable()
 export class UsersService {
@@ -41,6 +42,54 @@ export class UsersService {
     })
 
     return student
+  }
+
+  // ─── Bulk create students ─────────────────────────────────────────────────
+
+  async bulkCreateStudents(dto: BulkCreateStudentsDto, user: AuthUser) {
+    if (!user.organizationId) throw new ForbiddenException('No organisation')
+    if (user.role === UserRole.STUDENT) throw new ForbiddenException()
+
+    const DEFAULT_PASSWORD = 'Student123!'
+    const results: { name: string; email: string; status: 'created' | 'skipped'; reason?: string }[] = []
+
+    for (const row of dto.students) {
+      const existing = await this.prisma.user.findUnique({ where: { email: row.email } })
+      if (existing) {
+        results.push({ name: row.name, email: row.email, status: 'skipped', reason: 'Email already exists' })
+        continue
+      }
+      const passwordHash = await bcrypt.hash(row.password ?? DEFAULT_PASSWORD, 12)
+      await this.prisma.user.create({
+        data: {
+          name: row.name,
+          email: row.email,
+          passwordHash,
+          role: 'STUDENT',
+          status: 'ACTIVE',
+          organizationId: user.organizationId,
+        },
+      })
+      results.push({ name: row.name, email: row.email, status: 'created' })
+    }
+
+    return {
+      total: dto.students.length,
+      created: results.filter(r => r.status === 'created').length,
+      skipped: results.filter(r => r.status === 'skipped').length,
+      results,
+    }
+  }
+
+  // ─── Get org join code ────────────────────────────────────────────────────
+
+  async getOrgJoinCode(user: AuthUser) {
+    if (!user.organizationId) throw new ForbiddenException('No organisation')
+    const org = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: user.organizationId },
+      select: { joinCode: true, name: true },
+    })
+    return org
   }
 
   // ─── List students in org ─────────────────────────────────────────────────

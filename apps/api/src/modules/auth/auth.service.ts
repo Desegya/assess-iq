@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  NotFoundException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { ConfigService } from '@nestjs/config'
@@ -9,6 +10,7 @@ import * as bcrypt from 'bcryptjs'
 import { PrismaService } from '../prisma/prisma.service'
 import { LoginDto } from './dto/login.dto'
 import { RegisterOrgDto } from './dto/register-org.dto'
+import { JoinOrgDto } from './dto/join-org.dto'
 import { AuthUser, UserRole } from '@assessiq/types'
 
 export interface TokenPair {
@@ -55,6 +57,7 @@ export class AuthService {
         data: {
           name: dto.orgName,
           slug,
+          joinCode: this.generateJoinCode(),
           type: dto.orgType as never,
           country: dto.country ?? 'Nigeria',
           plan: 'FREE_TRIAL',
@@ -173,6 +176,46 @@ export class AuthService {
     return this.sanitizeUser(user)
   }
 
+  // ─── Student self-registration ────────────────────────────────────────────
+
+  async lookupOrg(joinCode: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { joinCode: joinCode.toUpperCase() },
+      select: { id: true, name: true, type: true, isActive: true },
+    })
+    if (!org || !org.isActive) throw new NotFoundException('Invalid or expired join code')
+    return org
+  }
+
+  async joinOrg(dto: JoinOrgDto) {
+    const org = await this.lookupOrg(dto.joinCode)
+
+    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } })
+    if (existing) throw new ConflictException('An account with this email already exists')
+
+    const passwordHash = await bcrypt.hash(dto.password, 12)
+
+    const user = await this.prisma.user.create({
+      data: {
+        name: dto.name,
+        email: dto.email,
+        passwordHash,
+        role: 'STUDENT',
+        status: 'ACTIVE',
+        organizationId: org.id,
+      },
+    })
+
+    const tokens = await this.generateTokenPair({
+      id: user.id,
+      email: user.email,
+      role: user.role as UserRole,
+      organizationId: user.organizationId,
+    })
+
+    return { user: this.sanitizeUser(user), ...tokens }
+  }
+
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   private async generateTokenPair(authUser: AuthUser): Promise<TokenPair> {
@@ -224,6 +267,12 @@ export class AuthService {
    */
   private parseExpiryToDate(duration: string): Date {
     return new Date(Date.now() + this.parseDurationToSeconds(duration) * 1000)
+  }
+
+  private generateJoinCode(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no 0/O/1/I to avoid confusion
+    const rand = (n: number) => Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    return `${rand(4)}-${rand(4)}`
   }
 
   private generateSlug(name: string): string {

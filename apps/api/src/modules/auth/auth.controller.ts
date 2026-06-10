@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common'
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common'
 import { ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { Throttle, SkipThrottle } from '@nestjs/throttler'
 import { AuthService } from './auth.service'
 import { LoginDto } from './dto/login.dto'
 import { RegisterOrgDto } from './dto/register-org.dto'
+import { JoinOrgDto } from './dto/join-org.dto'
 import { RefreshTokenDto } from './dto/refresh-token.dto'
 import { Public } from './decorators/public.decorator'
 import { CurrentUser } from './decorators/current-user.decorator'
@@ -50,6 +51,24 @@ export class AuthController {
   @ApiOperation({ summary: 'Revoke refresh token and log out' })
   logout(@Body() dto: RefreshTokenDto) {
     return this.authService.logout(dto.refreshToken)
+  }
+
+  // Validate a join code and return the org name (used by /join page before registration)
+  @Public()
+  @Get('org/:joinCode')
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Look up an organisation by join code' })
+  lookupOrg(@Param('joinCode') joinCode: string) {
+    return this.authService.lookupOrg(joinCode)
+  }
+
+  // Student self-registration via join code
+  @Public()
+  @Post('join')
+  @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
+  @ApiOperation({ summary: 'Student self-registers using an org join code' })
+  joinOrg(@Body() dto: JoinOrgDto) {
+    return this.authService.joinOrg(dto)
   }
 
   @Get('me')

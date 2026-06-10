@@ -10,6 +10,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { UsersService } from './users.service'
 import { CreateStudentDto } from './dto/create-student.dto'
+import { BulkCreateStudentsDto } from './dto/bulk-create-students.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Roles } from '../auth/decorators/roles.decorator'
 import { RolesGuard } from '../auth/guards/roles.guard'
@@ -39,6 +40,22 @@ export class UsersController {
   @ApiOperation({ summary: 'List all students in the organisation' })
   listStudents(@CurrentUser() user: AuthUser) {
     return this.usersService.findStudents(user)
+  }
+
+  // POST /users/students/bulk — bulk import from CSV data
+  @Post('students/bulk')
+  @Roles(UserRole.ORG_ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Bulk create student accounts (max 500)' })
+  bulkCreateStudents(@Body() dto: BulkCreateStudentsDto, @CurrentUser() user: AuthUser) {
+    return this.usersService.bulkCreateStudents(dto, user)
+  }
+
+  // GET /users/org/join-code — get the org's join code for sharing
+  @Get('org/join-code')
+  @Roles(UserRole.ORG_ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Get the organisation join code' })
+  getOrgJoinCode(@CurrentUser() user: AuthUser) {
+    return this.usersService.getOrgJoinCode(user)
   }
 
   // GET /users/:id
