@@ -43,6 +43,10 @@ const REFRESH_KEY = 'assessiq:refreshToken'
 const USER_KEY = 'assessiq:user'
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
 
+// Refresh token stored in BOTH localStorage (legacy read) AND a cookie so the
+// Edge middleware can see it and avoid redirecting to /login during silent refresh.
+const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 // 7 days, matches server
+
 function setTokenCookie(token: string, maxAge: number) {
   const secure = location.protocol === 'https:' ? '; Secure' : ''
   document.cookie = `accessToken=${token}; path=/; max-age=${maxAge}; SameSite=Strict${secure}`
@@ -50,6 +54,15 @@ function setTokenCookie(token: string, maxAge: number) {
 
 function clearTokenCookie() {
   document.cookie = 'accessToken=; path=/; max-age=0'
+}
+
+function setRefreshCookie(token: string) {
+  const secure = location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `refreshToken=${token}; path=/; max-age=${REFRESH_COOKIE_MAX_AGE}; SameSite=Strict${secure}`
+}
+
+function clearRefreshCookie() {
+  document.cookie = 'refreshToken=; path=/; max-age=0'
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -103,8 +116,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshToken: string
         expiresIn: number
       }
-      // Rotate: store the new refresh token
+      // Rotate: store the new refresh token in both localStorage and cookie
       localStorage.setItem(REFRESH_KEY, data.refreshToken)
+      setRefreshCookie(data.refreshToken)
       setTokenCookie(data.accessToken, data.expiresIn)
 
       // Re-fetch user from server — never trust stale localStorage data
@@ -125,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(REFRESH_KEY)
     localStorage.removeItem(USER_KEY)
     clearTokenCookie()
+    clearRefreshCookie()
   }
 
   // ── Public methods ────────────────────────────────────────────────────────
@@ -134,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(REFRESH_KEY, refreshToken)
       localStorage.setItem(USER_KEY, JSON.stringify(user))
       setTokenCookie(accessToken, expiresIn)
+      setRefreshCookie(refreshToken)
       setState({ user, accessToken, isLoading: false })
     },
     [],

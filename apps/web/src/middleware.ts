@@ -38,10 +38,16 @@ export function middleware(request: NextRequest) {
   const isAuthRoute = AUTH_ONLY_ROUTES.some(r => pathname.startsWith(r))
 
   // Unauthenticated user trying to reach a protected route → login
+  // BUT: if a refreshToken cookie exists, let the request through so the client
+  // auth context can silently refresh the access token (avoids logout on tab reopen).
+  const refreshToken = request.cookies.get('refreshToken')?.value
   if (isProtected && !accessToken) {
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(loginUrl)
+    if (!refreshToken) {
+      const loginUrl = new URL('/login', request.url)
+      loginUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+    // Has refresh token — let through; AuthGuard will handle the silent refresh
   }
 
   // Authenticated user hitting login/register → redirect to their own portal
