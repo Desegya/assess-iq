@@ -15,6 +15,7 @@ interface Assessment {
   totalQuestions: number
   startTime?: string
   endTime?: string
+  settings?: { maxAttempts?: number }
   course: { id: string; title: string }
   createdBy: { id: string; name: string }
   _count: { questions: number }
@@ -58,7 +59,13 @@ export default function StudentAssessmentsPage() {
     }).finally(() => setLoading(false))
   }, [])
 
-  const attemptMap = new Map(attempts.map(a => [a.assessmentId, a]))
+  // Group all attempts by assessmentId (API returns newest first)
+  const attemptsByAssessment = new Map<string, Attempt[]>()
+  for (const a of attempts) {
+    const bucket = attemptsByAssessment.get(a.assessmentId) ?? []
+    bucket.push(a)
+    attemptsByAssessment.set(a.assessmentId, bucket)
+  }
 
   function getWindowStatus(a: Assessment): 'not-open' | 'open' | 'closed' {
     const now = Date.now()
@@ -117,13 +124,19 @@ export default function StudentAssessmentsPage() {
       ) : (
         <div className="space-y-3">
           {assessments.map((a, idx) => {
-            const attempt      = attemptMap.get(a.id)
-            const isSubmitted  = attempt?.status === 'SUBMITTED' ||
-                                 attempt?.status === 'GRADED' ||
-                                 attempt?.status === 'AUTO_SUBMITTED'
-            const isInProgress = attempt?.status === 'IN_PROGRESS'
-            const windowStatus = getWindowStatus(a)
-            const isLocked     = !isSubmitted && !isInProgress && windowStatus !== 'open'
+            const allAttempts      = attemptsByAssessment.get(a.id) ?? []
+            const inProgress       = allAttempts.find(x => x.status === 'IN_PROGRESS')
+            const completed        = allAttempts.filter(x =>
+              x.status === 'SUBMITTED' || x.status === 'GRADED' || x.status === 'AUTO_SUBMITTED'
+            )
+            const latestCompleted  = completed[0]
+            const maxAttempts      = a.settings?.maxAttempts ?? 1
+            const isSubmitted      = completed.length > 0 && !inProgress
+            const isInProgress     = !!inProgress
+            const attempt          = inProgress ?? latestCompleted   // for score display
+            const canRetake        = completed.length > 0 && completed.length < maxAttempts && !inProgress
+            const windowStatus     = getWindowStatus(a)
+            const isLocked         = !isSubmitted && !isInProgress && !canRetake && windowStatus !== 'open'
 
             return (
               <div
@@ -196,33 +209,26 @@ export default function StudentAssessmentsPage() {
                       )}
                     </div>
 
-                    {isSubmitted && attempt?.percentageScore != null && (
+                    {latestCompleted?.percentageScore != null && (
                       <div className="mt-2.5 flex items-center gap-2">
                         <div className="flex-1 bg-slate-200 rounded-full h-1.5">
                           <div
                             className={`h-1.5 rounded-full ${
-                              attempt.percentageScore >= 70 ? 'bg-emerald-500' :
-                              attempt.percentageScore >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                              latestCompleted.percentageScore! >= 70 ? 'bg-emerald-500' :
+                              latestCompleted.percentageScore! >= 50 ? 'bg-amber-500' : 'bg-red-500'
                             }`}
-                            style={{ width: `${attempt.percentageScore}%` }}
+                            style={{ width: `${latestCompleted.percentageScore}%` }}
                           />
                         </div>
                         <span className="text-xs font-bold text-slate-700">
-                          {Math.round(attempt.percentageScore)}%
+                          {Math.round(latestCompleted.percentageScore!)}%
                         </span>
                       </div>
                     )}
                   </div>
 
-                  <div className="flex-shrink-0">
-                    {isSubmitted ? (
-                      <button
-                        onClick={() => router.push(`/student/results/${attempt!.id}`)}
-                        className="text-sm font-semibold text-violet-600 hover:text-violet-700 transition-colors"
-                      >
-                        View results →
-                      </button>
-                    ) : isInProgress ? (
+                  <div className="flex-shrink-0 flex flex-col items-end gap-2">
+                    {isInProgress ? (
                       <button
                         onClick={() => void handleStart(a.id)}
                         disabled={starting === a.id}
@@ -231,6 +237,30 @@ export default function StudentAssessmentsPage() {
                       >
                         {starting === a.id ? 'Loading…' : 'Resume →'}
                       </button>
+                    ) : isSubmitted ? (
+                      <>
+                        <button
+                          onClick={() => router.push(`/student/results/${latestCompleted!.id}`)}
+                          className="text-sm font-semibold text-violet-600 hover:text-violet-700 transition-colors"
+                        >
+                          View results →
+                        </button>
+                        {canRetake && windowStatus === 'open' && (
+                          <button
+                            onClick={() => void handleStart(a.id)}
+                            disabled={starting === a.id}
+                            className="bg-violet-600 hover:bg-violet-700 active:scale-[0.97] disabled:opacity-60
+                                       text-white text-xs font-semibold px-3 py-1.5 rounded-xl transition-all shadow-sm"
+                          >
+                            {starting === a.id ? '…' : `Retake (${completed.length}/${maxAttempts})`}
+                          </button>
+                        )}
+                        {canRetake && windowStatus !== 'open' && (
+                          <span className="text-xs text-slate-400 font-medium">
+                            {completed.length}/{maxAttempts} attempts
+                          </span>
+                        )}
+                      </>
                     ) : windowStatus === 'not-open' ? (
                       <div className="text-center">
                         <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center mx-auto">

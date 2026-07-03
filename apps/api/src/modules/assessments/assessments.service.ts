@@ -111,7 +111,10 @@ export class AssessmentsService {
         status: { in: ['PUBLISHED', 'ACTIVE'] },
       },
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true, title: true, description: true, durationMinutes: true,
+        status: true, totalQuestions: true, startTime: true, endTime: true,
+        settings: true,
         course: { select: { id: true, title: true } },
         createdBy: { select: { id: true, name: true } },
         _count: { select: { questions: true } },

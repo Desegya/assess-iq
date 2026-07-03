@@ -5,6 +5,94 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { useApi } from '@/hooks/use-api'
 import { Logo } from '@/components/ui/Logo'
 
+// ─── Proctoring lockdown ──────────────────────────────────────────────────────
+
+const MAX_VIOLATIONS = 3
+
+function useProctoringLock({ onMaxViolations }: { onMaxViolations: () => void }) {
+  const [violations, setViolations] = useState(0)
+  const [warning, setWarning] = useState<{ reason: string; count: number } | null>(null)
+  const onMaxRef         = useRef(onMaxViolations)
+  onMaxRef.current       = onMaxViolations
+  const lastViolationRef = useRef(0)
+
+  const addViolation = useCallback((reason: string) => {
+    const now = Date.now()
+    if (now - lastViolationRef.current < 600) return   // debounce blur+visibility
+    lastViolationRef.current = now
+
+    setViolations(prev => {
+      const next = prev + 1
+      if (next >= MAX_VIOLATIONS) {
+        onMaxRef.current()
+      } else {
+        setWarning({ reason, count: next })
+      }
+      return next
+    })
+  }, [])
+
+  // Tab switch detection
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === 'hidden') addViolation('You switched away from this tab')
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [addViolation])
+
+  // Window blur (alt-tab to another app)
+  useEffect(() => {
+    function onBlur() { addViolation('Application focus was lost') }
+    window.addEventListener('blur', onBlur)
+    return () => window.removeEventListener('blur', onBlur)
+  }, [addViolation])
+
+  // Copy / cut / paste / right-click blocking
+  useEffect(() => {
+    function block(e: Event) { e.preventDefault() }
+    const blocked = ['copy', 'cut', 'paste', 'contextmenu'] as const
+    blocked.forEach(evt => document.addEventListener(evt, block))
+    return ()  => blocked.forEach(evt => document.removeEventListener(evt, block))
+  }, [])
+
+  // DevTools keyboard shortcut blocking
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'F12') { e.preventDefault(); return }
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && e.shiftKey && ['i', 'j', 'c', 'k'].includes(e.key.toLowerCase())) {
+        e.preventDefault(); return
+      }
+      if (mod && e.key.toLowerCase() === 'u') e.preventDefault()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  // Fullscreen enforcement
+  useEffect(() => {
+    if (document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => undefined)
+    }
+    function onFullscreenChange() {
+      if (!document.fullscreenElement) addViolation('Fullscreen mode was exited')
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+      void document.exitFullscreen().catch(() => undefined)
+    }
+  }, [addViolation])
+
+  const reEnterFullscreen = useCallback(() => {
+    void document.documentElement.requestFullscreen?.().catch(() => undefined)
+    setWarning(null)
+  }, [])
+
+  return { violations, warning, dismissWarning: () => setWarning(null), reEnterFullscreen }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface McqOption { key: string; text: string }
@@ -89,13 +177,13 @@ export default function TakeTestPage({
 
   const submittedRef = useRef(false)
 
-  const handleSubmit = useCallback(async (auto = false) => {
+  const handleSubmit = useCallback(async (auto = false, reason?: string) => {
     if (submittedRef.current) return
     submittedRef.current = true
     setSubmitting(true)
 
     if (auto) {
-      alert('Time is up! Your test is being submitted automatically.')
+      alert(reason ?? 'Time is up! Your test is being submitted automatically.')
     }
 
     try {
@@ -128,6 +216,13 @@ export default function TakeTestPage({
     attempt?.assessment.durationMinutes ?? 60,
     () => void handleSubmit(true),
   )
+
+  const { violations, warning, dismissWarning, reEnterFullscreen } = useProctoringLock({
+    onMaxViolations: useCallback(
+      () => void handleSubmit(true, 'Test automatically submitted due to repeated security violations.'),
+      [handleSubmit],
+    ),
+  })
 
   async function saveAnswer(questionId: string, value: { selected?: string; text?: string }) {
     setAnswers(prev => ({ ...prev, [questionId]: value }))
@@ -217,6 +312,26 @@ export default function TakeTestPage({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Violation badge */}
+          {violations > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-red-500/20 text-red-400 text-xs font-bold">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              {violations}/{MAX_VIOLATIONS}
+            </div>
+          )}
+          {violations === 0 && (
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/10 text-white/50 text-xs font-semibold">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Secure
+            </div>
+          )}
+
           {/* Timer */}
           <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-mono text-sm
                           font-bold transition-all ${
@@ -452,6 +567,67 @@ export default function TakeTestPage({
           </div>
         </div>
       </div>
+
+      {/* ── Violation warning overlay ── */}
+      {warning && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
+            {/* Red top bar */}
+            <div className="h-1.5 bg-red-500" />
+
+            <div className="p-6">
+              {/* Icon */}
+              <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+
+              <h2 className="text-slate-900 font-bold text-lg mb-1">
+                Security violation — warning {warning.count} of {MAX_VIOLATIONS - 1}
+              </h2>
+              <p className="text-slate-500 text-sm mb-1">{warning.reason}.</p>
+              <p className="text-slate-500 text-sm mb-5">
+                {warning.count === MAX_VIOLATIONS - 1
+                  ? 'This is your final warning. One more violation will auto-submit your test.'
+                  : `${MAX_VIOLATIONS - 1 - warning.count} warning${MAX_VIOLATIONS - 1 - warning.count === 1 ? '' : 's'} remaining before your test is auto-submitted.`}
+              </p>
+
+              {/* Violation dots */}
+              <div className="flex gap-2 mb-6">
+                {Array.from({ length: MAX_VIOLATIONS - 1 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-2 flex-1 rounded-full transition-all ${
+                      i < warning.count ? 'bg-red-500' : 'bg-slate-200'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                {document.fullscreenElement === null && (
+                  <button
+                    onClick={reEnterFullscreen}
+                    className="flex-1 py-3 bg-violet-600 hover:bg-violet-700 text-white text-sm
+                               font-semibold rounded-2xl transition-all active:scale-[0.97]"
+                  >
+                    Re-enter Fullscreen
+                  </button>
+                )}
+                <button
+                  onClick={dismissWarning}
+                  className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700
+                             text-sm font-semibold rounded-2xl transition-all"
+                >
+                  Continue Test
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
