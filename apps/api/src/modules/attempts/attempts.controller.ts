@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Param,
   Body,
   Query,
@@ -11,6 +12,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { AttemptsService } from './attempts.service'
 import { StartAttemptDto } from './dto/start-attempt.dto'
 import { SubmitAnswerDto } from './dto/submit-answer.dto'
+import { GradeAnswersDto } from './dto/grade-answers.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Roles } from '../auth/decorators/roles.decorator'
 import { RolesGuard } from '../auth/guards/roles.guard'
@@ -76,5 +78,17 @@ export class AttemptsController {
   @ApiOperation({ summary: 'Submit attempt and get score' })
   submit(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.attemptsService.submit(id, user)
+  }
+
+  // PATCH /attempts/:id/grade — teacher manually grades open-ended answers
+  @Patch(':id/grade')
+  @Roles(UserRole.ORG_ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Manually grade SHORT_ANSWER/THEORY answers' })
+  gradeAnswers(
+    @Param('id') id: string,
+    @Body() dto: GradeAnswersDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.attemptsService.gradeAnswers(id, dto, user)
   }
 }

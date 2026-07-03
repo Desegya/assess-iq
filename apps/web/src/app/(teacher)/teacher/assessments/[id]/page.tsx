@@ -25,13 +25,24 @@ interface AssessmentQuestion {
   question: Question
 }
 
+interface AssessmentSettings {
+  shuffleQuestions: boolean
+  shuffleOptions: boolean
+  showResultsImmediately: boolean
+  allowReview: boolean
+  maxAttempts: number
+}
+
 interface Assessment {
   id: string
   title: string
   description?: string
   instructions?: string
   durationMinutes: number
+  startTime?: string
+  endTime?: string
   status: 'DRAFT' | 'PUBLISHED' | 'ACTIVE' | 'CLOSED' | 'ARCHIVED'
+  settings: AssessmentSettings
   totalQuestions: number
   course: { id: string; title: string }
   createdBy: { id: string; name: string }
@@ -39,7 +50,7 @@ interface Assessment {
   _count: { attempts: number }
 }
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: Assessment['status'] }) {
   const cfg: Record<Assessment['status'], string> = {
@@ -63,6 +74,25 @@ function Skeleton({ className }: { className?: string }) {
   )
 }
 
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <label className="flex items-center justify-between gap-3 cursor-pointer">
+      <span className="text-sm text-slate-700">{label}</span>
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        className={`relative w-10 h-6 rounded-full transition-colors duration-200 ${
+          checked ? 'bg-violet-600' : 'bg-slate-200'
+        }`}
+      >
+        <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
+          checked ? 'translate-x-5' : 'translate-x-1'
+        }`} />
+      </button>
+    </label>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AssessmentDetailPage({
@@ -79,19 +109,48 @@ export default function AssessmentDetailPage({
   const [assessment,   setAssessment]   = useState<Assessment | null>(null)
   const [loading,      setLoading]      = useState(true)
 
+  // Question bank slide-over
   const [bankQuestions, setBankQuestions] = useState<Question[]>([])
   const [bankLoading,   setBankLoading]   = useState(false)
   const [showBank,      setShowBank]      = useState(false)
   const [selected,      setSelected]      = useState<Set<string>>(new Set())
   const [adding,        setAdding]        = useState(false)
 
+  // Publish / archive / delete
   const [publishing,   setPublishing]   = useState(false)
+  const [deleting,     setDeleting]     = useState(false)
   const [actionError,  setActionError]  = useState<string | null>(null)
+
+  // Edit modal
+  const [showEdit,     setShowEdit]     = useState(false)
+  const [editSaving,   setEditSaving]   = useState(false)
+  const [editForm, setEditForm] = useState({
+    title: '', description: '', instructions: '', durationMinutes: 30,
+    startTime: '', endTime: '',
+  })
+  const [settings, setSettings] = useState<AssessmentSettings>({
+    shuffleQuestions: false, shuffleOptions: false,
+    showResultsImmediately: true, allowReview: true, maxAttempts: 1,
+  })
 
   useEffect(() => {
     void apiRef.current
       .get<Assessment>(`/assessments/${id}`)
-      .then(setAssessment)
+      .then(a => {
+        setAssessment(a)
+        setEditForm({
+          title: a.title,
+          description: a.description ?? '',
+          instructions: a.instructions ?? '',
+          durationMinutes: a.durationMinutes,
+          startTime: a.startTime ? a.startTime.slice(0, 16) : '',
+          endTime:   a.endTime   ? a.endTime.slice(0, 16)   : '',
+        })
+        setSettings(a.settings ?? {
+          shuffleQuestions: false, shuffleOptions: false,
+          showResultsImmediately: true, allowReview: true, maxAttempts: 1,
+        })
+      })
       .catch(() => undefined)
       .finally(() => setLoading(false))
   }, [id])
@@ -153,6 +212,39 @@ export default function AssessmentDetailPage({
     }
   }
 
+  async function handleSaveEdit() {
+    setEditSaving(true); setActionError(null)
+    try {
+      const updated = await api.patch<Assessment>(`/assessments/${id}`, {
+        title:           editForm.title.trim(),
+        description:     editForm.description.trim() || undefined,
+        instructions:    editForm.instructions.trim() || undefined,
+        durationMinutes: editForm.durationMinutes,
+        startTime:       editForm.startTime ? new Date(editForm.startTime).toISOString() : undefined,
+        endTime:         editForm.endTime   ? new Date(editForm.endTime).toISOString()   : undefined,
+        settings,
+      })
+      setAssessment(updated)
+      setShowEdit(false)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm('Delete this assessment? This cannot be undone.')) return
+    setDeleting(true); setActionError(null)
+    try {
+      await api.del(`/assessments/${id}`)
+      router.replace('/teacher/assessments')
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete')
+      setDeleting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
@@ -210,16 +302,30 @@ export default function AssessmentDetailPage({
         </a>
 
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <StatusBadge status={assessment.status} />
               <span className="text-xs text-slate-400 font-medium">{assessment.course.title}</span>
             </div>
-            <h1 className="font-heading text-2xl font-bold text-slate-900">{assessment.title}</h1>
+            <div className="flex items-start gap-2">
+              <h1 className="font-heading text-2xl font-bold text-slate-900">{assessment.title}</h1>
+              {isDraft && (
+                <button
+                  onClick={() => setShowEdit(true)}
+                  title="Edit assessment details"
+                  className="mt-1 p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors flex-shrink-0"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+              )}
+            </div>
             {assessment.description && (
               <p className="text-slate-500 text-sm mt-1">{assessment.description}</p>
             )}
-            <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
+            <div className="flex items-center gap-4 mt-3 text-xs text-slate-400 flex-wrap">
               <span className="flex items-center gap-1">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" strokeWidth="1.8"/>
@@ -241,42 +347,76 @@ export default function AssessmentDetailPage({
                 </svg>
                 {assessment._count.attempts} attempts
               </span>
+              {assessment.settings?.maxAttempts > 1 && (
+                <span>Max {assessment.settings.maxAttempts} attempts</span>
+              )}
+              {assessment.settings?.shuffleQuestions && (
+                <span>Shuffled</span>
+              )}
+              {assessment.startTime && (
+                <span>Opens {new Date(assessment.startTime).toLocaleDateString()}</span>
+              )}
+              {assessment.endTime && (
+                <span>Closes {new Date(assessment.endTime).toLocaleDateString()}</span>
+              )}
             </div>
           </div>
 
-          {isDraft && (
-            <button
-              onClick={() => void handlePublish()}
-              disabled={publishing || assessment.totalQuestions === 0}
-              title={assessment.totalQuestions === 0 ? 'Add at least one question first' : ''}
-              className="flex-shrink-0 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98]
-                         disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5
-                         rounded-xl transition-all shadow-sm flex items-center gap-2"
-            >
-              {publishing ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                  </svg>
-                  Publishing…
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M15 8a3 3 0 11-6 0 3 3 0 016 0zm6 8a2 2 0 01-2 2H5a2 2 0 01-2-2v-1a7 7 0 0114 0v1z" />
-                  </svg>
-                  Publish
-                </>
-              )}
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {isDraft && (
+              <>
+                <button
+                  onClick={() => void handleDelete()}
+                  disabled={deleting || assessment._count.attempts > 0}
+                  title={assessment._count.attempts > 0 ? 'Cannot delete — has attempts' : 'Delete assessment'}
+                  className="p-2.5 rounded-xl border border-slate-200 hover:border-red-200 hover:bg-red-50
+                             text-slate-400 hover:text-red-500 disabled:opacity-40 transition-all"
+                >
+                  {deleting ? (
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={() => void handlePublish()}
+                  disabled={publishing || assessment.totalQuestions === 0}
+                  title={assessment.totalQuestions === 0 ? 'Add at least one question first' : ''}
+                  className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98]
+                             disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5
+                             rounded-xl transition-all shadow-sm flex items-center gap-2"
+                >
+                  {publishing ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                      </svg>
+                      Publishing…
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M15 8a3 3 0 11-6 0 3 3 0 016 0zm6 8a2 2 0 01-2 2H5a2 2 0 01-2-2v-1a7 7 0 0114 0v1z" />
+                      </svg>
+                      Publish
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {actionError && (
-          <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-xl px-4 py-2.5
-                        border border-red-100">
+          <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-xl px-4 py-2.5 border border-red-100">
             {actionError}
           </p>
         )}
@@ -284,8 +424,7 @@ export default function AssessmentDetailPage({
 
       {/* ── Instructions ── */}
       {assessment.instructions && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6
-                        text-sm text-amber-800">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 text-sm text-amber-800">
           <p className="font-semibold mb-1">Instructions</p>
           {assessment.instructions}
         </div>
@@ -335,8 +474,7 @@ export default function AssessmentDetailPage({
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-xs font-semibold bg-violet-100 text-violet-700
-                                     px-2 py-0.5 rounded-lg">
+                    <span className="text-xs font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-lg">
                       {aq.question.questionType.replace('_', ' ')}
                     </span>
                     <span className={`text-xs font-semibold ${
@@ -400,18 +538,179 @@ export default function AssessmentDetailPage({
         </div>
       )}
 
+      {/* ── Edit / Settings Modal ── */}
+      {showEdit && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center
+                        p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <h3 className="font-heading font-bold text-slate-900">Edit Assessment</h3>
+              <button
+                onClick={() => setShowEdit(false)}
+                className="w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center
+                           text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              {/* Title */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Title</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm
+                             focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  Description <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  value={editForm.description}
+                  onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm resize-none
+                             focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                />
+              </div>
+
+              {/* Instructions */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  Instructions <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={editForm.instructions}
+                  onChange={e => setEditForm(p => ({ ...p, instructions: e.target.value }))}
+                  placeholder="e.g. Answer all questions. No calculators allowed."
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm resize-none
+                             focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500
+                             placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* Duration */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  Duration: <span className="text-violet-600 font-bold">{editForm.durationMinutes} min</span>
+                </label>
+                <input
+                  type="range" min={5} max={480} value={editForm.durationMinutes}
+                  onChange={e => setEditForm(p => ({ ...p, durationMinutes: Number(e.target.value) }))}
+                  className="w-full accent-violet-600 h-2 rounded-full"
+                />
+                <div className="flex justify-between text-xs text-slate-400 mt-1">
+                  <span>5 min</span><span>8 hrs</span>
+                </div>
+              </div>
+
+              {/* Time window */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Opens at</label>
+                  <input
+                    type="datetime-local"
+                    value={editForm.startTime}
+                    onChange={e => setEditForm(p => ({ ...p, startTime: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm
+                               focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Closes at</label>
+                  <input
+                    type="datetime-local"
+                    value={editForm.endTime}
+                    onChange={e => setEditForm(p => ({ ...p, endTime: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm
+                               focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                  />
+                </div>
+              </div>
+
+              {/* Settings divider */}
+              <div className="border-t border-slate-100 pt-5">
+                <h4 className="font-heading font-semibold text-slate-700 mb-4">Settings</h4>
+                <div className="space-y-4">
+                  <Toggle
+                    checked={settings.shuffleQuestions}
+                    onChange={v => setSettings(p => ({ ...p, shuffleQuestions: v }))}
+                    label="Shuffle question order"
+                  />
+                  <Toggle
+                    checked={settings.shuffleOptions}
+                    onChange={v => setSettings(p => ({ ...p, shuffleOptions: v }))}
+                    label="Shuffle MCQ options"
+                  />
+                  <Toggle
+                    checked={settings.showResultsImmediately}
+                    onChange={v => setSettings(p => ({ ...p, showResultsImmediately: v }))}
+                    label="Show results immediately after submit"
+                  />
+                  <Toggle
+                    checked={settings.allowReview}
+                    onChange={v => setSettings(p => ({ ...p, allowReview: v }))}
+                    label="Allow students to review their answers"
+                  />
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      Max attempts: <span className="text-violet-600 font-bold">{settings.maxAttempts}</span>
+                    </label>
+                    <input
+                      type="range" min={1} max={10} value={settings.maxAttempts}
+                      onChange={e => setSettings(p => ({ ...p, maxAttempts: Number(e.target.value) }))}
+                      className="w-full accent-violet-600 h-2 rounded-full"
+                    />
+                    <div className="flex justify-between text-xs text-slate-400 mt-1">
+                      <span>1 (once)</span><span>10</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex gap-3">
+              <button
+                onClick={() => setShowEdit(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold
+                           text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleSaveEdit()}
+                disabled={editSaving || !editForm.title.trim()}
+                className="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white
+                           text-sm font-semibold transition-all disabled:opacity-60 active:scale-[0.98]"
+              >
+                {editSaving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Question Bank Slide-over ── */}
       {showBank && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex z-50 animate-fade-in">
-          <div className="ml-auto w-full max-w-xl bg-white h-full flex flex-col shadow-modal
-                          translate-x-0 transition-transform">
+          <div className="ml-auto w-full max-w-xl bg-white h-full flex flex-col shadow-modal">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
               <div>
                 <h3 className="font-heading font-bold text-slate-900">Question Bank</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Select approved questions to add
-                </p>
+                <p className="text-xs text-slate-400 mt-0.5">Select approved questions to add</p>
               </div>
               <button
                 onClick={() => { setShowBank(false); setSelected(new Set()) }}
@@ -448,7 +747,7 @@ export default function AssessmentDetailPage({
                   <p className="text-sm font-medium text-slate-600">No approved questions found</p>
                   <a href="/teacher/questions/generate"
                      className="text-sm text-violet-600 hover:underline mt-2 inline-block font-medium">
-                    Generate questions with AI →
+                    Generate or simulate questions →
                   </a>
                 </div>
               ) : (
@@ -474,8 +773,7 @@ export default function AssessmentDetailPage({
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-xs font-semibold bg-slate-100 text-slate-600
-                                           px-2 py-0.5 rounded-lg">
+                          <span className="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg">
                             {q.questionType.replace('_', ' ')}
                           </span>
                           <span className={`text-xs font-semibold ${
@@ -500,8 +798,7 @@ export default function AssessmentDetailPage({
                 onClick={() => void handleAddQuestions()}
                 disabled={selected.size === 0 || adding}
                 className="w-full bg-violet-600 hover:bg-violet-700 active:scale-[0.98]
-                           disabled:opacity-60 text-white font-semibold py-3 rounded-xl
-                           text-sm transition-all"
+                           disabled:opacity-60 text-white font-semibold py-3 rounded-xl text-sm transition-all"
               >
                 {adding
                   ? 'Adding…'

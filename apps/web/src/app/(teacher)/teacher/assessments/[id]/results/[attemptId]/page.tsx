@@ -25,6 +25,7 @@ interface AssessmentQuestion {
 }
 
 interface Answer {
+  id: string
   questionId: string
   selectedAnswer?: string
   textAnswer?: string
@@ -51,7 +52,7 @@ interface AttemptResult {
   answers: Answer[]
 }
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function Skeleton({ className }: { className?: string }) {
   return (
@@ -59,8 +60,6 @@ function Skeleton({ className }: { className?: string }) {
       bg-[length:200%_100%] animate-shimmer rounded-lg ${className ?? ''}`} />
   )
 }
-
-// ─── Score ring ───────────────────────────────────────────────────────────────
 
 function ScoreRing({ percent }: { percent: number }) {
   const radius = 52
@@ -101,9 +100,14 @@ export default function TeacherAttemptDetailPage() {
   const apiRef = useRef(api)
   apiRef.current = api
 
-  const [attempt, setAttempt] = useState<AttemptResult | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [openIdx, setOpenIdx] = useState<number | null>(null)
+  const [attempt,    setAttempt]    = useState<AttemptResult | null>(null)
+  const [loading,    setLoading]    = useState(true)
+  const [openIdx,    setOpenIdx]    = useState<number | null>(null)
+
+  // Manual grading state: answerId → score (0 or 1)
+  const [pendingGrades, setPendingGrades] = useState<Record<string, number>>({})
+  const [grading,       setGrading]       = useState(false)
+  const [gradeError,    setGradeError]    = useState<string | null>(null)
 
   useEffect(() => {
     if (!attemptId) return
@@ -114,7 +118,43 @@ export default function TeacherAttemptDetailPage() {
       .finally(() => setLoading(false))
   }, [attemptId])
 
-  // ─── Loading state ───────────────────────────────────────────────────────
+  async function handleSaveGrades() {
+    if (Object.keys(pendingGrades).length === 0) return
+    setGrading(true); setGradeError(null)
+    try {
+      const grades = Object.entries(pendingGrades).map(([answerId, score]) => ({ answerId, score }))
+      const updated = await api.patch<{ percentageScore: number; score: number; status: string }>(
+        `/attempts/${attemptId}/grade`,
+        { grades },
+      )
+      setAttempt(prev => prev
+        ? { ...prev, percentageScore: updated.percentageScore, score: updated.score, status: updated.status }
+        : prev
+      )
+      // Merge the new scores back into answers
+      setAttempt(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          percentageScore: updated.percentageScore,
+          score: updated.score,
+          status: updated.status,
+          answers: prev.answers.map(a =>
+            pendingGrades[a.id] !== undefined
+              ? { ...a, score: pendingGrades[a.id], isCorrect: (pendingGrades[a.id] ?? 0) > 0 }
+              : a
+          ),
+        }
+      })
+      setPendingGrades({})
+    } catch (err) {
+      setGradeError(err instanceof Error ? err.message : 'Failed to save grades')
+    } finally {
+      setGrading(false)
+    }
+  }
+
+  // ─── Loading ────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -170,6 +210,17 @@ export default function TeacherAttemptDetailPage() {
         (new Date(attempt.submittedAt).getTime() - new Date(attempt.startedAt).getTime()) / 60000,
       )
     : null
+
+  // Open-ended questions needing grading
+  const openEndedQuestions = questions.filter(aq =>
+    !autoGradedTypes.includes(aq.question.questionType)
+  )
+  const ungradedCount = openEndedQuestions.filter(aq => {
+    const ans = answerMap.get(aq.question.id)
+    return ans?.textAnswer && ans.score == null
+  }).length
+
+  const hasPendingGrades = Object.keys(pendingGrades).length > 0
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -248,6 +299,21 @@ export default function TeacherAttemptDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Ungraded open-ended banner */}
+        {ungradedCount > 0 && (
+          <div className="mt-5 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-3">
+            <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" />
+            </svg>
+            <p className="text-sm text-blue-800">
+              <span className="font-semibold">{ungradedCount} question{ungradedCount !== 1 ? 's' : ''}</span>
+              {' '}need{ungradedCount === 1 ? 's' : ''} manual grading. Score them below and click
+              {' '}<strong>Save Grades</strong>.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Question review ── */}
@@ -262,12 +328,16 @@ export default function TeacherAttemptDetailPage() {
 
         <div className="divide-y divide-slate-50">
           {questions.map((aq, i) => {
-            const q           = aq.question
-            const ans         = answerMap.get(q.id)
-            const isAutoGrad  = autoGradedTypes.includes(q.questionType)
-            const isCorrect   = ans?.isCorrect
+            const q            = aq.question
+            const ans          = answerMap.get(q.id)
+            const isAutoGrad   = autoGradedTypes.includes(q.questionType)
+            const isCorrect    = ans?.isCorrect
             const isUnanswered = !ans?.selectedAnswer && !ans?.textAnswer
-            const isOpen      = openIdx === i
+            const isOpen       = openIdx === i
+            const needsGrading = !isAutoGrad && !!ans?.textAnswer && ans.score == null
+
+            // Current grade value for this answer (pending or saved)
+            const currentGrade = ans?.id ? (pendingGrades[ans.id] ?? ans.score ?? null) : null
 
             return (
               <div key={aq.id}>
@@ -279,11 +349,29 @@ export default function TeacherAttemptDetailPage() {
                   {/* Result indicator */}
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
                     isUnanswered ? 'bg-slate-100' :
-                    !isAutoGrad  ? 'bg-blue-100'  :
+                    !isAutoGrad && needsGrading ? 'bg-amber-100' :
+                    !isAutoGrad && !needsGrading && currentGrade != null
+                      ? (currentGrade > 0 ? 'bg-emerald-100' : 'bg-red-100')
+                      : !isAutoGrad ? 'bg-blue-100' :
                     isCorrect    ? 'bg-emerald-100' : 'bg-red-100'
                   }`}>
                     {isUnanswered ? (
                       <span className="text-xs text-slate-400 font-bold leading-none">—</span>
+                    ) : !isAutoGrad && needsGrading ? (
+                      <svg className="w-3 h-3 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    ) : !isAutoGrad && currentGrade != null ? (
+                      currentGrade > 0 ? (
+                        <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-3 h-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )
                     ) : !isAutoGrad ? (
                       <svg className="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -318,9 +406,16 @@ export default function TeacherAttemptDetailPage() {
                           Skipped
                         </span>
                       )}
-                      {!isAutoGrad && ans?.textAnswer && (
-                        <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                          Needs manual grading
+                      {!isAutoGrad && needsGrading && (
+                        <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                          Needs grading
+                        </span>
+                      )}
+                      {!isAutoGrad && !needsGrading && currentGrade != null && (
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          currentGrade > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
+                        }`}>
+                          {currentGrade > 0 ? 'Marked correct' : 'Marked incorrect'}
                         </span>
                       )}
                     </div>
@@ -328,8 +423,7 @@ export default function TeacherAttemptDetailPage() {
                   </div>
 
                   <svg
-                    className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform
-                                ${isOpen ? 'rotate-180' : ''}`}
+                    className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
                     fill="none" stroke="currentColor" viewBox="0 0 24 24"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -394,6 +488,61 @@ export default function TeacherAttemptDetailPage() {
                         <div className="text-sm bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-3 py-2.5">
                           <span className="font-semibold">Model answer: </span>{q.correctAnswer}
                         </div>
+
+                        {/* Manual grade controls — only when student answered */}
+                        {ans?.textAnswer && ans.id && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mt-1">
+                            <p className="text-xs font-semibold text-amber-800 mb-2">
+                              Assign score for this answer:
+                            </p>
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => {
+                                  const newGrade = currentGrade === 1 ? null : 1
+                                  setPendingGrades(p => {
+                                    const next = { ...p }
+                                    if (newGrade === null) { delete next[ans.id!]; return next }
+                                    next[ans.id!] = 1
+                                    return next
+                                  })
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                                            border-2 transition-all ${
+                                  currentGrade === 1
+                                    ? 'border-emerald-500 bg-emerald-100 text-emerald-700'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300'
+                                }`}
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Correct (1 pt)
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const newGrade = currentGrade === 0 ? null : 0
+                                  setPendingGrades(p => {
+                                    const next = { ...p }
+                                    if (newGrade === null) { delete next[ans.id!]; return next }
+                                    next[ans.id!] = 0
+                                    return next
+                                  })
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                                            border-2 transition-all ${
+                                  currentGrade === 0
+                                    ? 'border-red-500 bg-red-100 text-red-700'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-red-300'
+                                }`}
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Incorrect (0 pts)
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -415,6 +564,41 @@ export default function TeacherAttemptDetailPage() {
             )
           })}
         </div>
+
+        {/* Save grades bar */}
+        {(hasPendingGrades || ungradedCount > 0) && (
+          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-4">
+            <div>
+              {gradeError && (
+                <p className="text-sm text-red-600">{gradeError}</p>
+              )}
+              {hasPendingGrades && !gradeError && (
+                <p className="text-sm text-slate-600">
+                  {Object.keys(pendingGrades).length} grade{Object.keys(pendingGrades).length !== 1 ? 's' : ''} pending
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => void handleSaveGrades()}
+              disabled={!hasPendingGrades || grading}
+              className="bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-sm
+                         font-semibold px-5 py-2.5 rounded-xl transition-all active:scale-[0.98]
+                         flex items-center gap-2"
+            >
+              {grading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Saving…
+                </>
+              ) : (
+                'Save Grades'
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Footer actions ── */}

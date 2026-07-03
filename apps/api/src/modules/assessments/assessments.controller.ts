@@ -13,6 +13,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { AssessmentsService } from './assessments.service'
 import { CreateAssessmentDto } from './dto/create-assessment.dto'
 import { AddQuestionsDto } from './dto/add-questions.dto'
+import { UpdateAssessmentDto } from './dto/update-assessment.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Roles } from '../auth/decorators/roles.decorator'
 import { RolesGuard } from '../auth/guards/roles.guard'
@@ -76,6 +77,24 @@ export class AssessmentsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.assessmentsService.removeQuestion(id, questionId, user)
+  }
+
+  @Patch(':id')
+  @Roles(UserRole.ORG_ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Update a draft assessment (title, settings, time window, etc.)' })
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateAssessmentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.assessmentsService.update(id, dto, user)
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ORG_ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Delete a draft assessment with no attempts' })
+  delete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.assessmentsService.delete(id, user)
   }
 
   @Patch(':id/publish')

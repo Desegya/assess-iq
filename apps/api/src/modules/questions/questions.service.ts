@@ -9,6 +9,8 @@ import { AiService } from '../ai/ai.service'
 import { AuthUser, UserRole, QuestionType } from '@assessiq/types'
 import { GenerateQuestionsDto } from './dto/generate-questions.dto'
 import { UpdateQuestionDto } from './dto/update-question.dto'
+import { SimulateQuestionsDto } from './dto/simulate-questions.dto'
+import { QUESTION_BANK, scoreQuestion, buildTemplateQuestions } from './question-bank'
 
 @Injectable()
 export class QuestionsService {
@@ -64,6 +66,67 @@ export class QuestionsService {
             difficulty: dto.difficulty,
             status: 'DRAFT',
             isAiGenerated: true,
+            tags: [],
+          },
+        }),
+      ),
+    )
+
+    return { count: saved.length, questions: saved }
+  }
+
+  // ─── Simulate (no AI credits needed) ─────────────────────────────────────
+
+  async simulate(dto: SimulateQuestionsDto, user: AuthUser) {
+    if (!user.organizationId) {
+      throw new ForbiddenException('You must belong to an organisation')
+    }
+
+    const requestedTypes = dto.types as string[]
+    const searchTerms = [
+      ...dto.topic.toLowerCase().split(/\s+/),
+      ...(dto.subject?.toLowerCase().split(/\s+/) ?? []),
+    ].filter(Boolean)
+
+    // Score and filter bank questions
+    const scored = QUESTION_BANK
+      .filter(q => requestedTypes.includes(q.type))
+      .map(q => ({ q, score: scoreQuestion(q, searchTerms) }))
+      .sort((a, b) => b.score - a.score || Math.random() - 0.5)
+
+    const picked = scored.slice(0, dto.count).map(s => s.q)
+
+    // Fill any gap with templates
+    const shortfall = dto.count - picked.length
+    if (shortfall > 0) {
+      const templates = buildTemplateQuestions(dto.topic, requestedTypes, dto.difficulty, shortfall)
+      picked.push(...templates)
+    }
+
+    // Verify course belongs to org if provided
+    if (dto.courseId) {
+      const course = await this.prisma.course.findFirst({
+        where: { id: dto.courseId, organizationId: user.organizationId },
+      })
+      if (!course) throw new BadRequestException('Course not found')
+    }
+
+    // Save to DB
+    const saved = await Promise.all(
+      picked.map(q =>
+        this.prisma.question.create({
+          data: {
+            organizationId: user.organizationId!,
+            createdById: user.id,
+            courseId: dto.courseId ?? null,
+            questionText: q.questionText,
+            questionType: this.mapType(q.type),
+            options: q.options ?? undefined,
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation ?? null,
+            difficulty: dto.difficulty,
+            status: 'DRAFT',
+            isAiGenerated: false,
             tags: [],
           },
         }),

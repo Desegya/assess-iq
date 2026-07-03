@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { StartAttemptDto } from './dto/start-attempt.dto'
 import { SubmitAnswerDto } from './dto/submit-answer.dto'
+import { GradeAnswersDto } from './dto/grade-answers.dto'
 
 @Injectable()
 export class AttemptsService {
@@ -49,6 +50,18 @@ export class AttemptsService {
 
     if (assessment.totalQuestions === 0) {
       throw new BadRequestException('This assessment has no questions yet')
+    }
+
+    // Enforce time window
+    const now = new Date()
+    if (assessment.startTime && now < new Date(assessment.startTime)) {
+      const opens = new Date(assessment.startTime).toLocaleString('en-NG', {
+        dateStyle: 'medium', timeStyle: 'short',
+      })
+      throw new BadRequestException(`This assessment hasn't opened yet. It opens on ${opens}.`)
+    }
+    if (assessment.endTime && now > new Date(assessment.endTime)) {
+      throw new BadRequestException('This assessment has closed and is no longer accepting submissions.')
     }
 
     // Check for existing in-progress attempt
@@ -323,6 +336,47 @@ export class AttemptsService {
         student: { select: { id: true, name: true, email: true } },
         _count: { select: { answers: true } },
       },
+    })
+  }
+
+  // ─── Teacher: manually grade open-ended answers ───────────────────────────
+
+  async gradeAnswers(attemptId: string, dto: GradeAnswersDto, user: AuthUser) {
+    if (user.role === UserRole.STUDENT) throw new ForbiddenException()
+
+    const attempt = await this.prisma.attempt.findFirst({
+      where: { id: attemptId },
+      include: {
+        assessment: {
+          select: { questions: { select: { id: true } } },
+        },
+      },
+    })
+    if (!attempt) throw new NotFoundException('Attempt not found')
+
+    // Save each manual grade
+    await Promise.all(
+      dto.grades.map(g =>
+        this.prisma.answer.update({
+          where: { id: g.answerId },
+          data: { score: g.score, isCorrect: g.score > 0 },
+        }),
+      ),
+    )
+
+    // Recalculate totals across all answers (auto-graded + manually graded)
+    const allAnswers = await this.prisma.answer.findMany({
+      where: { attemptId },
+      select: { isCorrect: true },
+    })
+
+    const correctCount = allAnswers.filter(a => a.isCorrect === true).length
+    const totalQuestions = attempt.assessment.questions.length
+    const percentageScore = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0
+
+    return this.prisma.attempt.update({
+      where: { id: attemptId },
+      data: { score: correctCount, percentageScore, status: 'GRADED' },
     })
   }
 

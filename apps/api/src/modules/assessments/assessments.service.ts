@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { CreateAssessmentDto } from './dto/create-assessment.dto'
 import { AddQuestionsDto } from './dto/add-questions.dto'
+import { UpdateAssessmentDto } from './dto/update-assessment.dto'
 
 // Default assessment settings applied on creation
 const DEFAULT_SETTINGS = {
@@ -241,6 +242,59 @@ export class AssessmentsService {
       data: { status: 'PUBLISHED' },
       select: { id: true, status: true, title: true },
     })
+  }
+
+  // ─── Update ───────────────────────────────────────────────────────────────
+
+  async update(id: string, dto: UpdateAssessmentDto, user: AuthUser) {
+    const assessment = await this.findOne(id, user)
+    this.assertCanEdit(assessment, user)
+
+    if (assessment.status !== 'DRAFT') {
+      throw new BadRequestException('Only DRAFT assessments can be edited')
+    }
+
+    // Merge incoming settings with existing defaults
+    const existingSettings = (assessment.settings as Record<string, unknown>) ?? {}
+    const newSettings = dto.settings ? { ...existingSettings, ...dto.settings } : undefined
+
+    return this.prisma.assessment.update({
+      where: { id },
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.description !== undefined && { description: dto.description ?? null }),
+        ...(dto.instructions !== undefined && { instructions: dto.instructions ?? null }),
+        ...(dto.durationMinutes !== undefined && { durationMinutes: dto.durationMinutes }),
+        ...(dto.startTime !== undefined && { startTime: dto.startTime ? new Date(dto.startTime) : null }),
+        ...(dto.endTime !== undefined && { endTime: dto.endTime ? new Date(dto.endTime) : null }),
+        ...(newSettings !== undefined && { settings: newSettings }),
+      },
+      include: {
+        course: { select: { id: true, title: true } },
+        createdBy: { select: { id: true, name: true } },
+        questions: { orderBy: { order: 'asc' }, select: QUESTION_SELECT },
+        _count: { select: { attempts: true } },
+      },
+    })
+  }
+
+  // ─── Delete ───────────────────────────────────────────────────────────────
+
+  async delete(id: string, user: AuthUser) {
+    const assessment = await this.findOne(id, user)
+    this.assertCanEdit(assessment, user)
+
+    if (assessment.status !== 'DRAFT') {
+      throw new BadRequestException('Only DRAFT assessments can be deleted')
+    }
+    if (assessment._count.attempts > 0) {
+      throw new BadRequestException('Cannot delete an assessment that already has attempts')
+    }
+
+    await this.prisma.assessmentQuestion.deleteMany({ where: { assessmentId: id } })
+    await this.prisma.assessment.delete({ where: { id } })
+
+    return { message: 'Assessment deleted' }
   }
 
   // ─── Archive ──────────────────────────────────────────────────────────────

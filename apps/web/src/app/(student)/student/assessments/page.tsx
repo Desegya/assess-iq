@@ -60,6 +60,13 @@ export default function StudentAssessmentsPage() {
 
   const attemptMap = new Map(attempts.map(a => [a.assessmentId, a]))
 
+  function getWindowStatus(a: Assessment): 'not-open' | 'open' | 'closed' {
+    const now = Date.now()
+    if (a.startTime && now < new Date(a.startTime).getTime()) return 'not-open'
+    if (a.endTime   && now > new Date(a.endTime).getTime())   return 'closed'
+    return 'open'
+  }
+
   async function handleStart(assessmentId: string) {
     setStarting(assessmentId)
     try {
@@ -110,22 +117,25 @@ export default function StudentAssessmentsPage() {
       ) : (
         <div className="space-y-3">
           {assessments.map((a, idx) => {
-            const attempt     = attemptMap.get(a.id)
-            const isSubmitted = attempt?.status === 'SUBMITTED' ||
-                                attempt?.status === 'GRADED' ||
-                                attempt?.status === 'AUTO_SUBMITTED'
+            const attempt      = attemptMap.get(a.id)
+            const isSubmitted  = attempt?.status === 'SUBMITTED' ||
+                                 attempt?.status === 'GRADED' ||
+                                 attempt?.status === 'AUTO_SUBMITTED'
             const isInProgress = attempt?.status === 'IN_PROGRESS'
+            const windowStatus = getWindowStatus(a)
+            const isLocked     = !isSubmitted && !isInProgress && windowStatus !== 'open'
 
             return (
               <div
                 key={a.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-card
-                           hover:shadow-card-hover transition-all duration-200 p-5 animate-slide-up"
+                className={`bg-white rounded-2xl border shadow-card transition-all duration-200 p-5 animate-slide-up ${
+                  isLocked ? 'border-slate-200 opacity-75' : 'border-slate-200 hover:shadow-card-hover'
+                }`}
                 style={{ animationDelay: `${idx * 50}ms`, animationFillMode: 'both' }}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                       <span className="text-xs text-slate-400 font-medium">{a.course.title}</span>
                       {isSubmitted && (
                         <span className="text-xs font-semibold bg-emerald-100 text-emerald-700
@@ -139,12 +149,24 @@ export default function StudentAssessmentsPage() {
                           In Progress
                         </span>
                       )}
+                      {windowStatus === 'not-open' && !isSubmitted && !isInProgress && (
+                        <span className="text-xs font-semibold bg-blue-100 text-blue-700
+                                         px-2 py-0.5 rounded-full">
+                          Not yet open
+                        </span>
+                      )}
+                      {windowStatus === 'closed' && !isSubmitted && !isInProgress && (
+                        <span className="text-xs font-semibold bg-slate-100 text-slate-500
+                                         px-2 py-0.5 rounded-full">
+                          Closed
+                        </span>
+                      )}
                     </div>
                     <h2 className="font-heading text-base font-bold text-slate-900">{a.title}</h2>
                     {a.description && (
                       <p className="text-sm text-slate-500 mt-0.5 truncate">{a.description}</p>
                     )}
-                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
+                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 flex-wrap">
                       <span className="flex items-center gap-1">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <circle cx="12" cy="12" r="10" strokeWidth="1.8"/>
@@ -159,8 +181,18 @@ export default function StudentAssessmentsPage() {
                         </svg>
                         {a._count.questions} questions
                       </span>
-                      {a.startTime && (
-                        <span>Opens {new Date(a.startTime).toLocaleDateString()}</span>
+                      {a.startTime && windowStatus === 'not-open' && (
+                        <span className="font-medium text-blue-600">
+                          Opens {new Date(a.startTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                      {a.endTime && windowStatus === 'closed' && (
+                        <span>Closed {new Date(a.endTime).toLocaleDateString()}</span>
+                      )}
+                      {a.endTime && windowStatus === 'open' && (
+                        <span className="font-medium text-amber-600">
+                          Closes {new Date(a.endTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       )}
                     </div>
 
@@ -199,6 +231,17 @@ export default function StudentAssessmentsPage() {
                       >
                         {starting === a.id ? 'Loading…' : 'Resume →'}
                       </button>
+                    ) : windowStatus === 'not-open' ? (
+                      <div className="text-center">
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center mx-auto">
+                          <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        </div>
+                      </div>
+                    ) : windowStatus === 'closed' ? (
+                      <span className="text-xs font-medium text-slate-400">Ended</span>
                     ) : (
                       <button
                         onClick={() => void handleStart(a.id)}

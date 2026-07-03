@@ -14,6 +14,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger'
 import { QuestionsService } from './questions.service'
 import { GenerateQuestionsDto } from './dto/generate-questions.dto'
 import { UpdateQuestionDto } from './dto/update-question.dto'
+import { SimulateQuestionsDto } from './dto/simulate-questions.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Roles } from '../auth/decorators/roles.decorator'
 import { AuthUser, UserRole } from '@assessiq/types'
@@ -31,6 +32,15 @@ export class QuestionsController {
   @ApiOperation({ summary: 'Generate questions from a document using AI' })
   generate(@Body() dto: GenerateQuestionsDto, @CurrentUser() user: AuthUser) {
     return this.questionsService.generate(dto, user)
+  }
+
+  // ─── Simulate (no AI credits needed) ─────────────────────────────────────
+
+  @Post('simulate')
+  @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Simulate question generation from a pre-built bank (no AI credits required)' })
+  simulate(@Body() dto: SimulateQuestionsDto, @CurrentUser() user: AuthUser) {
+    return this.questionsService.simulate(dto, user)
   }
 
   // ─── List ─────────────────────────────────────────────────────────────────

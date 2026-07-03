@@ -14,6 +14,11 @@ interface Document {
   course?: { id: string; title: string } | null
 }
 
+interface Course {
+  id: string
+  title: string
+}
+
 interface McqOption { key: string; text: string }
 
 interface Question {
@@ -57,25 +62,36 @@ export default function GenerateQuestionsPage() {
 
   const documentId = searchParams.get('documentId') ?? ''
 
+  // Mode: 'ai' requires a document; 'simulate' works without one
+  const [mode, setMode] = useState<'ai' | 'simulate'>(documentId ? 'ai' : 'simulate')
+
   const [doc,        setDoc]        = useState<Document | null>(null)
-  const [docLoading, setDocLoading] = useState(true)
+  const [docLoading, setDocLoading] = useState(!!documentId)
+  const [courses,    setCourses]    = useState<Course[]>([])
 
   const [selectedTypes, setSelectedTypes] = useState<string[]>(['MCQ', 'TRUE_FALSE'])
   const [count,         setCount]         = useState(10)
   const [difficulty,    setDifficulty]    = useState('MEDIUM')
   const [topicHint,     setTopicHint]     = useState('')
 
+  // Simulate-only fields
+  const [simulateTopic,   setSimulateTopic]   = useState('')
+  const [simulateSubject, setSimulateSubject] = useState('')
+  const [simulateCourse,  setSimulateCourse]  = useState('')
+
   const [generating, setGenerating] = useState(false)
   const [questions,  setQuestions]  = useState<Question[]>([])
   const [error,      setError]      = useState<string | null>(null)
 
   useEffect(() => {
-    if (!documentId) return
-    void apiRef.current
-      .get<Document>(`/documents/${documentId}`)
-      .then(setDoc)
-      .catch(() => setDoc(null))
-      .finally(() => setDocLoading(false))
+    if (documentId) {
+      void apiRef.current
+        .get<Document>(`/documents/${documentId}`)
+        .then(setDoc)
+        .catch(() => setDoc(null))
+        .finally(() => setDocLoading(false))
+    }
+    void apiRef.current.get<Course[]>('/courses').then(setCourses).catch(() => [])
   }, [documentId])
 
   function toggleType(t: string) {
@@ -87,7 +103,6 @@ export default function GenerateQuestionsPage() {
   async function handleGenerate() {
     if (!documentId || selectedTypes.length === 0) return
     setGenerating(true); setError(null)
-
     try {
       const result = await api.post<GenerateResult>('/questions/generate', {
         documentId,
@@ -104,6 +119,26 @@ export default function GenerateQuestionsPage() {
     }
   }
 
+  async function handleSimulate() {
+    if (!simulateTopic.trim() || selectedTypes.length === 0) return
+    setGenerating(true); setError(null)
+    try {
+      const result = await api.post<GenerateResult>('/questions/simulate', {
+        topic: simulateTopic.trim(),
+        subject: simulateSubject.trim() || undefined,
+        courseId: simulateCourse || undefined,
+        types: selectedTypes,
+        count,
+        difficulty,
+      })
+      setQuestions(result.questions)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Simulation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
   async function handleApprove(id: string) {
     await api.patch(`/questions/${id}/approve`, {}).catch(() => undefined)
     setQuestions(prev => prev.map(q => q.id === id ? { ...q, status: 'APPROVED' } : q))
@@ -114,23 +149,8 @@ export default function GenerateQuestionsPage() {
     setQuestions(prev => prev.filter(q => q.id !== id))
   }
 
-  if (!documentId) {
-    return (
-      <div className="max-w-2xl mx-auto text-center py-24">
-        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-          <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        </div>
-        <p className="font-heading font-semibold text-slate-700">No document selected</p>
-        <a href="/teacher/documents"
-           className="text-violet-600 hover:underline text-sm mt-2 inline-block font-medium">
-          ← Back to Documents
-        </a>
-      </div>
-    )
-  }
+  const canGenerate   = mode === 'ai' ? (!!documentId && !!doc && selectedTypes.length > 0) : false
+  const canSimulate   = mode === 'simulate' ? (simulateTopic.trim().length >= 2 && selectedTypes.length > 0) : false
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -145,16 +165,71 @@ export default function GenerateQuestionsPage() {
           Back to Documents
         </a>
         <h1 className="font-heading text-2xl font-bold text-slate-900 mt-3">Generate Questions</h1>
-        {docLoading ? (
-          <div className="mt-1 h-4 w-48 bg-slate-200 animate-shimmer rounded" />
-        ) : doc ? (
-          <p className="text-slate-500 text-sm mt-1">
-            <span className="font-semibold text-slate-700">{doc.fileName}</span>
-            {doc.chunkCount != null && ` · ${doc.chunkCount} text chunks`}
-            {doc.course && ` · ${doc.course.title}`}
+
+        {/* Mode tabs */}
+        <div className="mt-4 flex items-center gap-1 bg-slate-100 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => { setMode('ai'); setQuestions([]) }}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              mode === 'ai'
+                ? 'bg-white text-violet-700 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+              </svg>
+              AI Generate
+            </span>
+          </button>
+          <button
+            onClick={() => { setMode('simulate'); setQuestions([]) }}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              mode === 'simulate'
+                ? 'bg-white text-violet-700 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+              Simulate
+              <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-md font-bold">
+                Free
+              </span>
+            </span>
+          </button>
+        </div>
+
+        {mode === 'ai' && (
+          <div className="mt-2">
+            {docLoading ? (
+              <div className="mt-1 h-4 w-48 bg-slate-200 animate-shimmer rounded" />
+            ) : doc ? (
+              <p className="text-slate-500 text-sm">
+                <span className="font-semibold text-slate-700">{doc.fileName}</span>
+                {doc.chunkCount != null && ` · ${doc.chunkCount} text chunks`}
+                {doc.course && ` · ${doc.course.title}`}
+              </p>
+            ) : (
+              <p className="text-slate-500 text-sm mt-1">
+                No document selected.{' '}
+                <a href="/teacher/documents" className="text-violet-600 hover:underline font-medium">
+                  Pick a document →
+                </a>
+              </p>
+            )}
+          </div>
+        )}
+
+        {mode === 'simulate' && (
+          <p className="text-slate-500 text-sm mt-2">
+            Generate questions from our built-in question bank — no document or AI credits needed.
           </p>
-        ) : (
-          <p className="text-red-500 text-sm mt-1">Document not found</p>
         )}
       </div>
 
@@ -162,6 +237,74 @@ export default function GenerateQuestionsPage() {
         {/* ── Config panel ── */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-card p-5 self-start">
           <h2 className="font-heading font-semibold text-slate-800 mb-5">Configuration</h2>
+
+          {/* Simulate-only: topic + subject */}
+          {mode === 'simulate' && (
+            <>
+              <div className="mb-5">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Topic <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={simulateTopic}
+                  onChange={e => setSimulateTopic(e.target.value)}
+                  placeholder="e.g. Photosynthesis, Newton's Laws…"
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm
+                             placeholder:text-slate-400 focus:outline-none focus:ring-2
+                             focus:ring-violet-500/20 focus:border-violet-500 transition-all"
+                />
+              </div>
+              <div className="mb-5">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Subject <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={simulateSubject}
+                  onChange={e => setSimulateSubject(e.target.value)}
+                  placeholder="e.g. Biology, Chemistry, Maths…"
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm
+                             placeholder:text-slate-400 focus:outline-none focus:ring-2
+                             focus:ring-violet-500/20 focus:border-violet-500 transition-all"
+                />
+              </div>
+              {courses.length > 0 && (
+                <div className="mb-5">
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    Link to course <span className="text-slate-400 font-normal">(optional)</span>
+                  </label>
+                  <select
+                    value={simulateCourse}
+                    onChange={e => setSimulateCourse(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm
+                               focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                  >
+                    <option value="">— No course —</option>
+                    {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* AI-only: topic hint */}
+          {mode === 'ai' && (
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Topic hint <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={topicHint}
+                onChange={e => setTopicHint(e.target.value)}
+                placeholder="e.g. Photosynthesis"
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm
+                           placeholder:text-slate-400 focus:outline-none focus:ring-2
+                           focus:ring-violet-500/20 focus:border-violet-500 transition-all"
+              />
+            </div>
+          )}
 
           {/* Question types */}
           <div className="mb-5">
@@ -223,53 +366,71 @@ export default function GenerateQuestionsPage() {
             </div>
           </div>
 
-          {/* Topic hint */}
-          <div className="mb-5">
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Topic hint <span className="text-slate-400 font-normal">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={topicHint}
-              onChange={e => setTopicHint(e.target.value)}
-              placeholder="e.g. Photosynthesis"
-              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm
-                         placeholder:text-slate-400 focus:outline-none focus:ring-2
-                         focus:ring-violet-500/20 focus:border-violet-500 transition-all"
-            />
-          </div>
-
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-2.5 mb-4 border border-red-100">
               {error}
             </p>
           )}
 
-          <button
-            onClick={handleGenerate}
-            disabled={generating || selectedTypes.length === 0 || !doc}
-            className="w-full bg-violet-600 hover:bg-violet-700 active:scale-[0.98] disabled:opacity-60
-                       text-white font-semibold py-3 rounded-xl text-sm transition-all duration-150
-                       shadow-sm flex items-center justify-center gap-2"
-          >
-            {generating ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                </svg>
-                Claude is generating…
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                </svg>
-                Generate {count} questions
-              </>
-            )}
-          </button>
+          {mode === 'ai' ? (
+            <button
+              onClick={() => void handleGenerate()}
+              disabled={generating || !canGenerate}
+              className="w-full bg-violet-600 hover:bg-violet-700 active:scale-[0.98] disabled:opacity-60
+                         text-white font-semibold py-3 rounded-xl text-sm transition-all duration-150
+                         shadow-sm flex items-center justify-center gap-2"
+            >
+              {generating ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Claude is generating…
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
+                  Generate {count} questions
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={() => void handleSimulate()}
+              disabled={generating || !canSimulate}
+              className="w-full bg-violet-600 hover:bg-violet-700 active:scale-[0.98] disabled:opacity-60
+                         text-white font-semibold py-3 rounded-xl text-sm transition-all duration-150
+                         shadow-sm flex items-center justify-center gap-2"
+            >
+              {generating ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Simulating…
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                  Simulate {count} questions
+                </>
+              )}
+            </button>
+          )}
+
+          {mode === 'simulate' && (
+            <p className="text-center text-xs text-slate-400 mt-3">
+              Questions come from our built-in bank, matched by topic.
+            </p>
+          )}
         </div>
 
         {/* ── Results panel ── */}
@@ -277,14 +438,26 @@ export default function GenerateQuestionsPage() {
           {questions.length === 0 && !generating ? (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-12 text-center">
               <div className="w-14 h-14 rounded-2xl bg-violet-50 flex items-center justify-center mx-auto mb-4">
-                <svg className="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                    d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                </svg>
+                {mode === 'ai' ? (
+                  <svg className="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
+                ) : (
+                  <svg className="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                )}
               </div>
-              <p className="font-heading font-semibold text-slate-700">Configure and generate</p>
+              <p className="font-heading font-semibold text-slate-700">
+                {mode === 'ai' ? 'Configure and generate' : 'Enter a topic and simulate'}
+              </p>
               <p className="text-slate-400 text-sm mt-1.5 max-w-xs mx-auto">
-                Questions Claude generates will appear here for you to review.
+                {mode === 'ai'
+                  ? 'Questions Claude generates will appear here for review.'
+                  : 'Questions from the built-in bank will appear here for review.'
+                }
               </p>
             </div>
           ) : generating ? (
@@ -294,20 +467,36 @@ export default function GenerateQuestionsPage() {
                 <div className="absolute inset-0 rounded-full border-4 border-violet-600
                                 border-t-transparent animate-spin" />
                 <div className="absolute inset-2 rounded-full bg-violet-50 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707" />
-                  </svg>
+                  {mode === 'ai' ? (
+                    <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    </svg>
+                  )}
                 </div>
               </div>
-              <p className="font-heading font-semibold text-slate-700">Claude is reading your document…</p>
-              <p className="text-slate-400 text-sm mt-1">This takes 5–15 seconds</p>
+              <p className="font-heading font-semibold text-slate-700">
+                {mode === 'ai' ? 'Claude is reading your document…' : 'Matching questions to your topic…'}
+              </p>
+              <p className="text-slate-400 text-sm mt-1">
+                {mode === 'ai' ? 'This takes 5–15 seconds' : 'Just a moment…'}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-700">
-                  {questions.length} questions generated
+                  {questions.length} questions {mode === 'simulate' ? 'simulated' : 'generated'}
+                  {mode === 'simulate' && (
+                    <span className="ml-2 text-xs font-normal text-slate-400">
+                      (from question bank — no AI credits used)
+                    </span>
+                  )}
                 </p>
                 <button
                   onClick={() => router.push('/teacher/questions')}
@@ -322,8 +511,8 @@ export default function GenerateQuestionsPage() {
                   key={q.id}
                   question={q}
                   index={i + 1}
-                  onApprove={() => handleApprove(q.id)}
-                  onDelete={() => handleDelete(q.id)}
+                  onApprove={() => void handleApprove(q.id)}
+                  onDelete={() => void handleDelete(q.id)}
                 />
               ))}
             </div>
