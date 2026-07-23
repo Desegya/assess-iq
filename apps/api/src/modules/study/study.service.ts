@@ -229,10 +229,11 @@ export class StudyService {
     })
 
     if (session.topicId) {
-      await this.prisma.topicMastery.upsert({
-        where: { studentId_topicId: { studentId: user.id, topicId: session.topicId } },
-        create: { studentId: user.id, topicId: session.topicId, lastAssessedAt: new Date() },
-        update: { lastAssessedAt: new Date() },
+      // Only touch an existing mastery record — don't create one from mere study time.
+      // Mastery is only meaningful once a quiz has produced a real score (see submitQuiz).
+      await this.prisma.topicMastery.updateMany({
+        where: { studentId: user.id, topicId: session.topicId },
+        data: { lastAssessedAt: new Date() },
       })
     }
 
@@ -434,7 +435,11 @@ export class StudyService {
 
   async getWeakTopics(user: AuthUser) {
     return this.prisma.topicMastery.findMany({
-      where: { studentId: user.id, masteryScore: { lt: WEAK_TOPIC_THRESHOLD } },
+      where: {
+        studentId: user.id,
+        quizAverage: { not: null }, // only topics that have actually been quizzed
+        masteryScore: { lt: WEAK_TOPIC_THRESHOLD },
+      },
       include: { topic: { select: { id: true, name: true, courseId: true } } },
       orderBy: { masteryScore: 'asc' },
     })
