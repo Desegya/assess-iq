@@ -5,6 +5,7 @@ import { AuthModule } from './modules/auth/auth.module'
 import { UsersModule } from './modules/users/users.module'
 import { OrganizationsModule } from './modules/organizations/organizations.module'
 import { CoursesModule } from './modules/courses/courses.module'
+import { TopicsModule } from './modules/topics/topics.module'
 import { QuestionsModule } from './modules/questions/questions.module'
 import { AssessmentsModule } from './modules/assessments/assessments.module'
 import { AttemptsModule } from './modules/attempts/attempts.module'
@@ -37,6 +38,7 @@ import { PrismaModule } from './modules/prisma/prisma.module'
     UsersModule,
     OrganizationsModule,
     CoursesModule,
+    TopicsModule,
     QuestionsModule,
     AssessmentsModule,
     AttemptsModule,

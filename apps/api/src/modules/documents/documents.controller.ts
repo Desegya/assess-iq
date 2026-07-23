@@ -38,7 +38,7 @@ export class DocumentsController {
   // ─── Upload ──────────────────────────────────────────────────────────────
 
   @Post('upload')
-  @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN, UserRole.STUDENT)
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Upload a document (PDF, DOCX, or TXT) and extract text' })
   @ApiConsumes('multipart/form-data')

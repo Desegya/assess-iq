@@ -5,6 +5,7 @@ import { AuthService } from './auth.service'
 import { LoginDto } from './dto/login.dto'
 import { RegisterOrgDto } from './dto/register-org.dto'
 import { JoinOrgDto } from './dto/join-org.dto'
+import { RegisterStudentDto } from './dto/register-student.dto'
 import { RefreshTokenDto } from './dto/refresh-token.dto'
 import { Public } from './decorators/public.decorator'
 import { CurrentUser } from './decorators/current-user.decorator'
@@ -69,6 +70,16 @@ export class AuthController {
   @ApiOperation({ summary: 'Student self-registers using an org join code' })
   joinOrg(@Body() dto: JoinOrgDto) {
     return this.authService.joinOrg(dto)
+  }
+
+  // Standalone student registration — no organisation/join code required
+  // (e.g. a Nightklass user whose school hasn't adopted the assessment side)
+  @Public()
+  @Post('register-student')
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @ApiOperation({ summary: 'Register a standalone student account with no organisation' })
+  registerStudent(@Body() dto: RegisterStudentDto) {
+    return this.authService.registerStudent(dto)
   }
 
   @Get('me')

@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { LoginDto } from './dto/login.dto'
 import { RegisterOrgDto } from './dto/register-org.dto'
 import { JoinOrgDto } from './dto/join-org.dto'
+import { RegisterStudentDto } from './dto/register-student.dto'
 import { AuthUser, UserRole } from '@assessiq/types'
 
 export interface TokenPair {
@@ -203,6 +204,35 @@ export class AuthService {
         role: 'STUDENT',
         status: 'ACTIVE',
         organizationId: org.id,
+      },
+    })
+
+    const tokens = await this.generateTokenPair({
+      id: user.id,
+      email: user.email,
+      role: user.role as UserRole,
+      organizationId: user.organizationId,
+    })
+
+    return { user: this.sanitizeUser(user), ...tokens }
+  }
+
+  // ─── Standalone student registration (no organisation, e.g. Nightklass) ───
+
+  async registerStudent(dto: RegisterStudentDto) {
+    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } })
+    if (existing) throw new ConflictException('An account with this email already exists')
+
+    const passwordHash = await bcrypt.hash(dto.password, 12)
+
+    const user = await this.prisma.user.create({
+      data: {
+        name: dto.name,
+        email: dto.email,
+        passwordHash,
+        role: 'STUDENT',
+        status: 'ACTIVE',
+        organizationId: null,
       },
     })
 

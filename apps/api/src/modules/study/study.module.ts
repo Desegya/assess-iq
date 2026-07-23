@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common'
 import { StudyController } from './study.controller'
 import { StudyService } from './study.service'
+import { CoursesModule } from '../courses/courses.module'
+import { AiModule } from '../ai/ai.module'
 
 @Module({
+  imports: [CoursesModule, AiModule],
   controllers: [StudyController],
   providers: [StudyService],
   exports: [StudyService],

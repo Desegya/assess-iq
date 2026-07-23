@@ -20,7 +20,7 @@ interface GenerateOptions {
   difficulty: QuestionDifficulty
   topicHint?: string
   userId: string
-  organizationId: string
+  organizationId?: string
   documentId: string
 }
 

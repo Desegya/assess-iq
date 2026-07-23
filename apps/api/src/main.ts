@@ -17,8 +17,13 @@ async function bootstrap() {
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })
 
   // ─── CORS ─────────────────────────────────────────────────────────────────
+  // APP_URL supports a comma-separated list — kwikeval.com (assessment) and
+  // nightklass.com (study) are separate frontends sharing this same API.
+  const allowedOrigins = (process.env.APP_URL ?? 'http://localhost:3000')
+    .split(',')
+    .map(origin => origin.trim())
   app.enableCors({
-    origin: process.env.APP_URL ?? 'http://localhost:3000',
+    origin: allowedOrigins,
     credentials: true,
   })
 

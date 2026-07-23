@@ -23,8 +23,8 @@ export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
 
   @Post()
-  @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Create a new course' })
+  @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN, UserRole.STUDENT)
+  @ApiOperation({ summary: 'Create a new course (or a personal course, for org-less students)' })
   create(@Body() dto: CreateCourseDto, @CurrentUser() user: AuthUser) {
     return this.coursesService.create(dto, user)
   }
@@ -42,7 +42,7 @@ export class CoursesController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN, UserRole.STUDENT)
   @ApiOperation({ summary: 'Update a course' })
   update(
     @Param('id') id: string,
@@ -54,7 +54,7 @@ export class CoursesController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN, UserRole.STUDENT)
   @ApiOperation({ summary: 'Delete a course' })
   remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.coursesService.remove(id, user)

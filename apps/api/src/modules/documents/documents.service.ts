@@ -34,7 +34,7 @@ export class DocumentsService {
   // ─── Upload ────────────────────────────────────────────────────────────────
 
   async upload(file: Express.Multer.File, dto: UploadDocumentDto, user: AuthUser) {
-    if (!user.organizationId) {
+    if (!user.organizationId && user.role !== UserRole.STUDENT) {
       throw new ForbiddenException('You must belong to an organisation to upload documents')
     }
     if (!ALLOWED_MIMETYPES.has(file.mimetype)) {
@@ -62,7 +62,8 @@ export class DocumentsService {
 
     try {
       // ── 1. Store in R2 ─────────────────────────────────────────────────────
-      const key = `${user.organizationId}/documents/${doc.id}/${file.originalname}`
+      const scopeKey = user.organizationId ?? `personal/${user.id}`
+      const key = `${scopeKey}/documents/${doc.id}/${file.originalname}`
       await this.storage.uploadBuffer(key, file.buffer, file.mimetype)
 
       await this.prisma.document.update({
@@ -105,11 +106,11 @@ export class DocumentsService {
   // ─── List ──────────────────────────────────────────────────────────────────
 
   async findAll(user: AuthUser, courseId?: string) {
-    if (!user.organizationId) return []
-
     return this.prisma.document.findMany({
       where: {
-        organizationId: user.organizationId,
+        ...(user.organizationId
+          ? { organizationId: user.organizationId }
+          : { uploadedById: user.id }),
         ...(courseId ? { courseId } : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -134,7 +135,9 @@ export class DocumentsService {
 
   async findOne(id: string, user: AuthUser) {
     const doc = await this.prisma.document.findFirst({
-      where: { id, organizationId: user.organizationId ?? undefined },
+      where: user.organizationId
+        ? { id, organizationId: user.organizationId }
+        : { id, uploadedById: user.id },
       include: {
         uploadedBy: { select: { id: true, name: true, email: true } },
         course: { select: { id: true, title: true } },

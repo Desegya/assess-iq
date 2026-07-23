@@ -131,6 +131,20 @@ enum AIAction {
   WEAK_TOPIC_SUGGESTION
 }
 
+enum StudyPlanStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
+enum StudySessionStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+  RESCHEDULED
+}
+
 // ─── Organization ─────────────────────────────────────────────────────────────
 
 model Organization {
@@ -180,6 +194,7 @@ model User {
   // Relations
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   teacherCourses Course[]      @relation("CourseTeacher")
+  ownedCourses   Course[]      @relation("CourseOwner")
   uploadedDocs   Document[]    @relation("DocumentUploader")
   createdQuestions Question[]  @relation("QuestionCreator")
   createdAssessments Assessment[] @relation("AssessmentCreator")
@@ -187,6 +202,10 @@ model User {
   aiUsageLogs    AIUsageLog[]
   flashcards     Flashcard[]
   refreshTokens  RefreshToken[]
+  studyAvailabilities StudyAvailability[] @relation("StudyAvailabilityStudent")
+  studyPlans     StudyPlan[]   @relation("StudyPlanStudent")
+  studySessions  StudySession[] @relation("StudySessionStudent")
+  topicMasteries TopicMastery[] @relation("TopicMasteryStudent")
 
   @@index([organizationId])
   @@index([email])
@@ -212,10 +231,15 @@ model RefreshToken {
 
 // ─── Course ───────────────────────────────────────────────────────────────────
 
+// A Course is either organisation-owned (organizationId + teacherId set — taught by a
+// teacher to an org's students) or personally-owned (ownerId set — a student's own
+// self-study course, e.g. a Nightklass user with no organisation at all). Exactly one
+// of (organizationId + teacherId) or ownerId is expected to be set.
 model Course {
   id             String       @id @default(cuid())
-  organizationId String
-  teacherId      String
+  organizationId String?
+  teacherId      String?
+  ownerId        String?
   title          String
   subject        String
   description    String?
@@ -224,34 +248,42 @@ model Course {
   updatedAt      DateTime     @updatedAt
 
   // Relations
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  teacher        User         @relation("CourseTeacher", fields: [teacherId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teacher        User?        @relation("CourseTeacher", fields: [teacherId], references: [id])
+  owner          User?        @relation("CourseOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   topics         Topic[]
   documents      Document[]
   questions      Question[]
   assessments    Assessment[]
+  studyPlans     StudyPlan[]
+  studySessions  StudySession[]
 
   @@index([organizationId])
   @@index([teacherId])
+  @@index([ownerId])
   @@map("courses")
 }
 
 // ─── Topic ────────────────────────────────────────────────────────────────────
 
 model Topic {
-  id            String    @id @default(cuid())
-  courseId      String
-  name          String
-  description   String?
-  parentTopicId String?
-  order         Int       @default(0)
-  createdAt     DateTime  @default(now())
+  id                String    @id @default(cuid())
+  courseId          String
+  name              String
+  description       String?
+  parentTopicId     String?
+  order             Int       @default(0)
+  estimatedMinutes  Int?
+  importanceWeight  Float?
+  createdAt         DateTime  @default(now())
 
   // Relations
   course        Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
   parentTopic   Topic?    @relation("TopicHierarchy", fields: [parentTopicId], references: [id])
   subTopics     Topic[]   @relation("TopicHierarchy")
   questions     Question[]
+  studySessions StudySession[]
+  masteries     TopicMastery[]
 
   @@index([courseId])
   @@map("topics")
@@ -261,7 +293,7 @@ model Topic {
 
 model Document {
   id             String         @id @default(cuid())
-  organizationId String
+  organizationId String?
   uploadedById   String
   courseId       String?
   fileName       String
@@ -276,7 +308,7 @@ model Document {
   updatedAt      DateTime       @updatedAt
 
   // Relations
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   uploadedBy     User           @relation("DocumentUploader", fields: [uploadedById], references: [id])
   course         Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
   generatedQuestions Question[]
@@ -291,7 +323,7 @@ model Document {
 
 model Question {
   id               String             @id @default(cuid())
-  organizationId   String
+  organizationId   String?
   createdById      String
   topicId          String?
   courseId         String?
@@ -311,7 +343,7 @@ model Question {
   updatedAt        DateTime           @updatedAt
 
   // Relations
-  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy        User               @relation("QuestionCreator", fields: [createdById], references: [id])
   topic            Topic?             @relation(fields: [topicId], references: [id], onDelete: SetNull)
   course           Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
@@ -446,7 +478,7 @@ model IntegrityEvent {
 
 model AIUsageLog {
   id              String       @id @default(cuid())
-  organizationId  String
+  organizationId  String?
   userId          String
   action          AIAction
   model           String       // e.g. "claude-sonnet-4-6"
@@ -459,7 +491,7 @@ model AIUsageLog {
   relatedEntityId String?      // documentId, assessmentId, etc.
   createdAt       DateTime     @default(now())
 
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   user            User         @relation(fields: [userId], references: [id])
 
   @@index([organizationId])
@@ -486,4 +518,96 @@ model Flashcard {
 
   @@index([studentId])
   @@map("flashcards")
+}
+
+// ─── Study Availability ───────────────────────────────────────────────────────
+
+model StudyAvailability {
+  id          String   @id @default(cuid())
+  studentId   String
+  dayOfWeek   Int      // 0 = Sunday .. 6 = Saturday
+  startTime   String   // "18:00"
+  endTime     String   // "22:00"
+  maxMinutes  Int?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student     User     @relation("StudyAvailabilityStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("study_availabilities")
+}
+
+// ─── Study Plan ───────────────────────────────────────────────────────────────
+
+model StudyPlan {
+  id        String          @id @default(cuid())
+  studentId String
+  courseId  String
+  examDate  DateTime
+  startDate DateTime        @default(now())
+  status    StudyPlanStatus @default(ACTIVE)
+  version   Int             @default(1)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  student   User            @relation("StudyPlanStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  course    Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sessions  StudySession[]
+
+  @@index([studentId])
+  @@index([courseId])
+  @@map("study_plans")
+}
+
+// ─── Study Session ────────────────────────────────────────────────────────────
+
+model StudySession {
+  id               String              @id @default(cuid())
+  studyPlanId      String
+  studentId        String
+  courseId         String
+  topicId          String?             // null = revision/buffer session
+  scheduledDate    DateTime
+  startTime        String
+  endTime          String
+  estimatedMinutes Int
+  actualMinutes    Int?
+  status           StudySessionStatus  @default(NOT_STARTED)
+  confidenceRating Int?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  studyPlan        StudyPlan           @relation(fields: [studyPlanId], references: [id], onDelete: Cascade)
+  student          User                @relation("StudySessionStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  course           Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  topic            Topic?              @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  @@index([studyPlanId])
+  @@index([studentId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@map("study_sessions")
+}
+
+// ─── Topic Mastery ────────────────────────────────────────────────────────────
+
+model TopicMastery {
+  id             String    @id @default(cuid())
+  studentId      String
+  topicId        String
+  masteryScore   Float     @default(0)
+  quizAverage    Float?
+  revisionCount  Int       @default(0)
+  lastAssessedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  student        User      @relation("TopicMasteryStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  topic          Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, topicId])
+  @@index([studentId])
+  @@map("topic_masteries")
 }

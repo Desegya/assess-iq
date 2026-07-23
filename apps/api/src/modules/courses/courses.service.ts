@@ -8,8 +8,24 @@ export class CoursesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateCourseDto, user: AuthUser) {
+    // A student with no organisation creates a personally-owned course
+    // (e.g. a Nightklass user whose school hasn't adopted the assessment side).
     if (!user.organizationId) {
-      throw new ForbiddenException('You must belong to an organisation to create courses')
+      if (user.role !== UserRole.STUDENT) {
+        throw new ForbiddenException('You must belong to an organisation to create courses')
+      }
+      return this.prisma.course.create({
+        data: {
+          title: dto.title,
+          subject: dto.subject,
+          description: dto.description,
+          ownerId: user.id,
+        },
+      })
+    }
+
+    if (user.role === UserRole.STUDENT) {
+      throw new ForbiddenException('Students in an organisation cannot create organisation courses')
     }
 
     return this.prisma.course.create({
@@ -24,7 +40,15 @@ export class CoursesService {
   }
 
   async findAll(user: AuthUser) {
-    if (!user.organizationId) return []
+    if (!user.organizationId) {
+      return this.prisma.course.findMany({
+        where: { ownerId: user.id },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          _count: { select: { documents: true, questions: true, assessments: true } },
+        },
+      })
+    }
 
     return this.prisma.course.findMany({
       where: {
@@ -42,7 +66,9 @@ export class CoursesService {
 
   async findOne(id: string, user: AuthUser) {
     const course = await this.prisma.course.findFirst({
-      where: { id, organizationId: user.organizationId ?? undefined },
+      where: user.organizationId
+        ? { id, organizationId: user.organizationId }
+        : { id, ownerId: user.id },
       include: {
         teacher: { select: { id: true, name: true, email: true } },
         topics: { orderBy: { order: 'asc' } },
@@ -57,6 +83,7 @@ export class CoursesService {
     const course = await this.findOne(id, user)
 
     const canEdit =
+      course.ownerId === user.id ||
       course.teacherId === user.id ||
       user.role === UserRole.ORG_ADMIN ||
       user.role === UserRole.SUPER_ADMIN
@@ -70,6 +97,7 @@ export class CoursesService {
     const course = await this.findOne(id, user)
 
     const canDelete =
+      course.ownerId === user.id ||
       course.teacherId === user.id ||
       user.role === UserRole.ORG_ADMIN ||
       user.role === UserRole.SUPER_ADMIN
