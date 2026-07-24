@@ -1,0 +1,17 @@
+{
+  "extends": "../../packages/config/typescript/nextjs.json",
+  "compilerOptions": {
+    "composite": false,
+    "outDir": "./.next",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@assessiq/types": ["../../packages/types/dist"]
+    },
+    "noEmit": true,
+    "incremental": true,
+    "isolatedModules": true
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
