@@ -7,9 +7,11 @@ import {
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
+import { AiService } from '../ai/ai.service'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { DocumentType } from '@assessiq/db'
 import { UploadDocumentDto } from './dto/upload-document.dto'
+import { extractTopicsHeuristically } from './topic-extraction-fallback'
 import pdfParse from 'pdf-parse'
 import mammoth from 'mammoth'
 
@@ -29,6 +31,7 @@ export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly ai: AiService,
   ) {}
 
   // ─── Upload ────────────────────────────────────────────────────────────────
@@ -156,6 +159,40 @@ export class DocumentsService {
     }
     const url = await this.storage.getSignedDownloadUrl(doc.fileUrl)
     return { url }
+  }
+
+  // ─── Extract topics ─────────────────────────────────────────────────────────
+
+  /**
+   * Proposes candidate topics from a document's extracted text. Tries AI first;
+   * falls back to a heuristic (no-AI) extraction if AI is unavailable or fails,
+   * so this never blocks a student without a valid ANTHROPIC_API_KEY configured.
+   * Proposals are not persisted — the caller reviews/edits before saving them as Topics.
+   */
+  async extractTopics(id: string, user: AuthUser) {
+    const doc = await this.findOne(id, user)
+    if (doc.status !== 'READY') {
+      throw new BadRequestException('Document is not ready yet — wait for text extraction to finish')
+    }
+    if (!doc.extractedText) {
+      throw new BadRequestException('Document has no extracted text')
+    }
+
+    try {
+      const proposals = await this.ai.extractTopics(doc.extractedText, {
+        userId: user.id,
+        organizationId: user.organizationId ?? undefined,
+        documentId: doc.id,
+      })
+      return { source: 'ai' as const, proposals }
+    } catch (err) {
+      this.logger.warn(
+        `AI topic extraction failed for document ${id}, using fallback extraction: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      )
+      return { source: 'fallback' as const, proposals: extractTopicsHeuristically(doc.extractedText) }
+    }
   }
 
   // ─── Delete ────────────────────────────────────────────────────────────────

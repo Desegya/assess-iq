@@ -95,6 +95,14 @@ export class DocumentsController {
     return this.documentsService.getDownloadUrl(id, user)
   }
 
+  // ─── Extract topics ──────────────────────────────────────────────────────
+
+  @Post(':id/extract-topics')
+  @ApiOperation({ summary: 'Propose candidate topics from a ready document (AI, with a heuristic fallback)' })
+  extractTopics(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.documentsService.extractTopics(id, user)
+  }
+
   // ─── Delete ──────────────────────────────────────────────────────────────
 
   @Delete(':id')

@@ -14,11 +14,22 @@ export interface RawGeneratedQuestion {
   explanation?: string
 }
 
+export interface RawExtractedTopic {
+  name: string
+  description?: string
+}
+
 interface GenerateOptions {
   count: number
   types: QuestionType[]
   difficulty: QuestionDifficulty
   topicHint?: string
+  userId: string
+  organizationId?: string
+  documentId: string
+}
+
+interface ExtractTopicsOptions {
   userId: string
   organizationId?: string
   documentId: string
@@ -81,7 +92,7 @@ export class AiService {
         throw new Error('Unexpected response type from Claude')
       }
 
-      const questions = this.parseResponse(textBlock.text)
+      const questions = this.parseJsonArray<RawGeneratedQuestion>(textBlock.text)
       this.logger.log(
         `Generated ${questions.length} questions for doc ${opts.documentId} ` +
           `(${inputTokens} in / ${outputTokens} out tokens)`,
@@ -104,6 +115,87 @@ export class AiService {
             organizationId: opts.organizationId,
             userId: opts.userId,
             action: 'GENERATE_QUESTIONS',
+            model: MODEL,
+            inputTokens,
+            outputTokens,
+            costUsd,
+            durationMs,
+            success,
+            errorMessage,
+            relatedEntityId: opts.documentId,
+          },
+        })
+        .catch(e => this.logger.error('Failed to save AI usage log', e))
+    }
+  }
+
+  // ─── Extract candidate topics from extracted document text ────────────────
+
+  async extractTopics(
+    extractedText: string,
+    opts: ExtractTopicsOptions,
+  ): Promise<RawExtractedTopic[]> {
+    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY', '')
+    if (!apiKey) {
+      throw new BadRequestException(
+        'ANTHROPIC_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
+      )
+    }
+
+    const textSlice = extractedText.slice(0, 12000)
+    const prompt = `You are an expert curriculum designer. Read the course material below and break it
+into a short, ordered list of study topics a student could plan revision sessions around.
+
+- Produce between 4 and 12 topics, in the order they appear in the text
+- Each topic name should be concise (under 8 words)
+- Include a one-sentence description of what the topic covers
+
+Return ONLY a valid JSON array — no markdown, no explanation, just the array.
+Each item must match: {"name":"...","description":"..."}
+
+TEXT TO USE:
+${textSlice}`
+
+    const start = Date.now()
+    let inputTokens = 0
+    let outputTokens = 0
+    let success = true
+    let errorMessage: string | undefined
+
+    try {
+      const response = await this.client.messages.create({
+        model: MODEL,
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+      })
+
+      inputTokens = response.usage.input_tokens
+      outputTokens = response.usage.output_tokens
+
+      const textBlock = response.content.find(b => b.type === 'text')
+      if (!textBlock || textBlock.type !== 'text') {
+        throw new Error('Unexpected response type from Claude')
+      }
+
+      const topics = this.parseJsonArray<RawExtractedTopic>(textBlock.text)
+      this.logger.log(`Extracted ${topics.length} topics for doc ${opts.documentId}`)
+      return topics
+    } catch (err) {
+      success = false
+      errorMessage = err instanceof Error ? err.message : String(err)
+      throw err
+    } finally {
+      const durationMs = Date.now() - start
+      const costUsd =
+        (inputTokens / 1_000_000) * COST_PER_M_INPUT +
+        (outputTokens / 1_000_000) * COST_PER_M_OUTPUT
+
+      await this.prisma.aIUsageLog
+        .create({
+          data: {
+            organizationId: opts.organizationId,
+            userId: opts.userId,
+            action: 'EXTRACT_TOPICS',
             model: MODEL,
             inputTokens,
             outputTokens,
@@ -159,7 +251,7 @@ ${text}`
 
   // ─── Response parser ──────────────────────────────────────────────────────
 
-  private parseResponse(raw: string): RawGeneratedQuestion[] {
+  private parseJsonArray<T>(raw: string): T[] {
     // Strip markdown code fences if Claude wrapped the output
     const cleaned = raw
       .replace(/^```(?:json)?\s*/i, '')
@@ -180,6 +272,6 @@ ${text}`
       throw new Error('Claude response was not a JSON array')
     }
 
-    return parsed as RawGeneratedQuestion[]
+    return parsed as T[]
   }
 }

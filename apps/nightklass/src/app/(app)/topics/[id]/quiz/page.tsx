@@ -13,6 +13,7 @@ interface QuizQuestion {
   questionText: string
   questionType: string
   options: QuizOption[] | null
+  isAiGenerated: boolean
 }
 
 interface QuizResult {
@@ -113,6 +114,11 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
 
       {questions && scorePercent === null && (
         <div className="space-y-4">
+          {questions.length > 0 && !questions[0]!.isAiGenerated && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              Using a practice question bank for now (no AI key configured yet).
+            </p>
+          )}
           {questions.map((q, i) => (
             <div key={q.id} className="card p-6">
               <p className="text-sm font-medium text-slate-800 mb-3">

@@ -21,6 +21,17 @@ interface Course {
   topics: Topic[]
 }
 
+interface UploadedDocument {
+  id: string
+  status: string
+  fileName: string
+}
+
+interface TopicProposal {
+  name: string
+  description?: string
+}
+
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 interface DaySlot {
@@ -39,6 +50,15 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
 
   const [topicForm, setTopicForm] = useState({ name: '', description: '', estimatedMinutes: '' })
   const [addingTopic, setAddingTopic] = useState(false)
+
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [readyDoc, setReadyDoc] = useState<UploadedDocument | null>(null)
+  const [extracting, setExtracting] = useState(false)
+  const [extractError, setExtractError] = useState<string | null>(null)
+  const [proposals, setProposals] = useState<TopicProposal[] | null>(null)
+  const [proposalSource, setProposalSource] = useState<'ai' | 'fallback' | null>(null)
+  const [savingProposals, setSavingProposals] = useState(false)
 
   const [days, setDays] = useState<DaySlot[]>(
     DAYS.map(() => ({ enabled: false, startTime: '18:00', endTime: '19:00' })),
@@ -98,6 +118,73 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     load()
   }
 
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadError(null)
+    setUploading(true)
+    setReadyDoc(null)
+    setProposals(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('courseId', id)
+      const doc = await api.upload<UploadedDocument>('/documents/upload', formData)
+      if (doc.status !== 'READY') {
+        throw new Error('Document could not be processed — try a different file')
+      }
+      setReadyDoc(doc)
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handleExtractTopics() {
+    if (!readyDoc) return
+    setExtractError(null)
+    setExtracting(true)
+    try {
+      const result = await api.post<{ source: 'ai' | 'fallback'; proposals: TopicProposal[] }>(
+        `/documents/${readyDoc.id}/extract-topics`,
+        {},
+      )
+      setProposals(result.proposals)
+      setProposalSource(result.source)
+    } catch (err) {
+      setExtractError(err instanceof Error ? err.message : 'Failed to extract topics')
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  function updateProposal(i: number, name: string) {
+    setProposals(prev => (prev ? prev.map((p, idx) => (idx === i ? { ...p, name } : p)) : prev))
+  }
+
+  function removeProposal(i: number) {
+    setProposals(prev => (prev ? prev.filter((_, idx) => idx !== i) : prev))
+  }
+
+  async function handleSaveProposals() {
+    if (!proposals || proposals.length === 0) return
+    setSavingProposals(true)
+    try {
+      for (const p of proposals) {
+        await api.post(`/courses/${id}/topics`, { name: p.name, description: p.description })
+      }
+      setProposals(null)
+      setReadyDoc(null)
+      load()
+    } catch (err) {
+      setExtractError(err instanceof Error ? err.message : 'Failed to save topics')
+    } finally {
+      setSavingProposals(false)
+    }
+  }
+
   async function handleGeneratePlan(e: React.FormEvent) {
     e.preventDefault()
     setPlanError(null)
@@ -147,6 +234,77 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
           </Link>
         )}
       </div>
+
+      {/* Upload material → extract topics */}
+      <section className="card p-6">
+        <h2 className="font-heading font-bold text-slate-900 mb-1">Upload course material</h2>
+        <p className="text-slate-400 text-sm mb-4">
+          Upload a course outline, notes, or textbook (PDF, DOCX, or TXT) and we&apos;ll suggest topics for you to review.
+        </p>
+
+        {uploadError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{uploadError}</div>
+        )}
+        {extractError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{extractError}</div>
+        )}
+
+        {!proposals && (
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx,.txt"
+              onChange={handleUpload}
+              disabled={uploading}
+              className="text-sm"
+            />
+            {uploading && <span className="text-sm text-slate-400">Uploading & extracting text…</span>}
+            {readyDoc && !uploading && (
+              <button onClick={handleExtractTopics} disabled={extracting} className="btn-secondary">
+                {extracting ? 'Suggesting topics…' : `Suggest topics from ${readyDoc.fileName}`}
+              </button>
+            )}
+          </div>
+        )}
+
+        {proposals && (
+          <div className="space-y-3">
+            {proposalSource === 'fallback' && (
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                Using basic section-splitting for now (no AI key configured yet) — feel free to edit these before adding.
+              </p>
+            )}
+            <ul className="space-y-2">
+              {proposals.map((p, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <input
+                    value={p.name}
+                    onChange={e => updateProposal(i, e.target.value)}
+                    className="input-base flex-1"
+                  />
+                  <button onClick={() => removeProposal(i)} className="text-xs text-red-500 flex-shrink-0">
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="flex items-center gap-3">
+              <button onClick={handleSaveProposals} disabled={savingProposals} className="btn-primary">
+                {savingProposals ? 'Adding…' : `Add ${proposals.length} topic(s)`}
+              </button>
+              <button
+                onClick={() => {
+                  setProposals(null)
+                  setReadyDoc(null)
+                }}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* Topics */}
       <section className="card p-6">

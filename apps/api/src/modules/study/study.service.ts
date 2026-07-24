@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { CoursesService } from '../courses/courses.service'
-import { AiService } from '../ai/ai.service'
+import { AiService, type RawGeneratedQuestion } from '../ai/ai.service'
+import { QUESTION_BANK, scoreQuestion, buildTemplateQuestions } from '../questions/question-bank'
 import { AuthUser, QuestionType } from '@assessiq/types'
 import { SetAvailabilityDto } from './dto/set-availability.dto'
 import { GeneratePlanDto } from './dto/generate-plan.dto'
@@ -31,6 +32,8 @@ interface DatedSlot {
 
 @Injectable()
 export class StudyService {
+  private readonly logger = new Logger(StudyService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly coursesService: CoursesService,
@@ -339,15 +342,45 @@ export class StudyService {
       )
     }
 
-    const raw = await this.ai.generateQuestions(sourceText, {
-      count: dto.count,
-      types: [QuestionType.MCQ, QuestionType.TRUE_FALSE],
-      difficulty: dto.difficulty,
-      topicHint: topic.name,
-      userId: user.id,
-      organizationId: user.organizationId ?? undefined,
-      documentId: doc?.id ?? topic.id,
-    })
+    // Try AI generation first; fall back to a local question bank if AI is
+    // unavailable (no/invalid API key) or fails, so this never hard-blocks a
+    // student — it just quietly degrades until a real key is configured.
+    let raw: RawGeneratedQuestion[]
+    let isAiGenerated = true
+    try {
+      raw = await this.ai.generateQuestions(sourceText, {
+        count: dto.count,
+        types: [QuestionType.MCQ, QuestionType.TRUE_FALSE],
+        difficulty: dto.difficulty,
+        topicHint: topic.name,
+        userId: user.id,
+        organizationId: user.organizationId ?? undefined,
+        documentId: doc?.id ?? topic.id,
+      })
+    } catch (err) {
+      this.logger.warn(
+        `AI quiz generation failed for topic ${topicId}, using fallback question bank: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      )
+      isAiGenerated = false
+      const searchTerms = topic.name.toLowerCase().split(/\s+/)
+      const scored = QUESTION_BANK.filter(q => q.type === 'MCQ' || q.type === 'TRUE_FALSE')
+        .map(q => ({ q, score: scoreQuestion(q, searchTerms) }))
+        .sort((a, b) => b.score - a.score || Math.random() - 0.5)
+      const picked = scored.slice(0, dto.count).map(s => s.q)
+      const shortfall = dto.count - picked.length
+      if (shortfall > 0) {
+        picked.push(...buildTemplateQuestions(topic.name, ['MCQ', 'TRUE_FALSE'], dto.difficulty, shortfall))
+      }
+      raw = picked.map(q => ({
+        type: q.type,
+        questionText: q.questionText,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+      }))
+    }
 
     const saved = await Promise.all(
       raw.map(q =>
@@ -365,8 +398,8 @@ export class StudyService {
             explanation: q.explanation ?? null,
             difficulty: dto.difficulty,
             status: 'APPROVED', // self-quizzes are student-initiated and formative — no teacher review needed
-            isAiGenerated: true,
-            tags: ['nightklass-self-quiz'],
+            isAiGenerated,
+            tags: isAiGenerated ? ['nightklass-self-quiz'] : ['nightklass-self-quiz', 'fallback'],
           },
         }),
       ),
