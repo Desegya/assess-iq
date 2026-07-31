@@ -120,7 +120,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         <p className="text-center text-xs text-slate-400 pb-8 px-6">
-          &copy; {new Date().getFullYear()} AssessIQ. All rights reserved.
+          &copy; {new Date().getFullYear()} KwikEval. All rights reserved.
         </p>
       </div>
     </div>

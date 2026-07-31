@@ -7,7 +7,7 @@ export default function AdminDashboardPage() {
     <div className="max-w-6xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Platform Overview</h1>
-        <p className="text-gray-500 text-sm mt-1">AssessIQ super-admin console.</p>
+        <p className="text-gray-500 text-sm mt-1">KwikEval super-admin console.</p>
       </div>
 
       <div className="grid sm:grid-cols-4 gap-4">

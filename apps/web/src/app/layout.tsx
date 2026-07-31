@@ -18,8 +18,8 @@ const jakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | AssessIQ',
-    default: 'AssessIQ — Assess Smarter, Teach Better',
+    template: '%s | KwikEval',
+    default: 'KwikEval — Assess Smarter, Teach Better',
   },
   description: 'AI-powered assessment platform for schools across Nigeria',
 }

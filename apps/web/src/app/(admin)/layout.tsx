@@ -4,7 +4,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex h-screen bg-slate-900">
       <aside className="w-64 bg-slate-800 flex flex-col">
         <div className="p-6 border-b border-slate-700">
-          <span className="text-xl font-bold text-white">AssessIQ</span>
+          <span className="text-xl font-bold text-white">KwikEval</span>
           <span className="block text-xs text-slate-400 mt-0.5">Platform Admin</span>
         </div>
       </aside>

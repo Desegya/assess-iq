@@ -67,7 +67,7 @@ export function Logo({ size = 'md', iconOnly = false, theme = 'dark' }: LogoProp
       {/* ── Wordmark ── */}
       {!iconOnly && (
         <span className={`font-heading font-bold ${fontSizeMap[size]} ${wordColor} tracking-tight`}>
-          Assess<span className={iqColor}>IQ</span>
+          Kwik<span className={iqColor}>Eval</span>
         </span>
       )}
     </span>
