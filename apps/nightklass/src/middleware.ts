@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PROTECTED_PREFIXES = ['/dashboard', '/courses', '/today', '/topics', '/weak-topics']
+const PROTECTED_PREFIXES = ['/dashboard', '/courses', '/today', '/topics', '/weak-topics', '/flashcards']
 const AUTH_ONLY_ROUTES = ['/login', '/register']
 
 export function middleware(request: NextRequest) {
