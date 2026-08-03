@@ -129,6 +129,7 @@ enum AIAction {
   EXTRACT_TOPICS
   REVIEW_QUALITY
   WEAK_TOPIC_SUGGESTION
+  ANSWER_QUESTION
 }
 
 enum StudyPlanStatus {
@@ -257,6 +258,7 @@ model Course {
   assessments    Assessment[]
   studyPlans     StudyPlan[]
   studySessions  StudySession[]
+  flashcards     Flashcard[]
 
   @@index([organizationId])
   @@index([teacherId])
@@ -284,6 +286,7 @@ model Topic {
   questions     Question[]
   studySessions StudySession[]
   masteries     TopicMastery[]
+  flashcards    Flashcard[]
 
   @@index([courseId])
   @@map("topics")
@@ -504,19 +507,30 @@ model AIUsageLog {
 
 model Flashcard {
   id             String       @id @default(cuid())
-  organizationId String
+  organizationId String?
   studentId      String
   documentId     String?
   topicId        String?
+  courseId       String?
   front          String       @db.Text
   back           String       @db.Text
+  // Spaced repetition (SM-2)
+  dueDate        DateTime     @default(now())
+  intervalDays   Int          @default(1)
+  easeFactor     Float        @default(2.5)
+  repetitions    Int          @default(0)
+  lastReviewedAt DateTime?
   createdAt      DateTime     @default(now())
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   student        User         @relation(fields: [studentId], references: [id])
   document       Document?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  topic          Topic?       @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  course         Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
 
   @@index([studentId])
+  @@index([courseId])
+  @@index([dueDate])
   @@map("flashcards")
 }
 
@@ -576,6 +590,7 @@ model StudySession {
   actualMinutes    Int?
   status           StudySessionStatus  @default(NOT_STARTED)
   confidenceRating Int?
+  completedAt      DateTime?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 

@@ -1,20 +1,45 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { AuthGuard } from '@/components/auth/AuthGuard'
 import { Logo } from '@/components/ui/Logo'
 import { useAuth } from '@/contexts/auth-context'
+import { useApi } from '@/hooks/use-api'
 
 const NAV = [
   { href: '/dashboard', label: 'Courses' },
-  { href: '/today', label: "Today" },
+  { href: '/today', label: 'Today' },
+  { href: '/flashcards', label: 'Flashcards' },
   { href: '/weak-topics', label: 'Weak topics' },
 ]
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { user, logout } = useAuth()
+  const api = useApi()
+  const [dueCount, setDueCount] = useState(0)
+
+  useEffect(() => {
+    api
+      .get<unknown[]>('/study/flashcards/due')
+      .then(cards => setDueCount(cards.length))
+      .catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
+
+  function navLabel(item: (typeof NAV)[number]) {
+    if (item.href !== '/flashcards' || dueCount === 0) return item.label
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        {item.label}
+        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+          {dueCount}
+        </span>
+      </span>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-brand-bg">
@@ -34,7 +59,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
                     : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                {item.label}
+                {navLabel(item)}
               </Link>
             ))}
           </nav>
@@ -54,7 +79,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
                 pathname.startsWith(item.href) ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600'
               }`}
             >
-              {item.label}
+              {navLabel(item)}
             </Link>
           ))}
         </nav>

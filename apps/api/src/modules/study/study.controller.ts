@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common'
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger'
 import { StudyService } from './study.service'
 import { SetAvailabilityDto } from './dto/set-availability.dto'
@@ -6,6 +6,9 @@ import { GeneratePlanDto } from './dto/generate-plan.dto'
 import { CompleteSessionDto } from './dto/complete-session.dto'
 import { GenerateQuizDto } from './dto/generate-quiz.dto'
 import { SubmitQuizDto } from './dto/submit-quiz.dto'
+import { GenerateFlashcardsDto } from './dto/generate-flashcards.dto'
+import { ReviewFlashcardDto } from './dto/review-flashcard.dto'
+import { ChatDto } from './dto/chat.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { AuthUser } from '@assessiq/types'
 
@@ -96,5 +99,64 @@ export class StudyController {
   @ApiOperation({ summary: "List the student's weak topics" })
   getWeakTopics(@CurrentUser() user: AuthUser) {
     return this.studyService.getWeakTopics(user)
+  }
+
+  // ─── Flashcards ───────────────────────────────────────────────────────────
+
+  @Post('topics/:topicId/flashcards/generate')
+  @ApiOperation({ summary: 'Generate spaced-repetition flashcards for a topic' })
+  generateFlashcards(
+    @Param('topicId') topicId: string,
+    @Body() dto: GenerateFlashcardsDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.studyService.generateFlashcards(topicId, dto, user)
+  }
+
+  @Get('flashcards/due')
+  @ApiQuery({ name: 'courseId', required: false })
+  @ApiOperation({ summary: "Get the student's flashcards due for review" })
+  getDueFlashcards(@CurrentUser() user: AuthUser, @Query('courseId') courseId?: string) {
+    return this.studyService.getDueFlashcards(user, courseId)
+  }
+
+  @Get('flashcards')
+  @ApiQuery({ name: 'courseId', required: false })
+  @ApiOperation({ summary: "List all of the student's flashcards" })
+  listFlashcards(@CurrentUser() user: AuthUser, @Query('courseId') courseId?: string) {
+    return this.studyService.listFlashcards(user, courseId)
+  }
+
+  @Post('flashcards/:id/review')
+  @ApiOperation({ summary: 'Submit a spaced-repetition review rating for a flashcard' })
+  reviewFlashcard(
+    @Param('id') id: string,
+    @Body() dto: ReviewFlashcardDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.studyService.reviewFlashcard(id, dto, user)
+  }
+
+  @Delete('flashcards/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a flashcard' })
+  removeFlashcard(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.studyService.removeFlashcard(id, user)
+  }
+
+  // ─── Progress & streaks ───────────────────────────────────────────────────
+
+  @Get('progress')
+  @ApiOperation({ summary: "Get the student's streak and per-course progress" })
+  getProgress(@CurrentUser() user: AuthUser) {
+    return this.studyService.getProgress(user)
+  }
+
+  // ─── AI study chat ────────────────────────────────────────────────────────
+
+  @Post('courses/:courseId/chat')
+  @ApiOperation({ summary: 'Ask the AI study buddy a question grounded in course material' })
+  chat(@Param('courseId') courseId: string, @Body() dto: ChatDto, @CurrentUser() user: AuthUser) {
+    return this.studyService.chat(courseId, dto, user)
   }
 }

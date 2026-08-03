@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { CoursesService } from '../courses/courses.service'
-import { AiService, type RawGeneratedQuestion } from '../ai/ai.service'
+import { AiService, type RawGeneratedQuestion, type RawFlashcard, type ChatMessage } from '../ai/ai.service'
 import { QUESTION_BANK, scoreQuestion, buildTemplateQuestions } from '../questions/question-bank'
 import { AuthUser, QuestionType } from '@assessiq/types'
 import { SetAvailabilityDto } from './dto/set-availability.dto'
@@ -9,9 +9,39 @@ import { GeneratePlanDto } from './dto/generate-plan.dto'
 import { CompleteSessionDto } from './dto/complete-session.dto'
 import { GenerateQuizDto } from './dto/generate-quiz.dto'
 import { SubmitQuizDto } from './dto/submit-quiz.dto'
+import { GenerateFlashcardsDto } from './dto/generate-flashcards.dto'
+import { ReviewFlashcardDto, type FlashcardRating } from './dto/review-flashcard.dto'
+import { ChatDto } from './dto/chat.dto'
 
 const DEFAULT_TOPIC_MINUTES = 45
 const WEAK_TOPIC_THRESHOLD = 60
+
+const RATING_QUALITY: Record<FlashcardRating, number> = { again: 2, hard: 3, good: 4, easy: 5 }
+
+function applySm2(
+  card: { repetitions: number; easeFactor: number; intervalDays: number },
+  quality: number,
+): { repetitions: number; easeFactor: number; intervalDays: number; dueDate: Date } {
+  let repetitions = card.repetitions
+  let intervalDays = card.intervalDays
+
+  if (quality < 3) {
+    repetitions = 0
+    intervalDays = 1
+  } else {
+    if (repetitions === 0) intervalDays = 1
+    else if (repetitions === 1) intervalDays = 6
+    else intervalDays = Math.round(intervalDays * card.easeFactor)
+    repetitions += 1
+  }
+
+  const easeFactor = Math.max(1.3, card.easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
+
+  const dueDate = new Date()
+  dueDate.setUTCDate(dueDate.getUTCDate() + intervalDays)
+
+  return { repetitions, easeFactor, intervalDays, dueDate }
+}
 
 function startOfDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
@@ -228,6 +258,7 @@ export class StudyService {
         status: 'COMPLETED',
         actualMinutes: dto.actualMinutes ?? session.estimatedMinutes,
         confidenceRating: dto.confidenceRating,
+        completedAt: new Date(),
       },
     })
 
@@ -476,5 +507,265 @@ export class StudyService {
       include: { topic: { select: { id: true, name: true, courseId: true } } },
       orderBy: { masteryScore: 'asc' },
     })
+  }
+
+  // ─── Flashcards ───────────────────────────────────────────────────────────
+
+  async generateFlashcards(topicId: string, dto: GenerateFlashcardsDto, user: AuthUser) {
+    const topic = await this.prisma.topic.findUnique({ where: { id: topicId } })
+    if (!topic) throw new NotFoundException('Topic not found')
+    await this.coursesService.findOne(topic.courseId, user) // access check
+
+    const doc = await this.prisma.document.findFirst({
+      where: { courseId: topic.courseId, status: 'READY', extractedText: { not: null } },
+      orderBy: { createdAt: 'desc' },
+    })
+    const sourceText = doc?.extractedText || `${topic.name}\n${topic.description ?? ''}`
+    if (!sourceText.trim()) {
+      throw new BadRequestException(
+        'No material available to generate flashcards from — upload a document or add a topic description first',
+      )
+    }
+
+    let raw: RawFlashcard[]
+    try {
+      raw = await this.ai.generateFlashcards(sourceText, {
+        count: dto.count,
+        topicHint: topic.name,
+        userId: user.id,
+        organizationId: user.organizationId ?? undefined,
+        documentId: doc?.id ?? topic.id,
+      })
+    } catch (err) {
+      this.logger.warn(
+        `AI flashcard generation failed for topic ${topicId}, using fallback question bank: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      )
+      const searchTerms = topic.name.toLowerCase().split(/\s+/)
+      const scored = QUESTION_BANK.map(q => ({ q, score: scoreQuestion(q, searchTerms) }))
+        .sort((a, b) => b.score - a.score || Math.random() - 0.5)
+      const picked = scored.slice(0, dto.count).map(s => s.q)
+      const shortfall = dto.count - picked.length
+      if (shortfall > 0) {
+        picked.push(...buildTemplateQuestions(topic.name, ['SHORT_ANSWER'], 'MEDIUM', shortfall))
+      }
+      raw = picked.map(q => {
+        // For MCQ/TRUE_FALSE bank questions, correctAnswer is just an option key (e.g. "C") —
+        // resolve it to the actual answer text so the flashcard back is self-contained.
+        const resolvedAnswer = q.options?.find(o => o.key === q.correctAnswer)?.text ?? q.correctAnswer
+        return {
+          front: q.questionText,
+          back: q.explanation ? `${resolvedAnswer} — ${q.explanation}` : resolvedAnswer,
+        }
+      })
+    }
+
+    return Promise.all(
+      raw.map(c =>
+        this.prisma.flashcard.create({
+          data: {
+            organizationId: user.organizationId ?? null,
+            studentId: user.id,
+            topicId: topic.id,
+            courseId: topic.courseId,
+            documentId: doc?.id ?? null,
+            front: c.front,
+            back: c.back,
+          },
+        }),
+      ),
+    )
+  }
+
+  async getDueFlashcards(user: AuthUser, courseId?: string) {
+    return this.prisma.flashcard.findMany({
+      where: {
+        studentId: user.id,
+        dueDate: { lte: new Date() },
+        ...(courseId ? { courseId } : {}),
+      },
+      orderBy: { dueDate: 'asc' },
+      include: { topic: { select: { id: true, name: true } }, course: { select: { id: true, title: true } } },
+    })
+  }
+
+  async listFlashcards(user: AuthUser, courseId?: string) {
+    return this.prisma.flashcard.findMany({
+      where: { studentId: user.id, ...(courseId ? { courseId } : {}) },
+      orderBy: { createdAt: 'desc' },
+      include: { topic: { select: { id: true, name: true } } },
+    })
+  }
+
+  async reviewFlashcard(id: string, dto: ReviewFlashcardDto, user: AuthUser) {
+    const card = await this.prisma.flashcard.findUnique({ where: { id } })
+    if (!card || card.studentId !== user.id) throw new NotFoundException('Flashcard not found')
+
+    const quality = RATING_QUALITY[dto.rating]
+    const { repetitions, easeFactor, intervalDays, dueDate } = applySm2(card, quality)
+
+    return this.prisma.flashcard.update({
+      where: { id },
+      data: { repetitions, easeFactor, intervalDays, dueDate, lastReviewedAt: new Date() },
+    })
+  }
+
+  async removeFlashcard(id: string, user: AuthUser) {
+    const card = await this.prisma.flashcard.findUnique({ where: { id } })
+    if (!card || card.studentId !== user.id) throw new NotFoundException('Flashcard not found')
+
+    await this.prisma.flashcard.delete({ where: { id } })
+    return { message: 'Flashcard deleted' }
+  }
+
+  // ─── Progress & streaks ───────────────────────────────────────────────────
+
+  async getProgress(user: AuthUser) {
+    const completedSessions = await this.prisma.studySession.findMany({
+      where: { studentId: user.id, completedAt: { not: null } },
+      select: { completedAt: true, topicId: true, courseId: true },
+    })
+
+    const dateKeys = new Set(completedSessions.map(s => startOfDay(s.completedAt!).toISOString()))
+    const sortedDates = [...dateKeys].map(d => new Date(d)).sort((a, b) => b.getTime() - a.getTime())
+
+    const today = startOfDay(new Date())
+    const yesterday = new Date(today)
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+
+    let currentStreak = 0
+    if (
+      sortedDates.length > 0 &&
+      (sortedDates[0]!.getTime() === today.getTime() || sortedDates[0]!.getTime() === yesterday.getTime())
+    ) {
+      currentStreak = 1
+      let cursor = sortedDates[0]!
+      for (let i = 1; i < sortedDates.length; i++) {
+        const expectedPrev = new Date(cursor)
+        expectedPrev.setUTCDate(expectedPrev.getUTCDate() - 1)
+        if (sortedDates[i]!.getTime() === expectedPrev.getTime()) {
+          currentStreak += 1
+          cursor = sortedDates[i]!
+        } else break
+      }
+    }
+
+    let longestStreak = 0
+    let run = 0
+    for (let i = 0; i < sortedDates.length; i++) {
+      if (i === 0) {
+        run = 1
+      } else {
+        const expectedPrev = new Date(sortedDates[i - 1]!)
+        expectedPrev.setUTCDate(expectedPrev.getUTCDate() - 1)
+        run = sortedDates[i]!.getTime() === expectedPrev.getTime() ? run + 1 : 1
+      }
+      longestStreak = Math.max(longestStreak, run)
+    }
+
+    const countByDate = new Map<string, number>()
+    for (const s of completedSessions) {
+      const key = startOfDay(s.completedAt!).toISOString().slice(0, 10)
+      countByDate.set(key, (countByDate.get(key) ?? 0) + 1)
+    }
+    const last30Days: { date: string; completedCount: number }[] = []
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today)
+      d.setUTCDate(d.getUTCDate() - i)
+      const key = d.toISOString().slice(0, 10)
+      last30Days.push({ date: key, completedCount: countByDate.get(key) ?? 0 })
+    }
+
+    const courses = await this.prisma.course.findMany({
+      where: user.organizationId ? { organizationId: user.organizationId } : { ownerId: user.id },
+      include: { topics: { select: { id: true } } },
+    })
+
+    const completedTopicIdsByCourse = new Map<string, Set<string>>()
+    for (const s of completedSessions) {
+      if (!s.topicId) continue
+      if (!completedTopicIdsByCourse.has(s.courseId)) completedTopicIdsByCourse.set(s.courseId, new Set())
+      completedTopicIdsByCourse.get(s.courseId)!.add(s.topicId)
+    }
+
+    const courseProgress = courses.map(c => {
+      const total = c.topics.length
+      const completed = completedTopicIdsByCourse.get(c.id)?.size ?? 0
+      return {
+        courseId: c.id,
+        title: c.title,
+        topicsTotal: total,
+        topicsCompleted: completed,
+        percent: total > 0 ? Math.round((completed / total) * 100) : 0,
+      }
+    })
+
+    return { currentStreak, longestStreak, last30Days, courses: courseProgress }
+  }
+
+  // ─── AI study chat ────────────────────────────────────────────────────────
+
+  async chat(courseId: string, dto: ChatDto, user: AuthUser) {
+    const course = await this.coursesService.findOne(courseId, user) // access check
+
+    const docs = await this.prisma.document.findMany({
+      where: { courseId, status: 'READY', extractedText: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+    })
+    const combinedText = docs.map(d => d.extractedText).join('\n\n').slice(0, 12000)
+    const topicNames = course.topics.map((t: { name: string }) => t.name).join(', ')
+
+    if (!combinedText.trim()) {
+      return {
+        source: 'fallback' as const,
+        reply:
+          "You haven't uploaded any material for this course yet, so I can't answer from your notes. Upload a document first, then ask again.",
+      }
+    }
+
+    const systemContext = `You are a friendly, encouraging study tutor helping a student with their course "${course.title}" (${course.subject}).
+Topics in this course: ${topicNames || 'none listed yet'}.
+
+Answer the student's questions using ONLY the course material provided below. If the answer isn't in the
+material, say so clearly rather than guessing. Keep answers concise and easy to understand.
+
+COURSE MATERIAL:
+${combinedText}`
+
+    const messages: ChatMessage[] = [...(dto.history ?? []), { role: 'user', content: dto.message }]
+
+    try {
+      const reply = await this.ai.chat(messages, systemContext, {
+        userId: user.id,
+        organizationId: user.organizationId ?? undefined,
+        relatedEntityId: courseId,
+      })
+      return { source: 'ai' as const, reply }
+    } catch (err) {
+      this.logger.warn(
+        `AI chat failed for course ${courseId}, using fallback keyword search: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      )
+      return { source: 'fallback' as const, reply: this.keywordSearchFallback(dto.message, combinedText) }
+    }
+  }
+
+  private keywordSearchFallback(question: string, text: string): string {
+    const terms = question.toLowerCase().split(/\W+/).filter(t => t.length > 3)
+    const sentences = text.split(/(?<=[.!?])\s+/)
+    const scored = sentences
+      .map(s => ({ s, score: terms.filter(t => s.toLowerCase().includes(t)).length }))
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+
+    if (scored.length === 0) {
+      return "AI isn't available right now, and I couldn't find anything matching that in your uploaded materials — try rephrasing, or check back once AI is configured."
+    }
+
+    const best = scored.slice(0, 3).map(x => x.s.trim()).join(' ')
+    return `AI isn't available right now — here's a basic search of your notes:\n\n${best}`
   }
 }

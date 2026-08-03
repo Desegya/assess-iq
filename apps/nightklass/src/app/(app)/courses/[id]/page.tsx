@@ -67,6 +67,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
   const [planLoading, setPlanLoading] = useState(false)
   const [planError, setPlanError] = useState<string | null>(null);
   const [hasPlan, setHasPlan] = useState(false)
+  const [generatingFlashcardsFor, setGeneratingFlashcardsFor] = useState<string | null>(null)
+  const [flashcardError, setFlashcardError] = useState<string | null>(null)
 
   function load() {
     api
@@ -212,6 +214,19 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  async function handleGenerateFlashcards(topicId: string) {
+    setFlashcardError(null)
+    setGeneratingFlashcardsFor(topicId)
+    try {
+      await api.post(`/study/topics/${topicId}/flashcards/generate`, { count: 8 })
+      router.push('/flashcards')
+    } catch (err) {
+      setFlashcardError(err instanceof Error ? err.message : 'Failed to generate flashcards')
+    } finally {
+      setGeneratingFlashcardsFor(null)
+    }
+  }
+
   function toggleDay(i: number) {
     setDays(prev => prev.map((d, idx) => (idx === i ? { ...d, enabled: !d.enabled } : d)))
   }
@@ -225,15 +240,46 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-heading text-2xl font-bold text-slate-900">{course.title}</h1>
-        <p className="text-slate-500 text-sm mt-1">{course.subject}</p>
-        {hasPlan && (
-          <Link href={`/courses/${id}/plan`} className="inline-block mt-3 text-sm text-indigo-600 font-semibold">
-            View current study plan →
-          </Link>
-        )}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-heading text-2xl font-bold text-slate-900">{course.title}</h1>
+          <p className="text-slate-500 text-sm mt-1">{course.subject}</p>
+          {hasPlan && (
+            <Link href={`/courses/${id}/plan`} className="inline-block mt-3 text-sm text-indigo-600 font-semibold">
+              View current study plan →
+            </Link>
+          )}
+        </div>
+        <Link href={`/courses/${id}/chat`} className="btn-secondary flex-shrink-0">
+          💬 Ask AI about this course
+        </Link>
       </div>
+
+      {course.topics.length > 0 && (
+        <section className="card p-6 bg-indigo-50/50 border-indigo-100">
+          <h2 className="font-heading font-bold text-slate-900 mb-1">Quick practice</h2>
+          <p className="text-slate-500 text-sm mb-4">
+            No need to wait for a full plan — try a quiz or flashcards right now.
+          </p>
+          {flashcardError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">
+              {flashcardError}
+            </div>
+          )}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Link href={`/topics/${course.topics[0]!.id}/quiz`} className="btn-primary">
+              Try a quick quiz
+            </Link>
+            <button
+              onClick={() => handleGenerateFlashcards(course.topics[0]!.id)}
+              disabled={generatingFlashcardsFor === course.topics[0]!.id}
+              className="btn-secondary"
+            >
+              {generatingFlashcardsFor === course.topics[0]!.id ? 'Generating…' : 'Try flashcards'}
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Upload material → extract topics */}
       <section className="card p-6">
@@ -326,6 +372,13 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
                 <Link href={`/topics/${topic.id}/quiz`} className="text-xs text-indigo-600 font-semibold">
                   Self-quiz
                 </Link>
+                <button
+                  onClick={() => handleGenerateFlashcards(topic.id)}
+                  disabled={generatingFlashcardsFor === topic.id}
+                  className="text-xs text-indigo-600 font-semibold disabled:opacity-60"
+                >
+                  {generatingFlashcardsFor === topic.id ? 'Generating…' : 'Flashcards'}
+                </button>
                 <button onClick={() => handleRemoveTopic(topic.id)} className="text-xs text-red-500">
                   Remove
                 </button>

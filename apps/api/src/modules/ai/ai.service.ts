@@ -19,6 +19,16 @@ export interface RawExtractedTopic {
   description?: string
 }
 
+export interface RawFlashcard {
+  front: string
+  back: string
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 interface GenerateOptions {
   count: number
   types: QuestionType[]
@@ -33,6 +43,20 @@ interface ExtractTopicsOptions {
   userId: string
   organizationId?: string
   documentId: string
+}
+
+interface GenerateFlashcardsOptions {
+  count: number
+  topicHint?: string
+  userId: string
+  organizationId?: string
+  documentId: string
+}
+
+interface ChatOptions {
+  userId: string
+  organizationId?: string
+  relatedEntityId: string
 }
 
 // Approximate cost per million tokens (USD) — Claude Sonnet 4.6
@@ -204,6 +228,150 @@ ${textSlice}`
             success,
             errorMessage,
             relatedEntityId: opts.documentId,
+          },
+        })
+        .catch(e => this.logger.error('Failed to save AI usage log', e))
+    }
+  }
+
+  // ─── Generate flashcards from extracted document text ─────────────────────
+
+  async generateFlashcards(
+    extractedText: string,
+    opts: GenerateFlashcardsOptions,
+  ): Promise<RawFlashcard[]> {
+    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY', '')
+    if (!apiKey) {
+      throw new BadRequestException(
+        'ANTHROPIC_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
+      )
+    }
+
+    const textSlice = extractedText.slice(0, 12000)
+    const prompt = `You are an expert tutor creating spaced-repetition flashcards from study material.
+
+Generate exactly ${opts.count} flashcards from the text below${opts.topicHint ? ` focused on: ${opts.topicHint}` : ''}.
+- Each card should test one clear fact, definition, or concept
+- The front should be a short question or prompt; the back should be a concise, correct answer
+- Avoid duplicating the same fact across cards
+
+Return ONLY a valid JSON array — no markdown, no explanation, just the array.
+Each item must match: {"front":"...","back":"..."}
+
+TEXT TO USE:
+${textSlice}`
+
+    const start = Date.now()
+    let inputTokens = 0
+    let outputTokens = 0
+    let success = true
+    let errorMessage: string | undefined
+
+    try {
+      const response = await this.client.messages.create({
+        model: MODEL,
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+      })
+
+      inputTokens = response.usage.input_tokens
+      outputTokens = response.usage.output_tokens
+
+      const textBlock = response.content.find(b => b.type === 'text')
+      if (!textBlock || textBlock.type !== 'text') {
+        throw new Error('Unexpected response type from Claude')
+      }
+
+      const cards = this.parseJsonArray<RawFlashcard>(textBlock.text)
+      this.logger.log(`Generated ${cards.length} flashcards for doc ${opts.documentId}`)
+      return cards
+    } catch (err) {
+      success = false
+      errorMessage = err instanceof Error ? err.message : String(err)
+      throw err
+    } finally {
+      const durationMs = Date.now() - start
+      const costUsd =
+        (inputTokens / 1_000_000) * COST_PER_M_INPUT +
+        (outputTokens / 1_000_000) * COST_PER_M_OUTPUT
+
+      await this.prisma.aIUsageLog
+        .create({
+          data: {
+            organizationId: opts.organizationId,
+            userId: opts.userId,
+            action: 'GENERATE_FLASHCARDS',
+            model: MODEL,
+            inputTokens,
+            outputTokens,
+            costUsd,
+            durationMs,
+            success,
+            errorMessage,
+            relatedEntityId: opts.documentId,
+          },
+        })
+        .catch(e => this.logger.error('Failed to save AI usage log', e))
+    }
+  }
+
+  // ─── Study chat — answer a question grounded in course material ───────────
+
+  async chat(messages: ChatMessage[], systemContext: string, opts: ChatOptions): Promise<string> {
+    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY', '')
+    if (!apiKey) {
+      throw new BadRequestException(
+        'ANTHROPIC_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
+      )
+    }
+
+    const start = Date.now()
+    let inputTokens = 0
+    let outputTokens = 0
+    let success = true
+    let errorMessage: string | undefined
+
+    try {
+      const response = await this.client.messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        system: systemContext,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+      })
+
+      inputTokens = response.usage.input_tokens
+      outputTokens = response.usage.output_tokens
+
+      const textBlock = response.content.find(b => b.type === 'text')
+      if (!textBlock || textBlock.type !== 'text') {
+        throw new Error('Unexpected response type from Claude')
+      }
+
+      return textBlock.text.trim()
+    } catch (err) {
+      success = false
+      errorMessage = err instanceof Error ? err.message : String(err)
+      throw err
+    } finally {
+      const durationMs = Date.now() - start
+      const costUsd =
+        (inputTokens / 1_000_000) * COST_PER_M_INPUT +
+        (outputTokens / 1_000_000) * COST_PER_M_OUTPUT
+
+      await this.prisma.aIUsageLog
+        .create({
+          data: {
+            organizationId: opts.organizationId,
+            userId: opts.userId,
+            action: 'ANSWER_QUESTION',
+            model: MODEL,
+            inputTokens,
+            outputTokens,
+            costUsd,
+            durationMs,
+            success,
+            errorMessage,
+            relatedEntityId: opts.relatedEntityId,
           },
         })
         .catch(e => this.logger.error('Failed to save AI usage log', e))
