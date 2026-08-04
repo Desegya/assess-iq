@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { Suspense, useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
 import { Logo } from '@/components/ui/Logo'
@@ -21,7 +21,7 @@ const inputClass =
   'placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 ' +
   'focus:border-violet-500 transition-all duration-150'
 
-export default function JoinPage() {
+function JoinPageContent() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const { login }    = useAuth()
@@ -350,5 +350,13 @@ export default function JoinPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={null}>
+      <JoinPageContent />
+    </Suspense>
   )
 }
