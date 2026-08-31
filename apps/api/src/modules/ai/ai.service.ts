@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { PrismaService } from '../prisma/prisma.service'
 import { QuestionDifficulty, QuestionType } from '@assessiq/types'
 
@@ -59,23 +59,23 @@ interface ChatOptions {
   relatedEntityId: string
 }
 
-// Approximate cost per million tokens (USD) — Claude Sonnet 4.6
-const COST_PER_M_INPUT = 3.0
-const COST_PER_M_OUTPUT = 15.0
+// Price per million tokens (USD) — gpt-5.4-mini
+const COST_PER_M_INPUT = 0.75
+const COST_PER_M_OUTPUT = 4.5
 
-const MODEL = 'claude-sonnet-4-6'
+const MODEL = 'gpt-5.4-mini'
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name)
-  private readonly client: Anthropic
+  private readonly client: OpenAI
 
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY', '')
-    this.client = new Anthropic({ apiKey: apiKey || 'placeholder' })
+    const apiKey = this.config.get<string>('OPENAI_API_KEY', '')
+    this.client = new OpenAI({ apiKey: apiKey || 'placeholder' })
   }
 
   // ─── Generate questions from extracted document text ──────────────────────
@@ -84,10 +84,10 @@ export class AiService {
     extractedText: string,
     opts: GenerateOptions,
   ): Promise<RawGeneratedQuestion[]> {
-    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY', '')
+    const apiKey = this.config.get<string>('OPENAI_API_KEY', '')
     if (!apiKey) {
       throw new BadRequestException(
-        'ANTHROPIC_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
+        'OPENAI_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
       )
     }
 
@@ -102,21 +102,20 @@ export class AiService {
     let errorMessage: string | undefined
 
     try {
-      const response = await this.client.messages.create({
+      const response = await this.client.responses.create({
         model: MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
+        max_output_tokens: 4096,
+        input: prompt,
       })
 
-      inputTokens = response.usage.input_tokens
-      outputTokens = response.usage.output_tokens
+      inputTokens = response.usage?.input_tokens ?? 0
+      outputTokens = response.usage?.output_tokens ?? 0
 
-      const textBlock = response.content.find(b => b.type === 'text')
-      if (!textBlock || textBlock.type !== 'text') {
-        throw new Error('Unexpected response type from Claude')
+      if (!response.output_text) {
+        throw new Error('Empty response from OpenAI')
       }
 
-      const questions = this.parseJsonArray<RawGeneratedQuestion>(textBlock.text)
+      const questions = this.parseJsonArray<RawGeneratedQuestion>(response.output_text)
       this.logger.log(
         `Generated ${questions.length} questions for doc ${opts.documentId} ` +
           `(${inputTokens} in / ${outputTokens} out tokens)`,
@@ -159,10 +158,10 @@ export class AiService {
     extractedText: string,
     opts: ExtractTopicsOptions,
   ): Promise<RawExtractedTopic[]> {
-    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY', '')
+    const apiKey = this.config.get<string>('OPENAI_API_KEY', '')
     if (!apiKey) {
       throw new BadRequestException(
-        'ANTHROPIC_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
+        'OPENAI_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
       )
     }
 
@@ -187,21 +186,20 @@ ${textSlice}`
     let errorMessage: string | undefined
 
     try {
-      const response = await this.client.messages.create({
+      const response = await this.client.responses.create({
         model: MODEL,
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }],
+        max_output_tokens: 2048,
+        input: prompt,
       })
 
-      inputTokens = response.usage.input_tokens
-      outputTokens = response.usage.output_tokens
+      inputTokens = response.usage?.input_tokens ?? 0
+      outputTokens = response.usage?.output_tokens ?? 0
 
-      const textBlock = response.content.find(b => b.type === 'text')
-      if (!textBlock || textBlock.type !== 'text') {
-        throw new Error('Unexpected response type from Claude')
+      if (!response.output_text) {
+        throw new Error('Empty response from OpenAI')
       }
 
-      const topics = this.parseJsonArray<RawExtractedTopic>(textBlock.text)
+      const topics = this.parseJsonArray<RawExtractedTopic>(response.output_text)
       this.logger.log(`Extracted ${topics.length} topics for doc ${opts.documentId}`)
       return topics
     } catch (err) {
@@ -240,10 +238,10 @@ ${textSlice}`
     extractedText: string,
     opts: GenerateFlashcardsOptions,
   ): Promise<RawFlashcard[]> {
-    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY', '')
+    const apiKey = this.config.get<string>('OPENAI_API_KEY', '')
     if (!apiKey) {
       throw new BadRequestException(
-        'ANTHROPIC_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
+        'OPENAI_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
       )
     }
 
@@ -268,21 +266,20 @@ ${textSlice}`
     let errorMessage: string | undefined
 
     try {
-      const response = await this.client.messages.create({
+      const response = await this.client.responses.create({
         model: MODEL,
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }],
+        max_output_tokens: 2048,
+        input: prompt,
       })
 
-      inputTokens = response.usage.input_tokens
-      outputTokens = response.usage.output_tokens
+      inputTokens = response.usage?.input_tokens ?? 0
+      outputTokens = response.usage?.output_tokens ?? 0
 
-      const textBlock = response.content.find(b => b.type === 'text')
-      if (!textBlock || textBlock.type !== 'text') {
-        throw new Error('Unexpected response type from Claude')
+      if (!response.output_text) {
+        throw new Error('Empty response from OpenAI')
       }
 
-      const cards = this.parseJsonArray<RawFlashcard>(textBlock.text)
+      const cards = this.parseJsonArray<RawFlashcard>(response.output_text)
       this.logger.log(`Generated ${cards.length} flashcards for doc ${opts.documentId}`)
       return cards
     } catch (err) {
@@ -318,10 +315,10 @@ ${textSlice}`
   // ─── Study chat — answer a question grounded in course material ───────────
 
   async chat(messages: ChatMessage[], systemContext: string, opts: ChatOptions): Promise<string> {
-    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY', '')
+    const apiKey = this.config.get<string>('OPENAI_API_KEY', '')
     if (!apiKey) {
       throw new BadRequestException(
-        'ANTHROPIC_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
+        'OPENAI_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
       )
     }
 
@@ -332,22 +329,21 @@ ${textSlice}`
     let errorMessage: string | undefined
 
     try {
-      const response = await this.client.messages.create({
+      const response = await this.client.responses.create({
         model: MODEL,
-        max_tokens: 1024,
-        system: systemContext,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        max_output_tokens: 1024,
+        instructions: systemContext,
+        input: messages.map(m => ({ role: m.role, content: m.content })),
       })
 
-      inputTokens = response.usage.input_tokens
-      outputTokens = response.usage.output_tokens
+      inputTokens = response.usage?.input_tokens ?? 0
+      outputTokens = response.usage?.output_tokens ?? 0
 
-      const textBlock = response.content.find(b => b.type === 'text')
-      if (!textBlock || textBlock.type !== 'text') {
-        throw new Error('Unexpected response type from Claude')
+      if (!response.output_text) {
+        throw new Error('Empty response from OpenAI')
       }
 
-      return textBlock.text.trim()
+      return response.output_text.trim()
     } catch (err) {
       success = false
       errorMessage = err instanceof Error ? err.message : String(err)
@@ -420,7 +416,7 @@ ${text}`
   // ─── Response parser ──────────────────────────────────────────────────────
 
   private parseJsonArray<T>(raw: string): T[] {
-    // Strip markdown code fences if Claude wrapped the output
+    // Strip markdown code fences if the model wrapped the output
     const cleaned = raw
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```\s*$/, '')
@@ -432,12 +428,12 @@ ${text}`
     } catch {
       // Try to extract a JSON array if there's surrounding text
       const match = cleaned.match(/\[[\s\S]*\]/)
-      if (!match) throw new Error('Claude response did not contain a valid JSON array')
+      if (!match) throw new Error('OpenAI response did not contain a valid JSON array')
       parsed = JSON.parse(match[0])
     }
 
     if (!Array.isArray(parsed)) {
-      throw new Error('Claude response was not a JSON array')
+      throw new Error('OpenAI response was not a JSON array')
     }
 
     return parsed as T[]
