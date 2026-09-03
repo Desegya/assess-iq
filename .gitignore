@@ -46,3 +46,4 @@ packages/db/generated
 
 # Uploads (local dev)
 uploads/
+.vercel
