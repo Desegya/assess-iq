@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
 import { Logo } from '@/components/ui/Logo'
 import { getSubjectColor } from '@/lib/subject-color'
+import { ProgressRing } from '@/components/ui/ProgressRing'
+import { NightIllustration, StudyScene } from '@/components/ui/NightIllustration'
 
 const STARS = [
   [8, 12, 1.6], [22, 30, 1.2], [42, 8, 1.8], [65, 22, 1.3], [85, 14, 1.6],
@@ -60,6 +62,41 @@ const FEATURES = [
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
         d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 11a4 4 0 10-4-4" />
     ),
+  },
+  {
+    title: 'Track your CGPA as you go',
+    desc: 'Log your grades each semester and watch your GPA update live — on the 5.0 or 4.0 scale, whichever your school uses.',
+    icon: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+        d="M9 7h6m-6 4h6m-6 4h3M5 3h14a1 1 0 011 1v16a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" />
+    ),
+  },
+]
+
+const FAQS = [
+  {
+    q: 'Do I need my school to sign up first?',
+    a: 'No. Nightklass works whether or not your institution has adopted it — you create your own account and it\'s entirely yours.',
+  },
+  {
+    q: 'Is my uploaded material private?',
+    a: 'Yes. Your notes and documents are only used to build your topics, quizzes, and power the AI study buddy for you.',
+  },
+  {
+    q: 'Do the self-quizzes count toward my grades?',
+    a: 'Never. They\'re formative practice only, so you can get things wrong without any consequence beyond finding out what to revise.',
+  },
+  {
+    q: 'Can I use it for more than one course at a time?',
+    a: 'Yes — add every course you\'re taking. The planner schedules across all of them using the study times you give it.',
+  },
+  {
+    q: 'What if my university uses a different GPA scale?',
+    a: 'The GPA calculator toggles between the 5.0 and 4.0 systems, and course level/semester are optional fields you can skip entirely.',
+  },
+  {
+    q: 'Is it really free?',
+    a: 'Yes, to start. No card, no lecturer sign-up, no institutional licence required.',
   },
 ]
 
@@ -117,6 +154,66 @@ function LandingContent() {
             </Link>
           </div>
         </div>
+
+        {/* Product preview */}
+        <div className="relative max-w-3xl mx-auto px-6 pb-16 sm:pb-20 animate-slide-up delay-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 p-5 sm:p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-300" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-300" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-300" />
+            </div>
+            <div className="grid sm:grid-cols-[1.2fr_1fr] gap-4">
+              <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 p-4 sm:p-5">
+                <p className="text-white font-heading font-bold text-sm sm:text-base">Good evening, Amaka 👋</p>
+                <p className="text-blue-100 text-xs mt-1">You&apos;re on a 6-day streak — don&apos;t break the chain tonight.</p>
+                <div className="flex items-center gap-1.5 mt-3 bg-white/15 rounded-lg px-2.5 py-1.5 w-fit">
+                  <span className="text-sm">🔥</span>
+                  <span className="text-xs font-bold text-white">6</span>
+                </div>
+              </div>
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 flex items-center gap-3">
+                <ProgressRing percent={72} size={52} strokeWidth={5} color="#2563eb" />
+                <div>
+                  <p className="text-xs font-semibold text-slate-500">MTH201</p>
+                  <p className="text-xs text-slate-400 mt-0.5">9/13 topics done</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              {[
+                { l: 'Courses', v: '4', c: 'bg-blue-50 text-blue-600' },
+                { l: 'Due cards', v: '12', c: 'bg-orange-50 text-orange-600' },
+                { l: 'Weak spots', v: '2', c: 'bg-lime-50 text-lime-700' },
+              ].map(t => (
+                <div key={t.l} className={`rounded-xl px-3 py-2.5 ${t.c}`}>
+                  <p className="font-heading font-bold text-lg leading-none">{t.v}</p>
+                  <p className="text-[10px] font-semibold mt-1 opacity-80">{t.l}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="max-w-5xl mx-auto px-6 py-16 sm:py-20">
+        <div className="grid sm:grid-cols-2 gap-10 items-center">
+          <div>
+            <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-3">Why we built this</p>
+            <h2 className="font-heading text-2xl sm:text-3xl font-bold text-slate-900 leading-snug">
+              We've all been there — three courses, one exam week, and a reading list that never gets shorter.
+            </h2>
+            <p className="text-slate-500 mt-4 leading-relaxed">
+              &quot;Just make a timetable&quot; isn&apos;t advice, it&apos;s a chore. So tell us what you&apos;re studying and when
+              you&apos;re actually free, and we&apos;ll turn it into a plan you can follow — one session at a time, one topic
+              at a time, right up until you walk into the exam hall. No lecturer sign-up, no school licence, just you and
+              a plan that adapts when life gets in the way.
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <StudyScene className="w-full max-w-[280px] h-auto" />
+          </div>
+        </div>
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16">
@@ -128,15 +225,27 @@ function LandingContent() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {FEATURES.map((f, i) => {
             const color = getSubjectColor(f.title)
+            const featured = i === 0
             return (
-              <div key={f.title} className="card p-6 animate-fade-in" style={{ animationDelay: `${i * 60}ms` }}>
-                <div className={`w-10 h-10 rounded-xl ${color.bgSoft} flex items-center justify-center ${color.text} mb-4`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    {f.icon}
-                  </svg>
+              <div
+                key={f.title}
+                className={`card p-6 animate-fade-in ${featured ? 'lg:col-span-2 flex items-center gap-6' : ''}`}
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                <div className={featured ? 'flex-1' : ''}>
+                  <div className={`w-10 h-10 rounded-xl ${color.bgSoft} flex items-center justify-center ${color.text} mb-4`}>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {f.icon}
+                    </svg>
+                  </div>
+                  <h3 className="font-heading font-bold text-slate-900">{f.title}</h3>
+                  <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{f.desc}</p>
                 </div>
-                <h3 className="font-heading font-bold text-slate-900">{f.title}</h3>
-                <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{f.desc}</p>
+                {featured && (
+                  <div className="hidden sm:block flex-shrink-0">
+                    <NightIllustration variant="search" />
+                  </div>
+                )}
               </div>
             )
           })}
@@ -148,10 +257,11 @@ function LandingContent() {
           <h2 className="font-heading text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-12">
             From notes to exam-ready in four steps
           </h2>
-          <div className="grid sm:grid-cols-4 gap-8">
+          <div className="relative grid sm:grid-cols-4 gap-8">
+            <div className="hidden sm:block absolute top-5 left-[12%] right-[12%] h-0.5 bg-gradient-to-r from-blue-200 via-cyan-200 to-lime-200" aria-hidden="true" />
             {STEPS.map(s => (
-              <div key={s.n} className="text-center">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 text-white font-heading font-bold flex items-center justify-center mx-auto mb-4">
+              <div key={s.n} className="relative text-center">
+                <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 text-white font-heading font-bold flex items-center justify-center mx-auto mb-4">
                   {s.n}
                 </div>
                 <h3 className="font-semibold text-slate-900 text-sm">{s.title}</h3>
@@ -162,15 +272,33 @@ function LandingContent() {
         </div>
       </section>
 
-      <section className="max-w-4xl mx-auto px-6 py-20 text-center">
-        <h2 className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">
-          Stop cramming. Start a plan that actually finishes.
+      <section className="max-w-4xl mx-auto px-6 py-16">
+        <h2 className="font-heading text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-10">
+          Questions people actually ask
         </h2>
-        <p className="text-slate-500 mt-3">Free to start. No school or lecturer sign-up needed.</p>
-        <div className="mt-6">
-          <Link href="/register" className="btn-primary !py-3 !px-8 inline-flex">
-            Get started free
-          </Link>
+        <div className="grid sm:grid-cols-2 gap-x-8 gap-y-6">
+          {FAQS.map(f => (
+            <div key={f.q}>
+              <h3 className="font-semibold text-slate-900 text-sm">{f.q}</h3>
+              <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{f.a}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="max-w-6xl mx-auto px-6 py-16">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-dark via-blue-950 to-blue-900 px-6 sm:px-10 py-14 sm:py-16 text-center">
+          <div className="absolute -top-10 -right-10 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
+          <div className="absolute -bottom-16 -left-10 w-64 h-64 bg-lime-400/10 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
+          <h2 className="relative font-heading text-2xl sm:text-3xl font-bold text-white">
+            Stop cramming. Start a plan that actually finishes.
+          </h2>
+          <p className="relative text-blue-100/80 mt-3">Free to start. No school or lecturer sign-up needed.</p>
+          <div className="relative mt-6">
+            <Link href="/register" className="btn-primary !py-3 !px-8 inline-flex">
+              Get started free
+            </Link>
+          </div>
         </div>
       </section>
 

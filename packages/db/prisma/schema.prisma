@@ -198,6 +198,8 @@ model User {
   role           UserRole
   status         UserStatus   @default(PENDING)
   avatarUrl      String?
+  courseOfStudy  String?
+  programYears   Int?
   lastLoginAt    DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -646,7 +648,8 @@ model TopicMastery {
 model GpaEntry {
   id            String   @id @default(cuid())
   studentId     String
-  semesterLabel String
+  level         Int
+  semester      Semester
   courseTitle   String
   creditUnits   Int
   grade         String
