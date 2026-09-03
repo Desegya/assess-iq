@@ -14,41 +14,76 @@
   }
 
   :focus-visible {
-    outline: 2px solid #4f46e5;
+    outline: 2px solid #2563eb;
     outline-offset: 2px;
   }
 
   body {
-    background-color: #f5f6fb;
-    color: #0f172a;
+    background-color: #F5FAFF;
+    color: #0f1a2e;
   }
 }
 
 @layer components {
   .input-base {
-    @apply w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900
-           placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20
-           focus:border-indigo-500 transition-all duration-150 disabled:bg-slate-50 disabled:text-slate-400;
+    @apply w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-2xl text-sm text-slate-900
+           placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/15
+           focus:border-blue-400 transition-all duration-150 disabled:bg-slate-50 disabled:text-slate-400;
   }
 
   .btn-primary {
-    @apply bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-semibold
-           py-3 px-5 rounded-xl text-sm transition-all duration-150 shadow-sm
-           flex items-center justify-center gap-2 disabled:opacity-60 disabled:pointer-events-none;
+    @apply bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400
+           active:scale-[0.97] text-white font-bold py-3 px-5 rounded-2xl text-sm transition-all duration-150
+           shadow-[0_4px_14px_rgba(37,99,235,0.35)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.45)]
+           flex items-center justify-center gap-2 disabled:opacity-60 disabled:pointer-events-none disabled:shadow-none;
   }
 
   .btn-secondary {
-    @apply bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 font-medium
-           py-3 px-5 rounded-xl text-sm transition-all duration-150 border border-slate-200
+    @apply bg-white hover:bg-blue-50 active:scale-[0.97] text-slate-700 font-semibold
+           py-3 px-5 rounded-2xl text-sm transition-all duration-150 border-2 border-slate-200 hover:border-blue-200
            flex items-center justify-center gap-2 disabled:opacity-60 disabled:pointer-events-none;
   }
 
   .card {
-    @apply bg-white rounded-2xl border border-slate-200 shadow-card
+    @apply bg-white rounded-3xl border border-slate-100 shadow-card
            hover:shadow-card-hover transition-all duration-200;
   }
 
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold;
+  }
+
+  .card-accent {
+    border-top-width: 3px;
+    border-top-color: var(--accent-color, theme('colors.blue.400'));
+  }
+
+  .skeleton {
+    @apply rounded-lg bg-slate-100 bg-[length:200%_100%] animate-shimmer;
+    background-image: linear-gradient(90deg, theme('colors.slate.100') 25%, theme('colors.slate.200') 37%, theme('colors.slate.100') 63%);
+  }
+
+  .flip-scene {
+    perspective: 1200px;
+  }
+
+  .flip-card {
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.5s cubic-bezier(0.4, 0.2, 0.2, 1);
+  }
+
+  .flip-card.is-flipped {
+    transform: rotateY(180deg);
+  }
+
+  .flip-face {
+    backface-visibility: hidden;
+  }
+
+  .flip-face-back {
+    position: absolute;
+    inset: 0;
+    transform: rotateY(180deg);
   }
 }

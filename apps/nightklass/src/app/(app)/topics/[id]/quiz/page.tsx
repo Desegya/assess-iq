@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, use as usePromise } from 'react'
+import { useState, use as usePromise, useEffect } from 'react'
 import { useApi } from '@/hooks/use-api'
+import { ProgressRing } from '@/components/ui/ProgressRing'
+import { celebrate } from '@/lib/celebrate'
 
 interface QuizOption {
   key: string
@@ -38,6 +40,10 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (scorePercent !== null && scorePercent >= 70) celebrate()
+  }, [scorePercent])
+
   async function handleGenerate() {
     setError(null)
     setLoading(true)
@@ -73,6 +79,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   }
 
   const resultsByQuestion = new Map(results?.map(r => [r.questionId, r]) ?? [])
+  const answeredCount = questions ? questions.filter(q => answers[q.id]).length : 0
 
   return (
     <div className="max-w-2xl">
@@ -114,6 +121,16 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
 
       {questions && scorePercent === null && (
         <div className="space-y-4">
+          <div className="flex items-center justify-center gap-1.5">
+            {questions.map((q, i) => (
+              <span
+                key={q.id}
+                className={`h-2 rounded-full transition-all ${
+                  answers[q.id] ? 'w-6 bg-blue-500' : i === answeredCount ? 'w-6 bg-blue-200' : 'w-2 bg-slate-200'
+                }`}
+              />
+            ))}
+          </div>
           {questions.length > 0 && !questions[0]!.isAiGenerated && (
             <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
               Using a practice question bank for now (no AI key configured yet).
@@ -126,7 +143,12 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
               </p>
               <div className="space-y-2">
                 {(q.options ?? []).map(opt => (
-                  <label key={opt.key} className="flex items-center gap-2 text-sm text-slate-700">
+                  <label
+                    key={opt.key}
+                    className={`flex items-center gap-2 text-sm text-slate-700 rounded-xl px-3 py-2 border-2 cursor-pointer transition-colors ${
+                      answers[q.id] === opt.key ? 'border-blue-400 bg-blue-50' : 'border-transparent hover:bg-slate-50'
+                    }`}
+                  >
                     <input
                       type="radio"
                       name={q.id}
@@ -150,9 +172,19 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
 
       {questions && scorePercent !== null && (
         <div className="space-y-4">
-          <div className="card p-6 text-center">
-            <p className="text-3xl font-heading font-bold text-slate-900">{scorePercent}%</p>
-            <p className="text-slate-500 text-sm mt-1">score on this quiz</p>
+          <div className="card p-8 text-center">
+            <div className="flex justify-center mb-3">
+              <ProgressRing
+                percent={scorePercent}
+                size={96}
+                strokeWidth={8}
+                color={scorePercent >= 70 ? '#84cc16' : scorePercent >= 40 ? '#f59e0b' : '#f43f5e'}
+                label={<span className="font-heading text-2xl font-bold text-slate-900">{scorePercent}%</span>}
+              />
+            </div>
+            <p className="text-slate-500 text-sm">
+              {scorePercent >= 70 ? 'Great work — that topic is looking solid.' : scorePercent >= 40 ? 'Getting there — a bit more revision will help.' : 'Worth another pass on this topic.'}
+            </p>
           </div>
           {questions.map((q, i) => {
             const r = resultsByQuestion.get(q.id)

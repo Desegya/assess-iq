@@ -3,12 +3,20 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useApi } from '@/hooks/use-api'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 interface WeakTopic {
   id: string
   masteryScore: number
   quizAverage: number | null
   topic: { id: string; name: string; courseId: string }
+}
+
+function severityColor(pct: number) {
+  if (pct < 40) return { bar: 'bg-red-500', text: 'text-red-600' }
+  if (pct < 70) return { bar: 'bg-amber-500', text: 'text-amber-600' }
+  return { bar: 'bg-emerald-500', text: 'text-emerald-600' }
 }
 
 export default function WeakTopicsPage() {
@@ -31,25 +39,38 @@ export default function WeakTopicsPage() {
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
 
-      {items?.length === 0 && (
-        <div className="card p-10 text-center">
-          <p className="text-slate-600 font-medium">No weak topics yet</p>
-          <p className="text-slate-400 text-sm mt-1">Take a self-quiz on a topic to start tracking your mastery.</p>
+      {items === null && !error && (
+        <div className="space-y-3">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
         </div>
       )}
 
+      {items?.length === 0 && (
+        <EmptyState illustration="search" title="No weak topics yet" subtitle="Take a self-quiz on a topic to start tracking your mastery." />
+      )}
+
       <div className="space-y-3">
-        {items?.map(item => (
-          <div key={item.id} className="card p-5 flex items-center justify-between">
-            <div>
-              <p className="font-medium text-slate-800">{item.topic.name}</p>
-              <p className="text-xs text-slate-400 mt-0.5">Quiz average: {item.quizAverage ?? '—'}%</p>
+        {items?.map(item => {
+          const pct = item.quizAverage ?? item.masteryScore
+          const color = severityColor(pct)
+          return (
+            <div key={item.id} className="card p-5 flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-slate-800">{item.topic.name}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="h-2 flex-1 bg-slate-100 rounded-full overflow-hidden max-w-[160px]">
+                    <div className={`h-full rounded-full transition-all duration-700 ${color.bar}`} style={{ width: `${Math.max(4, pct)}%` }} />
+                  </div>
+                  <span className={`text-xs font-bold ${color.text}`}>{item.quizAverage ?? '—'}%</span>
+                </div>
+              </div>
+              <Link href={`/topics/${item.topic.id}/quiz`} className="btn-secondary flex-shrink-0">
+                Practice again
+              </Link>
             </div>
-            <Link href={`/topics/${item.topic.id}/quiz`} className="btn-secondary">
-              Practice again
-            </Link>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

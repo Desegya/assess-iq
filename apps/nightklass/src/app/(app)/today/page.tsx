@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useApi } from '@/hooks/use-api'
+import { getSubjectColor } from '@/lib/subject-color'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 interface Session {
   id: string
@@ -53,21 +56,29 @@ export default function TodayPage() {
       <p className="text-slate-500 text-sm mb-6">Your scheduled study sessions for today.</p>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
-      {sessions === null && !error && <p className="text-slate-500 text-sm">Loading…</p>}
+      {sessions === null && !error && (
+        <div className="space-y-4">
+          <div className="card p-6 space-y-3">
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        </div>
+      )}
 
       {sessions?.length === 0 && (
-        <div className="card p-10 text-center">
-          <p className="text-slate-600 font-medium">Nothing scheduled today</p>
-          <p className="text-slate-400 text-sm mt-1">Generate a study plan from one of your courses to see tasks here.</p>
-        </div>
+        <EmptyState
+          illustration="empty"
+          title="Nothing scheduled today"
+          subtitle="Generate a study plan from one of your courses to see tasks here."
+        />
       )}
 
       <div className="space-y-4">
         {sessions?.map(s => (
-          <div key={s.id} className="card p-6">
+          <div key={s.id} className="card card-accent p-6" style={{ ['--accent-color' as string]: getSubjectColor(s.course.id).hex }}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs text-indigo-600 font-semibold">{s.course.title}</p>
+                <p className={`text-xs font-semibold ${getSubjectColor(s.course.id).text}`}>{s.course.title}</p>
                 <h2 className="font-heading font-bold text-slate-900 mt-0.5">{s.topic?.name ?? 'Revision / buffer'}</h2>
                 <p className="text-xs text-slate-400 mt-1">
                   {s.startTime}–{s.endTime} · {s.estimatedMinutes} min

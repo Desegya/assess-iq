@@ -4,6 +4,8 @@ import { useEffect, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useApi } from '@/hooks/use-api'
+import { getSubjectColor } from '@/lib/subject-color'
+import { SkeletonCard } from '@/components/ui/Skeleton'
 
 interface Topic {
   id: string
@@ -18,8 +20,13 @@ interface Course {
   title: string
   subject: string
   description: string | null
+  courseCode: string | null
+  level: number | null
+  semester: 'FIRST' | 'SECOND' | null
   topics: Topic[]
 }
+
+const SEMESTER_LABEL = { FIRST: 'First semester', SECOND: 'Second semester' } as const
 
 interface UploadedDocument {
   id: string
@@ -236,7 +243,9 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
   }
 
   if (error) return <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
-  if (!course) return <p className="text-slate-500 text-sm">Loading…</p>
+  if (!course) return <div className="space-y-8"><SkeletonCard /><SkeletonCard /></div>
+
+  const color = getSubjectColor(course.id)
 
   return (
     <div className="space-y-8">
@@ -244,8 +253,15 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
         <div>
           <h1 className="font-heading text-2xl font-bold text-slate-900">{course.title}</h1>
           <p className="text-slate-500 text-sm mt-1">{course.subject}</p>
+          {(course.courseCode || course.level || course.semester) && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {course.courseCode && <span className={`badge ${color.bgSoft} ${color.text}`}>{course.courseCode}</span>}
+              {course.level && <span className="badge bg-slate-100 text-slate-600">{course.level}L</span>}
+              {course.semester && <span className="badge bg-slate-100 text-slate-600">{SEMESTER_LABEL[course.semester]}</span>}
+            </div>
+          )}
           {hasPlan && (
-            <Link href={`/courses/${id}/plan`} className="inline-block mt-3 text-sm text-indigo-600 font-semibold">
+            <Link href={`/courses/${id}/plan`} className="inline-block mt-3 text-sm text-blue-600 font-semibold">
               View current study plan →
             </Link>
           )}
@@ -256,7 +272,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
       </div>
 
       {course.topics.length > 0 && (
-        <section className="card p-6 bg-indigo-50/50 border-indigo-100">
+        <section className={`card p-6 ${color.bgSoft} ${color.border}`}>
           <h2 className="font-heading font-bold text-slate-900 mb-1">Quick practice</h2>
           <p className="text-slate-500 text-sm mb-4">
             No need to wait for a full plan — try a quiz or flashcards right now.
@@ -369,13 +385,13 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
                 <span className="text-xs text-slate-400">{topic.estimatedMinutes ?? 45} min</span>
-                <Link href={`/topics/${topic.id}/quiz`} className="text-xs text-indigo-600 font-semibold">
+                <Link href={`/topics/${topic.id}/quiz`} className="text-xs text-blue-600 font-semibold">
                   Self-quiz
                 </Link>
                 <button
                   onClick={() => handleGenerateFlashcards(topic.id)}
                   disabled={generatingFlashcardsFor === topic.id}
-                  className="text-xs text-indigo-600 font-semibold disabled:opacity-60"
+                  className="text-xs text-blue-600 font-semibold disabled:opacity-60"
                 >
                   {generatingFlashcardsFor === topic.id ? 'Generating…' : 'Flashcards'}
                 </button>

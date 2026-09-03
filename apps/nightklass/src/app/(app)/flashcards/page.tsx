@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useApi } from '@/hooks/use-api'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { celebrate } from '@/lib/celebrate'
 
 interface Flashcard {
   id: string
@@ -17,7 +20,7 @@ const RATING_BUTTONS: { rating: Rating; label: string; className: string }[] = [
   { rating: 'again', label: 'Again', className: 'bg-red-50 text-red-700 hover:bg-red-100' },
   { rating: 'hard', label: 'Hard', className: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
   { rating: 'good', label: 'Good', className: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
-  { rating: 'easy', label: 'Easy', className: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' },
+  { rating: 'easy', label: 'Easy', className: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
 ]
 
 export default function FlashcardsPage() {
@@ -43,9 +46,11 @@ export default function FlashcardsPage() {
     setSubmitting(true)
     try {
       await api.post(`/study/flashcards/${card.id}/review`, { rating })
-      setReviewedCount(c => c + 1)
+      const nextCount = reviewedCount + 1
+      setReviewedCount(nextCount)
       setFlipped(false)
       setIndex(i => i + 1)
+      if (index + 1 >= (cards?.length ?? 0)) celebrate()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit review')
     } finally {
@@ -54,22 +59,24 @@ export default function FlashcardsPage() {
   }
 
   if (error) return <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
-  if (cards === null) return <p className="text-slate-500 text-sm">Loading…</p>
+  if (cards === null)
+    return (
+      <div className="max-w-lg space-y-3">
+        <Skeleton className="h-56 w-full rounded-3xl" />
+        <Skeleton className="h-11 w-full" />
+      </div>
+    )
 
   const card = cards[index]
 
   if (!card) {
     return (
       <div className="max-w-lg">
-        <div className="card p-10 text-center">
-          <p className="text-3xl mb-2">🎉</p>
-          <p className="text-slate-800 font-semibold">
-            {reviewedCount > 0 ? `Reviewed ${reviewedCount} card(s)` : 'No flashcards due right now'}
-          </p>
-          <p className="text-slate-400 text-sm mt-1">
-            Generate more from a topic on your course page, or check back later.
-          </p>
-        </div>
+        <EmptyState
+          illustration="celebrate"
+          title={reviewedCount > 0 ? `Nice — you reviewed ${reviewedCount} card${reviewedCount === 1 ? '' : 's'}` : 'All caught up'}
+          subtitle="Generate more from a topic on your course page, or check back later."
+        />
       </div>
     )
   }
@@ -84,17 +91,21 @@ export default function FlashcardsPage() {
       </div>
 
       {(card.course || card.topic) && (
-        <p className="text-xs text-indigo-600 font-semibold mb-2">
+        <p className="text-xs text-blue-600 font-semibold mb-2">
           {card.course?.title}
           {card.topic ? ` · ${card.topic.name}` : ''}
         </p>
       )}
 
-      <div
-        className="card p-10 min-h-[220px] flex items-center justify-center text-center cursor-pointer"
-        onClick={() => setFlipped(f => !f)}
-      >
-        <p className="text-lg font-medium text-slate-900">{flipped ? card.back : card.front}</p>
+      <div className="flip-scene min-h-[220px]" onClick={() => setFlipped(f => !f)}>
+        <div className={`flip-card cursor-pointer w-full h-[220px] ${flipped ? 'is-flipped' : ''}`}>
+          <div className="flip-face card w-full h-full p-10 flex items-center justify-center text-center absolute inset-0">
+            <p className="text-lg font-medium text-slate-900">{card.front}</p>
+          </div>
+          <div className="flip-face flip-face-back card w-full h-full p-10 flex items-center justify-center text-center bg-gradient-to-br from-blue-50 to-cyan-50">
+            <p className="text-lg font-medium text-slate-900">{card.back}</p>
+          </div>
+        </div>
       </div>
 
       {!flipped ? (

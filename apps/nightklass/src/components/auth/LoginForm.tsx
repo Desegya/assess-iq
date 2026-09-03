@@ -103,7 +103,7 @@ export function LoginForm() {
 
       <p className="text-center text-sm text-slate-500 mt-6">
         New to Nightklass?{' '}
-        <a href="/register" className="text-indigo-600 hover:text-indigo-700 font-semibold transition-colors">
+        <a href="/register" className="text-blue-600 hover:text-blue-700 font-semibold transition-colors">
           Create an account
         </a>
       </p>

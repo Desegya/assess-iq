@@ -3,6 +3,15 @@
 import { useEffect, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import { useApi } from '@/hooks/use-api'
+import { Skeleton } from '@/components/ui/Skeleton'
+
+const STATUS_ICON: Record<string, string> = {
+  COMPLETED: '✓',
+  MISSED: '✕',
+  RESCHEDULED: '↻',
+  NOT_STARTED: '·',
+  IN_PROGRESS: '·',
+}
 
 interface Session {
   id: string
@@ -64,13 +73,20 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
     return (
       <div>
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
-        <Link href={`/courses/${id}`} className="text-indigo-600 text-sm font-semibold">
+        <Link href={`/courses/${id}`} className="text-blue-600 text-sm font-semibold">
           ← Back to course
         </Link>
       </div>
     )
   }
-  if (!plan) return <p className="text-slate-500 text-sm">Loading…</p>
+  if (!plan)
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-1/3" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    )
 
   const missedCount = plan.sessions.filter(s => s.status === 'MISSED').length
 
@@ -94,46 +110,53 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
         )}
       </div>
 
-      {notice && <div className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-sm rounded-xl px-4 py-3 mb-6">{notice}</div>}
+      {notice && <div className="bg-blue-50 border border-blue-100 text-blue-700 text-sm rounded-xl px-4 py-3 mb-6">{notice}</div>}
 
-      <div className="space-y-4">
-        {[...byDate.entries()].map(([date, sessions]) => (
-          <div key={date} className="card p-5">
-            <p className="text-sm font-semibold text-slate-700 mb-3">
-              {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-            </p>
-            <ul className="space-y-2">
-              {sessions.map(s => (
-                <li key={s.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">{s.topic?.name ?? 'Revision / buffer'}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {s.startTime}–{s.endTime} · {s.estimatedMinutes} min
-                    </p>
-                  </div>
-                  <span
-                    className={`badge ${
-                      s.status === 'COMPLETED'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : s.status === 'MISSED'
-                          ? 'bg-red-50 text-red-700'
-                          : s.status === 'RESCHEDULED'
-                            ? 'bg-amber-50 text-amber-700'
-                            : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    {s.status.replace('_', ' ').toLowerCase()}
-                  </span>
-                  {s.status === 'NOT_STARTED' && (
-                    <button onClick={() => handleComplete(s.id)} className="text-xs text-indigo-600 font-semibold ml-3">
-                      Mark complete
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+      <div className="relative pl-6">
+        <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-slate-200" aria-hidden="true" />
+        <div className="space-y-6">
+          {[...byDate.entries()].map(([date, sessions]) => (
+            <div key={date} className="relative">
+              <span className="absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 ring-4 ring-brand-bg" />
+              <div className="card p-5">
+                <p className="text-sm font-semibold text-slate-700 mb-3">
+                  {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                </p>
+                <ul className="space-y-2">
+                  {sessions.map(s => (
+                    <li key={s.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">{s.topic?.name ?? 'Revision / buffer'}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {s.startTime}–{s.endTime} · {s.estimatedMinutes} min
+                        </p>
+                      </div>
+                      <span
+                        className={`badge gap-1 ${
+                          s.status === 'COMPLETED'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : s.status === 'MISSED'
+                              ? 'bg-red-50 text-red-700'
+                              : s.status === 'RESCHEDULED'
+                                ? 'bg-amber-50 text-amber-700'
+                                : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        <span>{STATUS_ICON[s.status] ?? ''}</span>
+                        {s.status.replace('_', ' ').toLowerCase()}
+                      </span>
+                      {s.status === 'NOT_STARTED' && (
+                        <button onClick={() => handleComplete(s.id)} className="text-xs text-blue-600 font-semibold ml-3">
+                          Mark complete
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

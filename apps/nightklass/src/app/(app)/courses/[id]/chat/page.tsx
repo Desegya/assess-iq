@@ -15,6 +15,12 @@ interface Message {
   source?: 'ai' | 'fallback'
 }
 
+const SUGGESTED_PROMPTS = [
+  'Explain this topic like I\'m in a hurry',
+  'Summarise the key points so far',
+  'Quiz me on the hardest part',
+]
+
 export default function CourseChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = usePromise(params)
   const api = useApi()
@@ -62,7 +68,7 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="max-w-2xl flex flex-col h-[calc(100vh-160px)]">
       <div className="mb-4">
-        <Link href={`/courses/${id}`} className="text-sm text-indigo-600 font-semibold">
+        <Link href={`/courses/${id}`} className="text-sm text-blue-600 font-semibold">
           ← Back to {course?.title ?? 'course'}
         </Link>
         <h1 className="font-heading text-2xl font-bold text-slate-900 mt-2">Ask AI</h1>
@@ -71,15 +77,26 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
 
       <div className="flex-1 overflow-y-auto space-y-3 pb-4">
         {messages.length === 0 && (
-          <div className="card p-6 text-center text-sm text-slate-400">
-            Ask something like &quot;Can you explain this topic simply?&quot; or &quot;Summarise chapter 2.&quot;
+          <div className="card p-6 text-center">
+            <p className="text-sm text-slate-500 mb-4">Not sure where to start? Try one of these:</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {SUGGESTED_PROMPTS.map(p => (
+                <button
+                  key={p}
+                  onClick={() => setInput(p)}
+                  className="text-xs font-medium bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-full px-3.5 py-2 transition-colors"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                m.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-800'
+                m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-800'
               }`}
             >
               {m.role === 'assistant' && m.source === 'fallback' && (

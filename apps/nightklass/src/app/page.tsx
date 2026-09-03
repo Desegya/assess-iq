@@ -5,6 +5,12 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
 import { Logo } from '@/components/ui/Logo'
+import { getSubjectColor } from '@/lib/subject-color'
+
+const STARS = [
+  [8, 12, 1.6], [22, 30, 1.2], [42, 8, 1.8], [65, 22, 1.3], [85, 14, 1.6],
+  [92, 34, 1.1], [15, 55, 1.4], [50, 48, 1.2], [78, 52, 1.5], [95, 60, 1.2],
+] as const
 
 const FEATURES = [
   {
@@ -81,19 +87,24 @@ function LandingContent() {
         </div>
       </header>
 
-      <section className="relative overflow-hidden">
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-indigo-300 rounded-full opacity-20 blur-3xl pointer-events-none" aria-hidden="true" />
-        <div className="absolute top-10 right-0 w-72 h-72 bg-amber-200 rounded-full opacity-20 blur-3xl pointer-events-none" aria-hidden="true" />
+      <section className="relative overflow-hidden bg-gradient-to-b from-brand-dark via-brand-dark to-brand-bg">
+        <svg className="absolute inset-0 w-full h-full opacity-70 pointer-events-none" preserveAspectRatio="none" aria-hidden="true">
+          {STARS.map(([x, y, r], i) => (
+            <circle key={i} cx={`${x}%`} cy={`${y}%`} r={r} fill="white" className="animate-twinkle" style={{ animationDelay: `${i * 0.35}s` }} />
+          ))}
+        </svg>
+        <div className="absolute top-16 -right-16 w-72 h-72 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
+        <div className="absolute top-0 -left-16 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
 
-        <div className="relative max-w-4xl mx-auto px-6 pt-20 pb-16 text-center">
-          <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 animate-fade-in">
+        <div className="relative max-w-4xl mx-auto px-6 pt-20 pb-24 text-center">
+          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur text-blue-100 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 animate-fade-in">
             <span>🔥</span>
             Free to start — no school sign-up required
           </div>
-          <h1 className="font-heading text-4xl sm:text-5xl font-bold text-slate-900 leading-tight animate-slide-up">
-            Your <span className="text-indigo-600">personal study coach</span>, not just another app.
+          <h1 className="font-heading text-4xl sm:text-5xl font-bold text-white leading-tight animate-slide-up">
+            Your <span className="bg-gradient-to-r from-cyan-300 to-lime-300 bg-clip-text text-transparent">personal study coach</span>, not just another app.
           </h1>
-          <p className="mt-5 text-lg text-slate-500 max-w-2xl mx-auto animate-slide-up delay-75">
+          <p className="mt-5 text-lg text-blue-100/80 max-w-2xl mx-auto animate-slide-up delay-75">
             Upload your notes, get a study plan built around your exam date, and test yourself along the way —
             with flashcards, quizzes, and an AI study buddy that knows your material.
           </p>
@@ -101,7 +112,7 @@ function LandingContent() {
             <Link href="/register" className="btn-primary !py-3 !px-6">
               Get started free
             </Link>
-            <Link href="/login" className="btn-secondary !py-3 !px-6">
+            <Link href="/login" className="bg-white/10 hover:bg-white/15 text-white font-semibold py-3 px-6 rounded-2xl text-sm transition-colors">
               Sign in
             </Link>
           </div>
@@ -115,17 +126,20 @@ function LandingContent() {
           </h2>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {FEATURES.map((f, i) => (
-            <div key={f.title} className="card p-6 animate-fade-in" style={{ animationDelay: `${i * 60}ms` }}>
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 mb-4">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {f.icon}
-                </svg>
+          {FEATURES.map((f, i) => {
+            const color = getSubjectColor(f.title)
+            return (
+              <div key={f.title} className="card p-6 animate-fade-in" style={{ animationDelay: `${i * 60}ms` }}>
+                <div className={`w-10 h-10 rounded-xl ${color.bgSoft} flex items-center justify-center ${color.text} mb-4`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {f.icon}
+                  </svg>
+                </div>
+                <h3 className="font-heading font-bold text-slate-900">{f.title}</h3>
+                <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{f.desc}</p>
               </div>
-              <h3 className="font-heading font-bold text-slate-900">{f.title}</h3>
-              <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{f.desc}</p>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 
@@ -137,7 +151,7 @@ function LandingContent() {
           <div className="grid sm:grid-cols-4 gap-8">
             {STEPS.map(s => (
               <div key={s.n} className="text-center">
-                <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-heading font-bold flex items-center justify-center mx-auto mb-4">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 text-white font-heading font-bold flex items-center justify-center mx-auto mb-4">
                   {s.n}
                 </div>
                 <h3 className="font-semibold text-slate-900 text-sm">{s.title}</h3>
