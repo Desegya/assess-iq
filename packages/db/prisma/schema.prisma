@@ -146,6 +146,16 @@ enum StudySessionStatus {
   RESCHEDULED
 }
 
+enum Semester {
+  FIRST
+  SECOND
+}
+
+enum GpaScale {
+  FIVE
+  FOUR
+}
+
 // ─── Organization ─────────────────────────────────────────────────────────────
 
 model Organization {
@@ -207,6 +217,7 @@ model User {
   studyPlans     StudyPlan[]   @relation("StudyPlanStudent")
   studySessions  StudySession[] @relation("StudySessionStudent")
   topicMasteries TopicMastery[] @relation("TopicMasteryStudent")
+  gpaEntries     GpaEntry[]    @relation("GpaEntryStudent")
 
   @@index([organizationId])
   @@index([email])
@@ -244,6 +255,9 @@ model Course {
   title          String
   subject        String
   description    String?
+  courseCode     String?
+  level          Int?
+  semester       Semester?
   isActive       Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -625,4 +639,24 @@ model TopicMastery {
   @@unique([studentId, topicId])
   @@index([studentId])
   @@map("topic_masteries")
+}
+
+// ─── GPA Entry ────────────────────────────────────────────────────────────────
+
+model GpaEntry {
+  id            String   @id @default(cuid())
+  studentId     String
+  semesterLabel String
+  courseTitle   String
+  creditUnits   Int
+  grade         String
+  scale         GpaScale
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  student       User     @relation("GpaEntryStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("gpa_entries")
 }

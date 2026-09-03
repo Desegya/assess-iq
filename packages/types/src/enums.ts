@@ -131,3 +131,15 @@ export enum AIModel {
   SONNET = 'claude-sonnet-4-6',             // Default generation
   OPUS = 'claude-opus-4-7',                 // Premium review only
 }
+
+// ─── Study ────────────────────────────────────────────────────────────────────
+
+export enum Semester {
+  FIRST = 'FIRST',
+  SECOND = 'SECOND',
+}
+
+export enum GpaScale {
+  FIVE = 'FIVE',
+  FOUR = 'FOUR',
+}

@@ -13,6 +13,7 @@ import { DocumentsModule } from './modules/documents/documents.module'
 import { AiModule } from './modules/ai/ai.module'
 import { AnalyticsModule } from './modules/analytics/analytics.module'
 import { StudyModule } from './modules/study/study.module'
+import { GpaModule } from './modules/gpa/gpa.module'
 import { AdminModule } from './modules/admin/admin.module'
 import { PrismaModule } from './modules/prisma/prisma.module'
 
@@ -46,6 +47,7 @@ import { PrismaModule } from './modules/prisma/prisma.module'
     AiModule,
     AnalyticsModule,
     StudyModule,
+    GpaModule,
     AdminModule,
   ],
 })

@@ -15,6 +15,7 @@ import {
   IntegritySeverity,
   AIAction,
   AIModel,
+  Semester,
 } from './enums'
 
 // ─── Organization ─────────────────────────────────────────────────────────────
@@ -63,6 +64,9 @@ export interface Course {
   title: string
   subject: string
   description: string | null
+  courseCode: string | null
+  level: number | null
+  semester: Semester | null
   isActive: boolean
   createdAt: Date
   updatedAt: Date
