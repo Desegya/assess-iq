@@ -7,8 +7,9 @@
     "dev": "nest start --watch",
     "start": "node dist/main",
     "lint": "eslint src --ext .ts",
-    "test": "jest",
-    "type-check": "tsc --noEmit"
+    "test": "vitest run",
+    "type-check": "tsc --noEmit",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@assessiq/db": "*",
@@ -50,6 +51,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
     "@types/pdf-parse": "^1.1.4",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
   }
 }

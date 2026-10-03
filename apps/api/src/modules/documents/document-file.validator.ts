@@ -15,8 +15,17 @@ const BINARY_TYPES: Record<string, string[]> = {
   'application/msword': ['application/x-cfb'],
 }
 
+type DetectFileType = (buffer: Buffer) => Promise<{ mime: string } | undefined>
+
+// file-type is ESM-only; eval keeps TypeScript from compiling this import into require() in our CommonJS build
+const detectWithFileType: DetectFileType = async buffer => {
+  const { fileTypeFromBuffer } = (await eval('import ("file-type")')) as typeof import('file-type')
+  return fileTypeFromBuffer(buffer)
+}
+
 export class DocumentFileValidator extends FileValidator<Record<string, never>> {
-  constructor() {
+  // The detector is injectable so tests can load file-type without the eval trick
+  constructor(private readonly detect: DetectFileType = detectWithFileType) {
     super({})
   }
 
@@ -35,8 +44,7 @@ export class DocumentFileValidator extends FileValidator<Record<string, never>> 
     const accepted = BINARY_TYPES[file.mimetype]
     if (!accepted) return false
     try {
-      const { fileTypeFromBuffer } = (await eval('import ("file-type")')) as typeof import('file-type')
-      const detected = await fileTypeFromBuffer(file.buffer)
+      const detected = await this.detect(file.buffer)
       return !!detected && accepted.includes(detected.mime)
     } catch {
       return false
