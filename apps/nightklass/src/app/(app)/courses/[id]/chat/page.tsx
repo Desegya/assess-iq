@@ -12,13 +12,13 @@ interface Course {
 interface Message {
   role: 'user' | 'assistant'
   content: string
-  source?: 'ai' | 'fallback'
+  source?: 'ai' | 'general' | 'fallback'
 }
 
 const SUGGESTED_PROMPTS = [
-  'Explain this topic like I\'m in a hurry',
-  'Summarise the key points so far',
-  'Quiz me on the hardest part',
+  'What topics does this course usually cover?',
+  'Explain the hardest topic like I\'m in a hurry',
+  'Quiz me on the basics',
 ]
 
 export default function CourseChatPage({ params }: { params: Promise<{ id: string }> }) {
@@ -53,7 +53,7 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
     setSending(true)
 
     try {
-      const result = await api.post<{ source: 'ai' | 'fallback'; reply: string }>(`/study/courses/${id}/chat`, {
+      const result = await api.post<{ source: 'ai' | 'general' | 'fallback'; reply: string }>(`/study/courses/${id}/chat`, {
         message,
         history,
       })
@@ -72,7 +72,9 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
           ← Back to {course?.title ?? 'course'}
         </Link>
         <h1 className="font-heading text-2xl font-bold text-slate-900 mt-2">Ask AI</h1>
-        <p className="text-slate-400 text-sm mt-1">Answers are based on your uploaded course materials.</p>
+        <p className="text-slate-400 text-sm mt-1">
+          Answers use your uploaded materials when you have them, and general course knowledge when you don&apos;t.
+        </p>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-3 pb-4">
@@ -101,6 +103,9 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
             >
               {m.role === 'assistant' && m.source === 'fallback' && (
                 <p className="text-xs text-amber-600 font-semibold mb-1">Basic search (AI unavailable)</p>
+              )}
+              {m.role === 'assistant' && m.source === 'general' && (
+                <p className="text-xs text-slate-400 font-semibold mb-1">From general knowledge, not your notes</p>
               )}
               <p className="whitespace-pre-wrap">{m.content}</p>
             </div>

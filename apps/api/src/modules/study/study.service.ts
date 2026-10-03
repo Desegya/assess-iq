@@ -16,6 +16,28 @@ import { ChatDto } from './dto/chat.dto'
 const DEFAULT_TOPIC_MINUTES = 45
 const WEAK_TOPIC_THRESHOLD = 60
 
+const SEMESTER_LABEL = { FIRST: 'first semester', SECOND: 'second semester' } as const
+
+// A plain-text description of a course, used as the AI's only context when the student hasn't uploaded material
+function describeCourse(course: {
+  title: string
+  subject: string
+  courseCode?: string | null
+  level?: number | null
+  semester?: 'FIRST' | 'SECOND' | null
+  description?: string | null
+}): string {
+  const details = [
+    course.courseCode,
+    course.subject,
+    course.level ? `${course.level} level` : null,
+    course.semester ? SEMESTER_LABEL[course.semester] : null,
+  ].filter(Boolean)
+  return `${course.title}${details.length ? ` (${details.join(', ')})` : ''} — a university course${
+    course.description ? `\nDescription: ${course.description}` : ''
+  }`
+}
+
 const RATING_QUALITY: Record<FlashcardRating, number> = { again: 2, hard: 3, good: 4, easy: 5 }
 
 function applySm2(
@@ -366,12 +388,10 @@ export class StudyService {
       where: { courseId: topic.courseId, status: 'READY', extractedText: { not: null } },
       orderBy: { createdAt: 'desc' },
     })
-    const sourceText = doc?.extractedText || `${topic.name}\n${topic.description ?? ''}`
-    if (!sourceText.trim()) {
-      throw new BadRequestException(
-        'No material available to generate a quiz from — upload a document or add a topic description first',
-      )
-    }
+    const course = await this.prisma.course.findUniqueOrThrow({ where: { id: topic.courseId } })
+    const sourceText =
+      doc?.extractedText ||
+      `${describeCourse(course)}\nTopic: ${topic.name}${topic.description ? ` — ${topic.description}` : ''}`
 
     // Try AI generation first; fall back to a local question bank if AI is
     // unavailable (no/invalid API key) or fails, so this never hard-blocks a
@@ -387,6 +407,7 @@ export class StudyService {
         userId: user.id,
         organizationId: user.organizationId ?? undefined,
         documentId: doc?.id ?? topic.id,
+        groundedInMaterial: !!doc,
       })
     } catch (err) {
       this.logger.warn(
@@ -520,12 +541,10 @@ export class StudyService {
       where: { courseId: topic.courseId, status: 'READY', extractedText: { not: null } },
       orderBy: { createdAt: 'desc' },
     })
-    const sourceText = doc?.extractedText || `${topic.name}\n${topic.description ?? ''}`
-    if (!sourceText.trim()) {
-      throw new BadRequestException(
-        'No material available to generate flashcards from — upload a document or add a topic description first',
-      )
-    }
+    const course = await this.prisma.course.findUniqueOrThrow({ where: { id: topic.courseId } })
+    const sourceText =
+      doc?.extractedText ||
+      `${describeCourse(course)}\nTopic: ${topic.name}${topic.description ? ` — ${topic.description}` : ''}`
 
     let raw: RawFlashcard[]
     try {
@@ -535,6 +554,7 @@ export class StudyService {
         userId: user.id,
         organizationId: user.organizationId ?? undefined,
         documentId: doc?.id ?? topic.id,
+        groundedInMaterial: !!doc,
       })
     } catch (err) {
       this.logger.warn(
@@ -704,6 +724,72 @@ export class StudyService {
     return { currentStreak, longestStreak, last30Days, courses: courseProgress }
   }
 
+  // ─── Topic suggestions & notes without uploaded material ──────────────────
+
+  async suggestTopics(courseId: string, user: AuthUser) {
+    const course = await this.coursesService.findOne(courseId, user) // access check
+    try {
+      const proposals = await this.ai.suggestCourseTopics(describeCourse(course), {
+        userId: user.id,
+        organizationId: user.organizationId ?? undefined,
+        relatedEntityId: courseId,
+      })
+      return { source: 'ai' as const, proposals }
+    } catch (err) {
+      this.logger.warn(
+        `AI topic suggestion failed for course ${courseId}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+      throw new BadRequestException("Couldn't suggest topics right now — try again in a moment, or add them yourself")
+    }
+  }
+
+  async getTopicNotes(topicId: string, user: AuthUser) {
+    const topic = await this.prisma.topic.findUnique({ where: { id: topicId } })
+    if (!topic) throw new NotFoundException('Topic not found')
+    const course = await this.coursesService.findOne(topic.courseId, user) // access check
+    return {
+      topic: { id: topic.id, name: topic.name, courseId: course.id, courseTitle: course.title },
+      notes: topic.notes,
+      notesGeneratedAt: topic.notesGeneratedAt,
+    }
+  }
+
+  async generateTopicNotes(topicId: string, user: AuthUser) {
+    const topic = await this.prisma.topic.findUnique({ where: { id: topicId } })
+    if (!topic) throw new NotFoundException('Topic not found')
+    const course = await this.coursesService.findOne(topic.courseId, user) // access check
+
+    const doc = await this.prisma.document.findFirst({
+      where: { courseId: topic.courseId, status: 'READY', extractedText: { not: null } },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    let notes: string
+    try {
+      notes = await this.ai.generateTopicNotes(describeCourse(course), topic.name, doc?.extractedText ?? null, {
+        userId: user.id,
+        organizationId: user.organizationId ?? undefined,
+        relatedEntityId: topic.id,
+      })
+    } catch (err) {
+      this.logger.warn(
+        `AI notes generation failed for topic ${topicId}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+      throw new BadRequestException("Couldn't generate notes right now — try again in a moment")
+    }
+
+    const updated = await this.prisma.topic.update({
+      where: { id: topic.id },
+      data: { notes, notesGeneratedAt: new Date() },
+    })
+    return {
+      topic: { id: topic.id, name: topic.name, courseId: course.id, courseTitle: course.title },
+      notes: updated.notes,
+      notesGeneratedAt: updated.notesGeneratedAt,
+      groundedInMaterial: !!doc,
+    }
+  }
+
   // ─── AI study chat ────────────────────────────────────────────────────────
 
   async chat(courseId: string, dto: ChatDto, user: AuthUser) {
@@ -716,16 +802,10 @@ export class StudyService {
     })
     const combinedText = docs.map(d => d.extractedText).join('\n\n').slice(0, 12000)
     const topicNames = course.topics.map((t: { name: string }) => t.name).join(', ')
+    const hasMaterial = !!combinedText.trim()
 
-    if (!combinedText.trim()) {
-      return {
-        source: 'fallback' as const,
-        reply:
-          "You haven't uploaded any material for this course yet, so I can't answer from your notes. Upload a document first, then ask again.",
-      }
-    }
-
-    const systemContext = `You are a friendly, encouraging study tutor helping a student with their course "${course.title}" (${course.subject}).
+    const systemContext = hasMaterial
+      ? `You are a friendly, encouraging study tutor helping a student with their course "${course.title}" (${course.subject}).
 Topics in this course: ${topicNames || 'none listed yet'}.
 
 Answer the student's questions using ONLY the course material provided below. If the answer isn't in the
@@ -733,6 +813,13 @@ material, say so clearly rather than guessing. Keep answers concise and easy to 
 
 COURSE MATERIAL:
 ${combinedText}`
+      : `You are a friendly, encouraging study tutor helping a student with this course:
+${describeCourse(course)}
+Topics the student has added: ${topicNames || 'none yet'}.
+
+The student hasn't uploaded slides or notes yet, so answer from your own knowledge of how this course is
+typically taught at university level. When asked for topics, notes, summaries or practice questions, produce
+them. Keep answers clear, accurate and easy to understand, and be honest when you're unsure.`
 
     const messages: ChatMessage[] = [...(dto.history ?? []), { role: 'user', content: dto.message }]
 
@@ -742,13 +829,19 @@ ${combinedText}`
         organizationId: user.organizationId ?? undefined,
         relatedEntityId: courseId,
       })
-      return { source: 'ai' as const, reply }
+      return { source: hasMaterial ? ('ai' as const) : ('general' as const), reply }
     } catch (err) {
       this.logger.warn(
         `AI chat failed for course ${courseId}, using fallback keyword search: ${
           err instanceof Error ? err.message : String(err)
         }`,
       )
+      if (!hasMaterial) {
+        return {
+          source: 'fallback' as const,
+          reply: "AI isn't available right now. Try again in a moment, or upload your course material so I can search it.",
+        }
+      }
       return { source: 'fallback' as const, reply: this.keywordSearchFallback(dto.message, combinedText) }
     }
   }

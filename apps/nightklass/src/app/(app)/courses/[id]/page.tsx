@@ -64,7 +64,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState<string | null>(null)
   const [proposals, setProposals] = useState<TopicProposal[] | null>(null)
-  const [proposalSource, setProposalSource] = useState<'ai' | 'fallback' | null>(null)
+  const [proposalSource, setProposalSource] = useState<'ai' | 'fallback' | 'course' | null>(null)
+  const [suggesting, setSuggesting] = useState(false)
   const [savingProposals, setSavingProposals] = useState(false)
 
   const [days, setDays] = useState<DaySlot[]>(
@@ -166,6 +167,23 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
       setExtractError(err instanceof Error ? err.message : 'Failed to extract topics')
     } finally {
       setExtracting(false)
+    }
+  }
+
+  async function handleSuggestTopics() {
+    setExtractError(null)
+    setSuggesting(true)
+    try {
+      const result = await api.post<{ source: 'ai'; proposals: TopicProposal[] }>(
+        `/study/courses/${id}/topics/suggest`,
+        {},
+      )
+      setProposals(result.proposals)
+      setProposalSource('course')
+    } catch (err) {
+      setExtractError(err instanceof Error ? err.message : 'Failed to suggest topics')
+    } finally {
+      setSuggesting(false)
     }
   }
 
@@ -307,10 +325,6 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
         {uploadError && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{uploadError}</div>
         )}
-        {extractError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{extractError}</div>
-        )}
-
         {!proposals && (
           <div className="flex items-center gap-3 flex-wrap">
             <input
@@ -328,9 +342,32 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
             )}
           </div>
         )}
+        {proposals && <p className="text-sm text-slate-500">Review the suggested topics below.</p>}
+      </section>
+
+      {/* Topics */}
+      <section className="card p-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+          <h2 className="font-heading font-bold text-slate-900">Topics</h2>
+          {!proposals && (
+            <button onClick={handleSuggestTopics} disabled={suggesting} className="btn-secondary text-sm">
+              {suggesting ? 'Suggesting topics…' : '✨ Suggest topics with AI'}
+            </button>
+          )}
+        </div>
+
+        {extractError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{extractError}</div>
+        )}
 
         {proposals && (
-          <div className="space-y-3">
+          <div className="space-y-3 mb-6">
+            {proposalSource === 'course' && (
+              <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                Suggested from how this course is usually taught — not your official course outline. Edit or remove
+                anything that doesn&apos;t match before adding.
+              </p>
+            )}
             {proposalSource === 'fallback' && (
               <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                 Using basic section-splitting for now (no AI key configured yet) — feel free to edit these before adding.
@@ -366,14 +403,12 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
             </div>
           </div>
         )}
-      </section>
 
-      {/* Topics */}
-      <section className="card p-6">
-        <h2 className="font-heading font-bold text-slate-900 mb-4">Topics</h2>
-
-        {course.topics.length === 0 && (
-          <p className="text-slate-400 text-sm mb-4">No topics yet — add the topics you need to study below.</p>
+        {course.topics.length === 0 && !proposals && (
+          <p className="text-slate-400 text-sm mb-4">
+            No topics yet. No course outline? Let AI suggest topics from the course title, upload your material above,
+            or add them yourself below.
+          </p>
         )}
 
         <ul className="space-y-2 mb-4">
@@ -385,6 +420,9 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
                 <span className="text-xs text-slate-400">{topic.estimatedMinutes ?? 45} min</span>
+                <Link href={`/topics/${topic.id}/notes`} className="text-xs text-blue-600 font-semibold">
+                  Notes
+                </Link>
                 <Link href={`/topics/${topic.id}/quiz`} className="text-xs text-blue-600 font-semibold">
                   Self-quiz
                 </Link>

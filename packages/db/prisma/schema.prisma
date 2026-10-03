@@ -293,6 +293,8 @@ model Topic {
   order             Int       @default(0)
   estimatedMinutes  Int?
   importanceWeight  Float?
+  notes             String?   @db.Text
+  notesGeneratedAt  DateTime?
   createdAt         DateTime  @default(now())
 
   // Relations

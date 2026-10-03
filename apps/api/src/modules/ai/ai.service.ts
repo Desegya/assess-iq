@@ -37,6 +37,8 @@ interface GenerateOptions {
   userId: string
   organizationId?: string
   documentId: string
+  // false = the text is only a course/topic description, so the model should draw on general knowledge
+  groundedInMaterial?: boolean
 }
 
 interface ExtractTopicsOptions {
@@ -51,6 +53,13 @@ interface GenerateFlashcardsOptions {
   userId: string
   organizationId?: string
   documentId: string
+  groundedInMaterial?: boolean
+}
+
+interface CourseGenerationOptions {
+  userId: string
+  organizationId?: string
+  relatedEntityId: string
 }
 
 interface ChatOptions {
@@ -246,9 +255,16 @@ ${textSlice}`
     }
 
     const textSlice = extractedText.slice(0, 12000)
-    const prompt = `You are an expert tutor creating spaced-repetition flashcards from study material.
+    const grounded = opts.groundedInMaterial !== false
+    const prompt = `You are an expert tutor creating spaced-repetition flashcards ${
+      grounded ? 'from study material' : 'for a university course'
+    }.
 
-Generate exactly ${opts.count} flashcards from the text below${opts.topicHint ? ` focused on: ${opts.topicHint}` : ''}.
+Generate exactly ${opts.count} flashcards ${
+      grounded
+        ? 'from the text below'
+        : 'using your own knowledge of the course and topic described below, at the depth a university student would be examined on'
+    }${opts.topicHint ? ` focused on: ${opts.topicHint}` : ''}.
 - Each card should test one clear fact, definition, or concept
 - The front should be a short question or prompt; the back should be a concise, correct answer
 - Avoid duplicating the same fact across cards
@@ -256,7 +272,7 @@ Generate exactly ${opts.count} flashcards from the text below${opts.topicHint ? 
 Return ONLY a valid JSON array — no markdown, no explanation, just the array.
 Each item must match: {"front":"...","back":"..."}
 
-TEXT TO USE:
+${grounded ? 'TEXT TO USE' : 'COURSE AND TOPIC'}:
 ${textSlice}`
 
     const start = Date.now()
@@ -310,6 +326,57 @@ ${textSlice}`
         })
         .catch(e => this.logger.error('Failed to save AI usage log', e))
     }
+  }
+
+  // ─── Suggest topics for a course from its title alone (no material) ───────
+
+  async suggestCourseTopics(courseDescription: string, opts: CourseGenerationOptions): Promise<RawExtractedTopic[]> {
+    const prompt = `You are an expert university curriculum designer. A student has added the course below but has
+no slides or notes yet. Using your knowledge of how this course is typically taught at university level,
+break it into an ordered list of study topics the student could plan revision sessions around.
+
+- Produce between 6 and 12 topics, in the order they are usually taught
+- Each topic name should be concise (under 8 words)
+- Include a one-sentence description of what the topic covers
+- Favour the topics most likely to appear in exams
+
+Return ONLY a valid JSON array — no markdown, no explanation, just the array.
+Each item must match: {"name":"...","description":"..."}
+
+COURSE:
+${courseDescription}`
+
+    const output = await this.complete(prompt, 2048, 'EXTRACT_TOPICS', opts)
+    return this.parseJsonArray<RawExtractedTopic>(output)
+  }
+
+  // ─── Generate study notes for a topic ─────────────────────────────────────
+
+  async generateTopicNotes(
+    courseDescription: string,
+    topicName: string,
+    material: string | null,
+    opts: CourseGenerationOptions,
+  ): Promise<string> {
+    const prompt = `You are an expert university tutor writing clear revision notes for a student.
+
+Write study notes on the topic "${topicName}" for the course below.
+${
+  material
+    ? 'Base the notes on the course material provided. Only add outside knowledge where the material is thin, and keep it consistent with the material.'
+    : 'The student has no slides or notes yet, so use your own knowledge of how this topic is taught at university level.'
+}
+
+- Use Markdown: a short intro, then ## sections with bullet points
+- Define key terms in **bold**
+- Include worked examples or formulas where the topic uses them
+- End with a "## Likely exam questions" section listing 3-5 questions
+- Aim for roughly 500-900 words
+
+COURSE:
+${courseDescription}${material ? `\n\nCOURSE MATERIAL:\n${material.slice(0, 12000)}` : ''}`
+
+    return this.complete(prompt, 3072, 'GENERATE_SUMMARY', opts)
   }
 
   // ─── Study chat — answer a question grounded in course material ───────────
@@ -374,6 +441,72 @@ ${textSlice}`
     }
   }
 
+  // ─── Shared single-prompt call with usage logging ─────────────────────────
+
+  private async complete(
+    prompt: string,
+    maxOutputTokens: number,
+    action: 'EXTRACT_TOPICS' | 'GENERATE_SUMMARY',
+    opts: CourseGenerationOptions,
+  ): Promise<string> {
+    const apiKey = this.config.get<string>('OPENAI_API_KEY', '')
+    if (!apiKey) {
+      throw new BadRequestException(
+        'OPENAI_API_KEY is not configured. Add it to apps/api/.env to use AI generation.',
+      )
+    }
+
+    const start = Date.now()
+    let inputTokens = 0
+    let outputTokens = 0
+    let success = true
+    let errorMessage: string | undefined
+
+    try {
+      const response = await this.client.responses.create({
+        model: MODEL,
+        max_output_tokens: maxOutputTokens,
+        input: prompt,
+      })
+
+      inputTokens = response.usage?.input_tokens ?? 0
+      outputTokens = response.usage?.output_tokens ?? 0
+
+      if (!response.output_text) {
+        throw new Error('Empty response from OpenAI')
+      }
+
+      return response.output_text.trim()
+    } catch (err) {
+      success = false
+      errorMessage = err instanceof Error ? err.message : String(err)
+      throw err
+    } finally {
+      const durationMs = Date.now() - start
+      const costUsd =
+        (inputTokens / 1_000_000) * COST_PER_M_INPUT +
+        (outputTokens / 1_000_000) * COST_PER_M_OUTPUT
+
+      await this.prisma.aIUsageLog
+        .create({
+          data: {
+            organizationId: opts.organizationId,
+            userId: opts.userId,
+            action,
+            model: MODEL,
+            inputTokens,
+            outputTokens,
+            costUsd,
+            durationMs,
+            success,
+            errorMessage,
+            relatedEntityId: opts.relatedEntityId,
+          },
+        })
+        .catch(e => this.logger.error('Failed to save AI usage log', e))
+    }
+  }
+
   // ─── Prompt builder ───────────────────────────────────────────────────────
 
   private buildPrompt(text: string, opts: GenerateOptions): string {
@@ -389,13 +522,21 @@ ${textSlice}`
       })
       .join(', ')
 
-    return `You are an expert educator creating exam questions from educational content.
+    const grounded = opts.groundedInMaterial !== false
 
-Generate exactly ${opts.count} exam questions from the text below.
+    return `You are an expert educator creating exam questions ${
+      grounded ? 'from educational content' : 'for a university course'
+    }.
+
+Generate exactly ${opts.count} exam questions ${
+      grounded
+        ? 'from the text below'
+        : 'using your own knowledge of the course and topic described below, at the level a university student would be examined on'
+    }.
 - Difficulty: ${opts.difficulty}
 - Question types to use: ${typeDescriptions}${opts.topicHint ? `\n- Focus on topic: ${opts.topicHint}` : ''}
 - Distribute question types roughly evenly across the types listed
-- Make questions clear, unambiguous, and directly based on the text
+- Make questions clear, unambiguous, and ${grounded ? 'directly based on the text' : 'factually accurate'}
 - For MCQ: always provide exactly 4 options (A, B, C, D)
 - For TRUE_FALSE: options must be exactly [{"key":"A","text":"True"},{"key":"B","text":"False"}]
 
@@ -409,7 +550,7 @@ MCQ / TRUE_FALSE:
 SHORT_ANSWER:
 {"type":"SHORT_ANSWER","questionText":"...","correctAnswer":"...","explanation":"...","difficulty":"${opts.difficulty}"}
 
-TEXT TO USE:
+${grounded ? 'TEXT TO USE' : 'COURSE AND TOPIC'}:
 ${text}`
   }
 
