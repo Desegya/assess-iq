@@ -40,7 +40,7 @@ export class DocumentsController {
   @Post('upload')
   @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN, UserRole.STUDENT)
   @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: 'Upload a document (PDF, DOCX, or TXT) and extract text' })
+  @ApiOperation({ summary: 'Upload a document (PDF, DOCX, PPTX, or TXT) and extract text' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -58,7 +58,7 @@ export class DocumentsController {
           new MaxFileSizeValidator({ maxSize: 20 * 1024 * 1024 }), // 20 MB
           new FileTypeValidator({
             fileType:
-              /^(application\/pdf|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|application\/msword|text\/plain)$/,
+              /^(application\/pdf|application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation)|application\/msword|text\/plain)$/,
           }),
         ],
       }),

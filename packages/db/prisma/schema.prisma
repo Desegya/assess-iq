@@ -102,6 +102,7 @@ enum DocumentStatus {
 enum DocumentType {
   PDF
   DOCX
+  PPTX
   TXT
 }
 
@@ -149,6 +150,20 @@ enum StudySessionStatus {
 enum Semester {
   FIRST
   SECOND
+}
+
+enum TopicSource {
+  OUTLINE
+  MATERIAL
+  AI_SUGGESTED
+  AI_EXPANDED
+  STUDENT
+}
+
+enum OutlineSource {
+  UPLOAD
+  PASTE
+  PHOTO
 }
 
 enum InstitutionType {
@@ -279,6 +294,9 @@ model Course {
   semester       Semester?
   creditUnits    Int?
   isCarryover    Boolean      @default(false)
+  // The original course outline exactly as provided (uploaded, pasted or photographed), never modified by AI
+  outlineText    String?      @db.Text
+  outlineSource  OutlineSource?
   isActive       Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -294,6 +312,7 @@ model Course {
   studyPlans     StudyPlan[]
   studySessions  StudySession[]
   flashcards     Flashcard[]
+  outlineRevisions OutlineRevision[]
 
   @@index([organizationId])
   @@index([teacherId])
@@ -314,6 +333,10 @@ model Topic {
   importanceWeight  Float?
   notes             String?   @db.Text
   notesGeneratedAt  DateTime?
+  // Which outline layer this topic belongs to (OUTLINE = the student's/lecturer's original; AI_* = Nightklass enrichment)
+  source            TopicSource @default(STUDENT)
+  // Archived instead of deleted when it has study progress, so edits never destroy history
+  archivedAt        DateTime?
   createdAt         DateTime  @default(now())
 
   // Relations
@@ -327,6 +350,23 @@ model Topic {
 
   @@index([courseId])
   @@map("topics")
+}
+
+// ─── Outline revision ─────────────────────────────────────────────────────────
+// Snapshot of a course's topic tree after each structural change (syllabus versioning)
+
+model OutlineRevision {
+  id          String   @id @default(cuid())
+  courseId    String
+  createdById String
+  reason      String
+  snapshot    Json
+  createdAt   DateTime @default(now())
+
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@map("outline_revisions")
 }
 
 // ─── Document ─────────────────────────────────────────────────────────────────

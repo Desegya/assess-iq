@@ -93,6 +93,7 @@ export enum DocumentStatus {
 export enum DocumentType {
   PDF = 'PDF',
   DOCX = 'DOCX',
+  PPTX = 'PPTX',
   TXT = 'TXT',
 }
 
@@ -137,6 +138,20 @@ export enum AIModel {
 export enum Semester {
   FIRST = 'FIRST',
   SECOND = 'SECOND',
+}
+
+export enum TopicSource {
+  OUTLINE = 'OUTLINE',
+  MATERIAL = 'MATERIAL',
+  AI_SUGGESTED = 'AI_SUGGESTED',
+  AI_EXPANDED = 'AI_EXPANDED',
+  STUDENT = 'STUDENT',
+}
+
+export enum OutlineSource {
+  UPLOAD = 'UPLOAD',
+  PASTE = 'PASTE',
+  PHOTO = 'PHOTO',
 }
 
 export enum InstitutionType {

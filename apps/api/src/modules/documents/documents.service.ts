@@ -14,11 +14,13 @@ import { UploadDocumentDto } from './dto/upload-document.dto'
 import { extractTopicsHeuristically } from './topic-extraction-fallback'
 import pdfParse from 'pdf-parse'
 import mammoth from 'mammoth'
+import JSZip from 'jszip'
 
 const ALLOWED_MIMETYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/msword',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'text/plain',
 ])
 
@@ -243,8 +245,40 @@ export class DocumentsService {
       }
     }
 
+    if (type === DocumentType.PPTX) {
+      try {
+        return await this.extractPptxText(buffer)
+      } catch (err) {
+        this.logger.warn('PPTX extraction failed, continuing without text', err)
+        return { text: '' }
+      }
+    }
+
     // Plain text
     return { text: buffer.toString('utf-8') }
+  }
+
+  // A .pptx is a zip of slide XML files; text runs live in <a:t> elements
+  private async extractPptxText(buffer: Buffer): Promise<{ text: string; pageCount: number }> {
+    const zip = await JSZip.loadAsync(buffer)
+    const slideFiles = Object.keys(zip.files)
+      .filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+      .sort((a, b) => Number(a.match(/(\d+)\.xml$/)![1]) - Number(b.match(/(\d+)\.xml$/)![1]))
+
+    const decode = (t: string) =>
+      t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&')
+
+    const slides: string[] = []
+    for (const name of slideFiles) {
+      const xml = await zip.file(name)!.async('string')
+      // Keep paragraphs on separate lines so headings and bullets stay distinct
+      const paragraphs = xml.split(/<\/a:p>/).map(p =>
+        [...p.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m => decode(m[1]!)).join(''),
+      )
+      const text = paragraphs.map(p => p.trim()).filter(Boolean).join('\n')
+      if (text) slides.push(text)
+    }
+    return { text: slides.join('\n\n'), pageCount: slideFiles.length }
   }
 
   /**
@@ -273,6 +307,7 @@ export class DocumentsService {
 
   private detectFileType(mimetype: string): DocumentType {
     if (mimetype === 'application/pdf') return DocumentType.PDF
+    if (mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') return DocumentType.PPTX
     if (
       mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       mimetype === 'application/msword'

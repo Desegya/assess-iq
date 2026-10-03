@@ -1,5 +1,6 @@
-import { IsInt, IsOptional, IsString, Min, MinLength, MaxLength } from 'class-validator'
+import { IsEnum, IsInt, IsOptional, IsString, Min, MinLength, MaxLength } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { TopicSource } from '@assessiq/types'
 
 export class CreateTopicDto {
   @ApiProperty({ example: 'Descriptive Statistics' })
@@ -23,4 +24,9 @@ export class CreateTopicDto {
   @Min(1)
   @IsOptional()
   estimatedMinutes?: number
+
+  @ApiPropertyOptional({ enum: TopicSource, description: 'Outline layer; defaults to STUDENT' })
+  @IsEnum(TopicSource)
+  @IsOptional()
+  source?: TopicSource
 }

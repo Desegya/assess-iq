@@ -39,7 +39,7 @@ const PATHS: { id: Path; title: string; desc: string }[] = [
   {
     id: 'outline',
     title: 'Upload a course outline',
-    desc: 'Upload your syllabus (PDF, Word or text) and we’ll pull the topics out for you to confirm.',
+    desc: 'Upload, photograph or paste your syllabus and we’ll pull the topics out for you to confirm.',
   },
 ]
 
@@ -142,10 +142,6 @@ export default function NewCoursePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    if (path === 'outline' && !file) {
-      setError('Choose your course outline file')
-      return
-    }
     setLoading(true)
     try {
       const course = await api.post<{ id: string }>('/courses', {
@@ -167,7 +163,7 @@ export default function NewCoursePage() {
         return
       }
 
-      router.push(generateOutline ? `/courses/${course.id}?generate=1` : `/courses/${course.id}`)
+      router.push(path === 'manual' && generateOutline ? `/courses/${course.id}?generate=1` : `/courses/${course.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create course')
       setLoading(false)
@@ -397,12 +393,14 @@ export default function NewCoursePage() {
             <input
               id="outline"
               type="file"
-              accept=".pdf,.doc,.docx,.txt"
+              accept=".pdf,.doc,.docx,.pptx,.txt"
               onChange={e => setFile(e.target.files?.[0] ?? null)}
               disabled={loading}
               className="text-sm"
             />
-            <p className="text-xs text-slate-400 mt-1.5">PDF, Word or text. Scanned images and slides aren&apos;t supported yet.</p>
+            <p className="text-xs text-slate-400 mt-1.5">
+              PDF, Word, PowerPoint or text. Only have a printout? Skip this and take a photo or paste it on the next screen.
+            </p>
           </div>
         )}
 

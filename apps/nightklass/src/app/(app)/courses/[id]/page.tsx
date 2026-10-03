@@ -6,14 +6,10 @@ import { useRouter } from 'next/navigation'
 import { useApi } from '@/hooks/use-api'
 import { getSubjectColor } from '@/lib/subject-color'
 import { SkeletonCard } from '@/components/ui/Skeleton'
-
-interface Topic {
-  id: string
-  name: string
-  description: string | null
-  estimatedMinutes: number | null
-  order: number
-}
+import { OutlineEditor } from '@/components/courses/OutlineEditor'
+import { OutlineInput } from '@/components/courses/OutlineInput'
+import { ProposalReview } from '@/components/courses/ProposalReview'
+import type { ProposalSet, Topic, TopicProposal } from '@/components/courses/outline-types'
 
 interface Course {
   id: string
@@ -24,20 +20,18 @@ interface Course {
   level: number | null
   semester: 'FIRST' | 'SECOND' | null
   isCarryover: boolean
+  outlineText: string | null
+  outlineSource: 'UPLOAD' | 'PASTE' | 'PHOTO' | null
   topics: Topic[]
 }
 
 const SEMESTER_LABEL = { FIRST: 'First semester', SECOND: 'Second semester' } as const
+const OUTLINE_SOURCE_LABEL = { UPLOAD: 'uploaded file', PASTE: 'pasted text', PHOTO: 'photo' } as const
 
 interface UploadedDocument {
   id: string
   status: string
   fileName: string
-}
-
-interface TopicProposal {
-  name: string
-  description?: string
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -56,25 +50,22 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
   const [course, setCourse] = useState<Course | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const [topicForm, setTopicForm] = useState({ name: '', description: '', estimatedMinutes: '' })
-  const [addingTopic, setAddingTopic] = useState(false)
+  const [proposalSet, setProposalSet] = useState<ProposalSet | null>(null)
+  const [arrivalBusy, setArrivalBusy] = useState<string | null>(null)
+  const [arrivalError, setArrivalError] = useState<string | null>(null)
+  const [showOriginal, setShowOriginal] = useState(false)
 
-  const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const [readyDoc, setReadyDoc] = useState<UploadedDocument | null>(null)
-  const [extracting, setExtracting] = useState(false)
-  const [extractError, setExtractError] = useState<string | null>(null)
-  const [proposals, setProposals] = useState<TopicProposal[] | null>(null)
-  const [proposalSource, setProposalSource] = useState<'ai' | 'fallback' | 'course' | null>(null)
-  const [suggesting, setSuggesting] = useState(false)
-  const [savingProposals, setSavingProposals] = useState(false)
+  const [uploadingNotes, setUploadingNotes] = useState(false)
+  const [notesError, setNotesError] = useState<string | null>(null)
+  const [notesDoc, setNotesDoc] = useState<UploadedDocument | null>(null)
+  const [extractingNotes, setExtractingNotes] = useState(false)
 
   const [days, setDays] = useState<DaySlot[]>(
     DAYS.map(() => ({ enabled: false, startTime: '18:00', endTime: '19:00' })),
   )
   const [examDate, setExamDate] = useState('')
   const [planLoading, setPlanLoading] = useState(false)
-  const [planError, setPlanError] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null)
   const [hasPlan, setHasPlan] = useState(false)
   const [generatingFlashcardsFor, setGeneratingFlashcardsFor] = useState<string | null>(null)
   const [flashcardError, setFlashcardError] = useState<string | null>(null)
@@ -106,8 +97,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // Arriving from the New Course flow: ?generate=1 drafts an AI outline, ?outline=<docId> extracts topics from
-  // the uploaded outline. The ref stops React strict mode from firing the AI call twice.
+  // Arriving from the New Course flow: ?generate=1 drafts an AI outline, ?outline=<docId> reads the uploaded
+  // outline. The ref stops React strict mode from firing the AI call twice.
   const handledArrival = useRef(false)
   useEffect(() => {
     if (handledArrival.current) return
@@ -117,122 +108,57 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     if (!outline && !params.get('generate')) return
     router.replace(`/courses/${id}`)
     if (outline === 'failed') {
-      setUploadError("Your course is ready, but we couldn't read that outline. Try another file, or let AI suggest topics below.")
-    } else if (outline) {
-      void extractTopicsFrom(outline)
-    } else {
-      void handleSuggestTopics()
+      setArrivalError("Your course is ready, but we couldn't read that outline. Try another file, paste it, or take a photo below.")
+      return
     }
+    setArrivalBusy(outline ? 'Reading your outline…' : 'Drafting an outline from the course title…')
+    const request = outline
+      ? api
+          .post<{ source: 'ai' | 'fallback'; proposals: TopicProposal[] }>(`/study/courses/${id}/outline/document/${outline}`, {})
+          .then(r => ({ source: 'OUTLINE' as const, proposals: r.proposals, fallback: r.source === 'fallback' }))
+      : api
+          .post<{ proposals: TopicProposal[] }>(`/study/courses/${id}/topics/suggest`, {})
+          .then(r => ({ source: 'AI_SUGGESTED' as const, proposals: r.proposals }))
+    request
+      .then(setProposalSet)
+      .catch(err => setArrivalError(err instanceof Error ? err.message : 'Something went wrong'))
+      .finally(() => setArrivalBusy(null))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  async function handleAddTopic(e: React.FormEvent) {
-    e.preventDefault()
-    setAddingTopic(true)
-    try {
-      await api.post(`/courses/${id}/topics`, {
-        name: topicForm.name,
-        description: topicForm.description || undefined,
-        estimatedMinutes: topicForm.estimatedMinutes ? Number(topicForm.estimatedMinutes) : undefined,
-      })
-      setTopicForm({ name: '', description: '', estimatedMinutes: '' })
-      load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add topic')
-    } finally {
-      setAddingTopic(false)
-    }
-  }
-
-  async function handleRemoveTopic(topicId: string) {
-    await api.del(`/topics/${topicId}`).catch(() => undefined)
-    load()
-  }
-
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleNotesUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    setUploadError(null)
-    setUploading(true)
-    setReadyDoc(null)
-    setProposals(null)
+    setNotesError(null)
+    setNotesDoc(null)
+    setUploadingNotes(true)
     try {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('courseId', id)
       const doc = await api.upload<UploadedDocument>('/documents/upload', formData)
-      if (doc.status !== 'READY') {
-        throw new Error('Document could not be processed — try a different file')
-      }
-      setReadyDoc(doc)
+      if (doc.status !== 'READY') throw new Error("We couldn't read that file. Try a different one.")
+      setNotesDoc(doc)
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+      setNotesError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
-      setUploading(false)
-      e.target.value = ''
+      setUploadingNotes(false)
     }
   }
 
-  async function handleExtractTopics() {
-    if (readyDoc) await extractTopicsFrom(readyDoc.id)
-  }
-
-  async function extractTopicsFrom(documentId: string) {
-    setExtractError(null)
-    setExtracting(true)
+  async function handleTopicsFromNotes() {
+    if (!notesDoc) return
+    setNotesError(null)
+    setExtractingNotes(true)
     try {
-      const result = await api.post<{ source: 'ai' | 'fallback'; proposals: TopicProposal[] }>(
-        `/documents/${documentId}/extract-topics`,
-        {},
-      )
-      setProposals(result.proposals)
-      setProposalSource(result.source)
+      const r = await api.post<{ source: 'ai' | 'fallback'; proposals: TopicProposal[] }>(`/documents/${notesDoc.id}/extract-topics`, {})
+      setProposalSet({ source: 'MATERIAL', proposals: r.proposals, fallback: r.source === 'fallback' })
+      setNotesDoc(null)
     } catch (err) {
-      setExtractError(err instanceof Error ? err.message : 'Failed to extract topics')
+      setNotesError(err instanceof Error ? err.message : 'Failed to suggest topics')
     } finally {
-      setExtracting(false)
-    }
-  }
-
-  async function handleSuggestTopics() {
-    setExtractError(null)
-    setSuggesting(true)
-    try {
-      const result = await api.post<{ source: 'ai'; proposals: TopicProposal[] }>(
-        `/study/courses/${id}/topics/suggest`,
-        {},
-      )
-      setProposals(result.proposals)
-      setProposalSource('course')
-    } catch (err) {
-      setExtractError(err instanceof Error ? err.message : 'Failed to suggest topics')
-    } finally {
-      setSuggesting(false)
-    }
-  }
-
-  function updateProposal(i: number, name: string) {
-    setProposals(prev => (prev ? prev.map((p, idx) => (idx === i ? { ...p, name } : p)) : prev))
-  }
-
-  function removeProposal(i: number) {
-    setProposals(prev => (prev ? prev.filter((_, idx) => idx !== i) : prev))
-  }
-
-  async function handleSaveProposals() {
-    if (!proposals || proposals.length === 0) return
-    setSavingProposals(true)
-    try {
-      for (const p of proposals) {
-        await api.post(`/courses/${id}/topics`, { name: p.name, description: p.description })
-      }
-      setProposals(null)
-      setReadyDoc(null)
-      load()
-    } catch (err) {
-      setExtractError(err instanceof Error ? err.message : 'Failed to save topics')
-    } finally {
-      setSavingProposals(false)
+      setExtractingNotes(false)
     }
   }
 
@@ -314,7 +240,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
         </Link>
       </div>
 
-      {course.topics.length > 0 && (
+      {course.topics.some(t => !t.parentTopicId) && (
         <section className={`card p-6 ${color.bgSoft} ${color.border}`}>
           <h2 className="font-heading font-bold text-slate-900 mb-1">Quick practice</h2>
           <p className="text-slate-500 text-sm mb-4">
@@ -326,171 +252,108 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
             </div>
           )}
           <div className="flex items-center gap-3 flex-wrap">
-            <Link href={`/topics/${course.topics[0]!.id}/quiz`} className="btn-primary">
+            <Link href={`/topics/${course.topics.find(t => !t.parentTopicId)!.id}/quiz`} className="btn-primary">
               Try a quick quiz
             </Link>
             <button
-              onClick={() => handleGenerateFlashcards(course.topics[0]!.id)}
-              disabled={generatingFlashcardsFor === course.topics[0]!.id}
+              onClick={() => handleGenerateFlashcards(course.topics.find(t => !t.parentTopicId)!.id)}
+              disabled={generatingFlashcardsFor === course.topics.find(t => !t.parentTopicId)!.id}
               className="btn-secondary"
             >
-              {generatingFlashcardsFor === course.topics[0]!.id ? 'Generating…' : 'Try flashcards'}
+              {generatingFlashcardsFor === course.topics.find(t => !t.parentTopicId)!.id ? 'Generating…' : 'Try flashcards'}
             </button>
           </div>
         </section>
       )}
 
-      {/* Upload material → extract topics */}
+      {/* Course outline: two layers — the student's original plus Nightklass enrichment */}
       <section className="card p-6">
-        <h2 className="font-heading font-bold text-slate-900 mb-1">Upload course material</h2>
+        <h2 className="font-heading font-bold text-slate-900 mb-1">Course outline</h2>
         <p className="text-slate-400 text-sm mb-4">
-          Upload a course outline, notes, or textbook (PDF, DOCX, or TXT) and we&apos;ll suggest topics for you to review.
+          Your topics, in study order. Edit them anytime. Removing a topic you&apos;ve studied archives it, so your progress is kept.
         </p>
 
-        {uploadError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{uploadError}</div>
-        )}
-        {!proposals && (
-          <div className="flex items-center gap-3 flex-wrap">
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx,.txt"
-              onChange={handleUpload}
-              disabled={uploading}
-              className="text-sm"
-            />
-            {uploading && <span className="text-sm text-slate-400">Uploading & extracting text…</span>}
-            {readyDoc && !uploading && (
-              <button onClick={handleExtractTopics} disabled={extracting} className="btn-secondary">
-                {extracting ? 'Suggesting topics…' : `Suggest topics from ${readyDoc.fileName}`}
-              </button>
+        {course.outlineText && course.outlineSource && (
+          <div className="mb-4">
+            <button onClick={() => setShowOriginal(v => !v)} className="text-xs font-semibold text-emerald-700">
+              {showOriginal ? 'Hide' : 'View'} your original outline (from {OUTLINE_SOURCE_LABEL[course.outlineSource]})
+            </button>
+            {showOriginal && (
+              <div className="mt-2 rounded-xl bg-emerald-50/50 border border-emerald-100 p-4">
+                <p className="text-[11px] text-emerald-700 mb-2">Kept exactly as you provided it. AI never edits this.</p>
+                <pre className="whitespace-pre-wrap font-sans text-xs text-slate-700 max-h-80 overflow-y-auto">{course.outlineText}</pre>
+              </div>
             )}
           </div>
         )}
-        {proposals && <p className="text-sm text-slate-500">Review the suggested topics below.</p>}
+
+        {arrivalBusy && <p className="text-sm text-slate-400 mb-4">{arrivalBusy}</p>}
+        {arrivalError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{arrivalError}</div>
+        )}
+
+        {proposalSet ? (
+          <ProposalReview
+            courseId={id}
+            set={proposalSet}
+            onSaved={() => {
+              setProposalSet(null)
+              load()
+            }}
+            onCancel={() => setProposalSet(null)}
+          />
+        ) : (
+          <>
+            {course.topics.length > 0 && (
+              <div className="mb-6">
+                <OutlineEditor
+                  courseId={id}
+                  topics={course.topics}
+                  onChanged={load}
+                  onFlashcards={handleGenerateFlashcards}
+                  flashcardsBusyFor={generatingFlashcardsFor}
+                />
+                {flashcardError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mt-3">{flashcardError}</div>
+                )}
+              </div>
+            )}
+            {!arrivalBusy && (
+              <div className={course.topics.length > 0 ? 'pt-5 border-t border-slate-100' : ''}>
+                <OutlineInput courseId={id} hasTopics={course.topics.length > 0} onProposals={setProposalSet} />
+              </div>
+            )}
+          </>
+        )}
       </section>
 
-      {/* Topics */}
+      {/* Lecture notes & slides — grounding material for notes, chat and quizzes */}
       <section className="card p-6">
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-          <h2 className="font-heading font-bold text-slate-900">Topics</h2>
-          {!proposals && (
-            <button onClick={handleSuggestTopics} disabled={suggesting || extracting} className="btn-secondary text-sm">
-              {suggesting ? 'Suggesting topics…' : extracting ? 'Reading your outline…' : '✨ Suggest topics with AI'}
-            </button>
-          )}
+        <h2 className="font-heading font-bold text-slate-900 mb-1">Lecture notes &amp; slides</h2>
+        <p className="text-slate-400 text-sm mb-4">
+          Upload notes, slides, handouts or a textbook (PDF, Word, PowerPoint or text). Nightklass uses them for your study
+          notes, quizzes and answers, so they match what your lecturer teaches.
+        </p>
+        {notesError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{notesError}</div>}
+        <div className="flex items-center gap-3 flex-wrap">
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.pptx,.txt"
+            onChange={handleNotesUpload}
+            disabled={uploadingNotes}
+            className="text-sm"
+            aria-label="Lecture notes or slides"
+          />
+          {uploadingNotes && <span className="text-sm text-slate-400">Uploading & reading…</span>}
         </div>
-
-        {extractError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{extractError}</div>
-        )}
-
-        {proposals && (
-          <div className="space-y-3 mb-6">
-            {proposalSource === 'course' && (
-              <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-                Suggested from how this course is usually taught — not your official course outline. Edit or remove
-                anything that doesn&apos;t match before adding.
-              </p>
-            )}
-            {proposalSource === 'fallback' && (
-              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                Using basic section-splitting for now (no AI key configured yet) — feel free to edit these before adding.
-              </p>
-            )}
-            <ul className="space-y-2">
-              {proposals.map((p, i) => (
-                <li key={i} className="flex items-center gap-2">
-                  <input
-                    value={p.name}
-                    onChange={e => updateProposal(i, e.target.value)}
-                    className="input-base flex-1"
-                  />
-                  <button onClick={() => removeProposal(i)} className="text-xs text-red-500 flex-shrink-0">
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <div className="flex items-center gap-3">
-              <button onClick={handleSaveProposals} disabled={savingProposals} className="btn-primary">
-                {savingProposals ? 'Adding…' : `Add ${proposals.length} topic(s)`}
-              </button>
-              <button
-                onClick={() => {
-                  setProposals(null)
-                  setReadyDoc(null)
-                }}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
-            </div>
+        {notesDoc && !uploadingNotes && (
+          <div className="mt-3 flex items-center gap-3 flex-wrap text-sm">
+            <span className="text-emerald-700">✓ {notesDoc.fileName} added.</span>
+            <button onClick={handleTopicsFromNotes} disabled={extractingNotes || !!proposalSet} className="btn-secondary !py-1.5 !px-3 text-xs">
+              {extractingNotes ? 'Finding topics…' : 'Suggest topics from it'}
+            </button>
           </div>
         )}
-
-        {course.topics.length === 0 && !proposals && (
-          <p className="text-slate-400 text-sm mb-4">
-            No topics yet. No course outline? Let AI suggest topics from the course title, upload your material above,
-            or add them yourself below.
-          </p>
-        )}
-
-        <ul className="space-y-2 mb-4">
-          {course.topics.map(topic => (
-            <li key={topic.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
-              <div>
-                <p className="text-sm font-medium text-slate-800">{topic.name}</p>
-                {topic.description && <p className="text-xs text-slate-400 mt-0.5">{topic.description}</p>}
-              </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <span className="text-xs text-slate-400">{topic.estimatedMinutes ?? 45} min</span>
-                <Link href={`/topics/${topic.id}/notes`} className="text-xs text-blue-600 font-semibold">
-                  Notes
-                </Link>
-                <Link href={`/topics/${topic.id}/quiz`} className="text-xs text-blue-600 font-semibold">
-                  Self-quiz
-                </Link>
-                <button
-                  onClick={() => handleGenerateFlashcards(topic.id)}
-                  disabled={generatingFlashcardsFor === topic.id}
-                  className="text-xs text-blue-600 font-semibold disabled:opacity-60"
-                >
-                  {generatingFlashcardsFor === topic.id ? 'Generating…' : 'Flashcards'}
-                </button>
-                <button onClick={() => handleRemoveTopic(topic.id)} className="text-xs text-red-500">
-                  Remove
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-
-        <form onSubmit={handleAddTopic} className="flex flex-wrap gap-2">
-          <input
-            required
-            placeholder="Topic name"
-            value={topicForm.name}
-            onChange={e => setTopicForm(f => ({ ...f, name: e.target.value }))}
-            className="input-base flex-1 min-w-[160px]"
-          />
-          <input
-            placeholder="Description (optional)"
-            value={topicForm.description}
-            onChange={e => setTopicForm(f => ({ ...f, description: e.target.value }))}
-            className="input-base flex-1 min-w-[160px]"
-          />
-          <input
-            type="number"
-            placeholder="Minutes"
-            value={topicForm.estimatedMinutes}
-            onChange={e => setTopicForm(f => ({ ...f, estimatedMinutes: e.target.value }))}
-            className="input-base w-28"
-          />
-          <button type="submit" disabled={addingTopic} className="btn-secondary">
-            {addingTopic ? 'Adding…' : '+ Add topic'}
-          </button>
-        </form>
       </section>
 
       {/* Study setup */}

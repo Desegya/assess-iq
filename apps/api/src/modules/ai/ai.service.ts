@@ -17,6 +17,12 @@ export interface RawGeneratedQuestion {
 export interface RawExtractedTopic {
   name: string
   description?: string
+  subtopics?: string[]
+}
+
+export interface RawExpandedTopic {
+  topic: string
+  subtopics: { name: string; description?: string }[]
 }
 
 export interface RawSuggestedCourse {
@@ -187,9 +193,11 @@ into a short, ordered list of study topics a student could plan revision session
 - Produce between 4 and 12 topics, in the order they appear in the text
 - Each topic name should be concise (under 8 words)
 - Include a one-sentence description of what the topic covers
+- If the text lists subtopics under a topic, include them (short names); otherwise use an empty array
+- Use the text's own wording for topic names where it has clear headings
 
 Return ONLY a valid JSON array — no markdown, no explanation, just the array.
-Each item must match: {"name":"...","description":"..."}
+Each item must match: {"name":"...","description":"...","subtopics":["...","..."]}
 
 TEXT TO USE:
 ${textSlice}`
@@ -344,16 +352,84 @@ break it into an ordered list of study topics the student could plan revision se
 - Produce between 6 and 12 topics, in the order they are usually taught
 - Each topic name should be concise (under 8 words)
 - Include a one-sentence description of what the topic covers
+- Give each topic 2-5 subtopics (short names) that a student would study within it
 - Favour the topics most likely to appear in exams
 
 Return ONLY a valid JSON array — no markdown, no explanation, just the array.
-Each item must match: {"name":"...","description":"..."}
+Each item must match: {"name":"...","description":"...","subtopics":["...","..."]}
 
 COURSE:
 ${courseDescription}`
 
     const output = await this.complete(prompt, 2048, 'EXTRACT_TOPICS', opts)
     return this.parseJsonArray<RawExtractedTopic>(output)
+  }
+
+  // ─── Expand an outline with AI subtopics (the Nightklass learning layer) ──
+
+  async expandOutline(
+    courseDescription: string,
+    topics: { name: string; description?: string | null }[],
+    material: string | null,
+    opts: CourseGenerationOptions,
+  ): Promise<RawExpandedTopic[]> {
+    const topicList = topics.map(t => `- ${t.name}${t.description ? `: ${t.description}` : ''}`).join('\n')
+    const prompt = `You are an expert university tutor turning a course outline into a detailed learning sequence.
+For each topic below, list the subtopics a student should work through, in the order they should learn them.
+
+- Give 3-6 subtopics per topic, each with a concise name (under 8 words) and a one-sentence description
+- Stay within the scope of each topic; don't repeat the topic name as a subtopic
+- Keep the exact topic names as given in the "topic" field
+${material ? '- Use the course material provided to match what the lecturer covers' : '- Use your knowledge of how this course is typically taught at university level'}
+
+Return ONLY a valid JSON array — no markdown, no explanation, just the array.
+Each item must match: {"topic":"<exact topic name>","subtopics":[{"name":"...","description":"..."}]}
+
+COURSE:
+${courseDescription}
+
+TOPICS:
+${topicList}${material ? `\n\nCOURSE MATERIAL:\n${material.slice(0, 10000)}` : ''}`
+
+    const output = await this.complete(prompt, 4096, 'EXTRACT_TOPICS', opts)
+    return this.parseJsonArray<RawExpandedTopic>(output)
+  }
+
+  // ─── Read a photographed outline/prospectus page ──────────────────────────
+
+  async extractOutlineFromImage(
+    image: Buffer,
+    mimeType: string,
+    opts: CourseGenerationOptions,
+  ): Promise<{ transcription: string; topics: RawExtractedTopic[] }> {
+    const prompt = `This is a photo or scan of a university course outline, syllabus or prospectus page.
+
+1. Transcribe the course content faithfully (headings, topics, subtopics). Skip page furniture like page numbers.
+2. Break it into an ordered list of study topics with any subtopics listed under each.
+
+- Each numbered or headed item is a topic: copy its heading text exactly as the topic name, even if it is broad
+- Lines indented or bulleted beneath a heading are its subtopics; never promote a subtopic to replace its heading
+- If the image is unreadable or isn't a course outline, return an empty topics array
+
+Return ONLY a valid JSON object — no markdown, no explanation.
+It must match: {"transcription":"...","topics":[{"name":"...","description":"...","subtopics":["..."]}]}`
+
+    const output = await this.complete(
+      [
+        {
+          role: 'user',
+          content: [
+            { type: 'input_text', text: prompt },
+            { type: 'input_image', image_url: `data:${mimeType};base64,${image.toString('base64')}`, detail: 'high' },
+          ],
+        },
+      ],
+      4096,
+      'EXTRACT_TOPICS',
+      opts,
+    )
+    const parsed = this.parseJsonObject<{ transcription?: string; topics?: RawExtractedTopic[] }>(output)
+    return { transcription: parsed.transcription ?? '', topics: Array.isArray(parsed.topics) ? parsed.topics : [] }
   }
 
   // ─── Suggest likely courses for a student's programme, level and semester ─
@@ -476,7 +552,7 @@ ${courseDescription}${material ? `\n\nCOURSE MATERIAL:\n${material.slice(0, 1200
   // ─── Shared single-prompt call with usage logging ─────────────────────────
 
   private async complete(
-    prompt: string,
+    input: string | OpenAI.Responses.ResponseInput,
     maxOutputTokens: number,
     action: 'EXTRACT_TOPICS' | 'GENERATE_SUMMARY',
     opts: CourseGenerationOptions,
@@ -498,7 +574,7 @@ ${courseDescription}${material ? `\n\nCOURSE MATERIAL:\n${material.slice(0, 1200
       const response = await this.client.responses.create({
         model: MODEL,
         max_output_tokens: maxOutputTokens,
-        input: prompt,
+        input,
       })
 
       inputTokens = response.usage?.input_tokens ?? 0
@@ -587,6 +663,20 @@ ${text}`
   }
 
   // ─── Response parser ──────────────────────────────────────────────────────
+
+  private parseJsonObject<T>(raw: string): T {
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '')
+      .trim()
+    try {
+      return JSON.parse(cleaned) as T
+    } catch {
+      const match = cleaned.match(/\{[\s\S]*\}/)
+      if (!match) throw new Error('OpenAI response did not contain a valid JSON object')
+      return JSON.parse(match[0]) as T
+    }
+  }
 
   private parseJsonArray<T>(raw: string): T[] {
     // Strip markdown code fences if the model wrapped the output

@@ -80,7 +80,7 @@ export class CoursesService {
         : { id, ownerId: user.id },
       include: {
         teacher: { select: { id: true, name: true, email: true } },
-        topics: { orderBy: { order: 'asc' } },
+        topics: { where: { archivedAt: null }, orderBy: { order: 'asc' } },
         _count: { select: { documents: true, questions: true, assessments: true } },
       },
     })

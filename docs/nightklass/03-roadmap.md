@@ -17,11 +17,12 @@ Maps [01-product-vision.md](01-product-vision.md) and [02-onboarding-and-curricu
 - Carryover detection when course level ≠ student level.
 - Not yet: free-text search over a course catalogue (needs the Phase 6 curriculum database). Students add unlisted courses manually.
 
-## Phase 3 — Two-layer outline & syllabus editing
+## Phase 3 — Two-layer outline & syllabus editing ✅ done 2026-10-03
 - Official/original outline stored separately from the Nightklass expanded learning outline; "Expand with AI" creates the expanded layer.
 - Modules → topics → subtopics; edit, reorder, delete, add.
 - Outline versioning that keeps progress intact (sessions/mastery stay linked to topics that survive an edit).
 - Outline input: paste text, PPTX, image/photo (via a vision-capable model rather than separate OCR).
+- Not yet: rolling the outline back to an earlier revision (history is recorded and viewable; archived topics can be restored individually).
 
 ## Phase 4 — Learning content engine
 - Structured per-topic content: objectives, explanation, key terms, worked examples, applications, summary (builds on the existing notes feature).

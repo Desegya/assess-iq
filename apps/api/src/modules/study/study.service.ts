@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { CoursesService } from '../courses/courses.service'
+import { TopicsService } from '../topics/topics.service'
+import { extractTopicsHeuristically } from '../documents/topic-extraction-fallback'
 import {
   AiService,
   type RawGeneratedQuestion,
@@ -9,7 +11,7 @@ import {
   type ChatMessage,
 } from '../ai/ai.service'
 import { QUESTION_BANK, scoreQuestion, buildTemplateQuestions } from '../questions/question-bank'
-import { AuthUser, QuestionType } from '@assessiq/types'
+import { AuthUser, QuestionType, TopicSource } from '@assessiq/types'
 import { SetAvailabilityDto } from './dto/set-availability.dto'
 import { GeneratePlanDto } from './dto/generate-plan.dto'
 import { CompleteSessionDto } from './dto/complete-session.dto'
@@ -97,6 +99,7 @@ export class StudyService {
     private readonly prisma: PrismaService,
     private readonly coursesService: CoursesService,
     private readonly ai: AiService,
+    private readonly topicsService: TopicsService,
   ) {}
 
   // ─── Availability ─────────────────────────────────────────────────────────
@@ -135,8 +138,9 @@ export class StudyService {
       throw new BadRequestException('Exam date must be in the future')
     }
 
+    // Plan around top-level topics; subtopics are studied within their parent's sessions
     const topics = await this.prisma.topic.findMany({
-      where: { courseId: dto.courseId },
+      where: { courseId: dto.courseId, parentTopicId: null, archivedAt: null },
       orderBy: { order: 'asc' },
     })
     if (topics.length === 0) {
@@ -706,7 +710,7 @@ export class StudyService {
 
     const courses = await this.prisma.course.findMany({
       where: user.organizationId ? { organizationId: user.organizationId } : { ownerId: user.id },
-      include: { topics: { select: { id: true } } },
+      include: { topics: { where: { parentTopicId: null, archivedAt: null }, select: { id: true } } },
     })
 
     const completedTopicIdsByCourse = new Map<string, Set<string>>()
@@ -783,6 +787,126 @@ export class StudyService {
       }))
     // Level 3 of the curriculum hierarchy: AI suggestions, never presented as an official list
     return { source: 'ai' as const, courses }
+  }
+
+  // ─── Course outline: input (paste / document / photo) and AI expansion ────
+
+  // Proposals are returned for review, never saved directly; the original outline text is preserved on the course
+  private async proposeFromOutlineText(text: string, courseId: string, user: AuthUser) {
+    try {
+      const proposals = await this.ai.extractTopics(text, {
+        userId: user.id,
+        organizationId: user.organizationId ?? undefined,
+        documentId: courseId,
+      })
+      return { source: 'ai' as const, proposals }
+    } catch (err) {
+      this.logger.warn(`AI outline extraction failed for course ${courseId}: ${err instanceof Error ? err.message : String(err)}`)
+      return { source: 'fallback' as const, proposals: extractTopicsHeuristically(text) }
+    }
+  }
+
+  async outlineFromText(courseId: string, text: string, user: AuthUser) {
+    await this.topicsService.assertCanEdit(courseId, user)
+    await this.prisma.course.update({ where: { id: courseId }, data: { outlineText: text, outlineSource: 'PASTE' } })
+    return this.proposeFromOutlineText(text, courseId, user)
+  }
+
+  async outlineFromDocument(courseId: string, documentId: string, user: AuthUser) {
+    await this.topicsService.assertCanEdit(courseId, user)
+    const doc = await this.prisma.document.findFirst({ where: { id: documentId, courseId } })
+    if (!doc) throw new NotFoundException('Document not found in this course')
+    if (doc.status !== 'READY' || !doc.extractedText?.trim()) {
+      throw new BadRequestException("We couldn't read any text from that file — try another file, paste the outline, or take a photo")
+    }
+    await this.prisma.course.update({
+      where: { id: courseId },
+      data: { outlineText: doc.extractedText, outlineSource: 'UPLOAD' },
+    })
+    return this.proposeFromOutlineText(doc.extractedText, courseId, user)
+  }
+
+  async outlineFromPhoto(courseId: string, file: { buffer: Buffer; mimetype: string }, user: AuthUser) {
+    await this.topicsService.assertCanEdit(courseId, user)
+    let result: Awaited<ReturnType<AiService['extractOutlineFromImage']>>
+    try {
+      result = await this.ai.extractOutlineFromImage(file.buffer, file.mimetype, {
+        userId: user.id,
+        organizationId: user.organizationId ?? undefined,
+        relatedEntityId: courseId,
+      })
+    } catch (err) {
+      this.logger.warn(`AI photo outline failed for course ${courseId}: ${err instanceof Error ? err.message : String(err)}`)
+      throw new BadRequestException("Couldn't read that photo right now — try again in a moment")
+    }
+    if (result.topics.length === 0) {
+      throw new BadRequestException("We couldn't find a course outline in that photo — try a clearer, well-lit shot of the page")
+    }
+    await this.prisma.course.update({
+      where: { id: courseId },
+      data: { outlineText: result.transcription || null, outlineSource: 'PHOTO' },
+    })
+    return { source: 'ai' as const, proposals: result.topics }
+  }
+
+  // Adds AI subtopics (the Nightklass learning layer) under one topic, or under every top-level topic without any
+  async expandOutline(courseId: string, topicId: string | undefined, user: AuthUser) {
+    const course = await this.topicsService.assertCanEdit(courseId, user)
+
+    const topLevel = await this.prisma.topic.findMany({
+      where: { courseId, parentTopicId: null, archivedAt: null, ...(topicId && { id: topicId }) },
+      orderBy: { order: 'asc' },
+      include: { subTopics: { where: { archivedAt: null }, select: { id: true, order: true } } },
+    })
+    const targets = topicId ? topLevel : topLevel.filter(t => t.subTopics.length === 0)
+    if (targets.length === 0) {
+      throw new BadRequestException(
+        topicId ? 'Topic not found' : 'Every topic already has subtopics — expand a single topic to add more',
+      )
+    }
+
+    const doc = await this.prisma.document.findFirst({
+      where: { courseId, status: 'READY', extractedText: { not: null } },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    let expanded: Awaited<ReturnType<AiService['expandOutline']>>
+    try {
+      expanded = await this.ai.expandOutline(describeCourse(course), targets, doc?.extractedText ?? null, {
+        userId: user.id,
+        organizationId: user.organizationId ?? undefined,
+        relatedEntityId: courseId,
+      })
+    } catch (err) {
+      this.logger.warn(`AI outline expansion failed for course ${courseId}: ${err instanceof Error ? err.message : String(err)}`)
+      throw new BadRequestException("Couldn't expand the outline right now — try again in a moment")
+    }
+
+    const byName = new Map(expanded.map(e => [e.topic?.trim().toLowerCase(), e.subtopics ?? []]))
+    let created = 0
+    await this.prisma.$transaction(async tx => {
+      for (const [i, target] of targets.entries()) {
+        // Match by name, falling back to position if the model reworded a topic
+        const subs = byName.get(target.name.trim().toLowerCase()) ?? expanded[i]?.subtopics ?? []
+        let order = Math.max(-1, ...target.subTopics.map(s => s.order)) + 1
+        for (const sub of subs.filter(s => s?.name)) {
+          await tx.topic.create({
+            data: {
+              courseId,
+              parentTopicId: target.id,
+              name: sub.name.slice(0, 200),
+              description: sub.description,
+              source: TopicSource.AI_EXPANDED,
+              order: order++,
+            },
+          })
+          created += 1
+        }
+      }
+    })
+
+    await this.topicsService.recordRevision(courseId, user.id, `Expanded ${targets.length} topic(s) with AI`)
+    return { expandedTopics: targets.length, createdSubtopics: created }
   }
 
   // ─── Topic suggestions & notes without uploaded material ──────────────────

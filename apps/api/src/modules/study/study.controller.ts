@@ -1,5 +1,21 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common'
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger'
+import {
+  Body,
+  Controller,
+  Delete,
+  FileTypeValidator,
+  Get,
+  HttpCode,
+  HttpStatus,
+  MaxFileSizeValidator,
+  Param,
+  ParseFilePipe,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiConsumes } from '@nestjs/swagger'
 import { StudyService } from './study.service'
 import { SetAvailabilityDto } from './dto/set-availability.dto'
 import { GeneratePlanDto } from './dto/generate-plan.dto'
@@ -12,6 +28,7 @@ import { ChatDto } from './dto/chat.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { AuthUser } from '@assessiq/types'
 import { SuggestCoursesDto } from './dto/suggest-courses.dto'
+import { OutlineTextDto, ExpandOutlineDto } from './dto/outline.dto'
 
 @ApiTags('Study')
 @ApiBearerAuth()
@@ -159,6 +176,50 @@ export class StudyController {
   @ApiOperation({ summary: "Suggest likely courses from the student's programme, level and semester (AI, not official)" })
   suggestCourses(@Body() dto: SuggestCoursesDto, @CurrentUser() user: AuthUser) {
     return this.studyService.suggestCourses(dto, user)
+  }
+
+  // ─── Course outline ───────────────────────────────────────────────────────
+
+  @Post('courses/:courseId/outline/text')
+  @ApiOperation({ summary: 'Save a pasted course outline and propose topics from it' })
+  outlineFromText(@Param('courseId') courseId: string, @Body() dto: OutlineTextDto, @CurrentUser() user: AuthUser) {
+    return this.studyService.outlineFromText(courseId, dto.text, user)
+  }
+
+  @Post('courses/:courseId/outline/document/:documentId')
+  @ApiOperation({ summary: 'Use an uploaded document as the course outline and propose topics from it' })
+  outlineFromDocument(
+    @Param('courseId') courseId: string,
+    @Param('documentId') documentId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.studyService.outlineFromDocument(courseId, documentId, user)
+  }
+
+  @Post('courses/:courseId/outline/photo')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Read a photographed outline or prospectus page and propose topics from it' })
+  outlineFromPhoto(
+    @Param('courseId') courseId: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }), // 10 MB
+          new FileTypeValidator({ fileType: /^image\/(jpeg|png|webp)$/ }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.studyService.outlineFromPhoto(courseId, file, user)
+  }
+
+  @Post('courses/:courseId/outline/expand')
+  @ApiOperation({ summary: 'Expand the outline with AI subtopics (kept separate from the original outline)' })
+  expandOutline(@Param('courseId') courseId: string, @Body() dto: ExpandOutlineDto, @CurrentUser() user: AuthUser) {
+    return this.studyService.expandOutline(courseId, dto.topicId, user)
   }
 
   // ─── Topic suggestions & notes ────────────────────────────────────────────
