@@ -19,7 +19,7 @@ export class GpaService {
   async findAll(user: AuthUser) {
     const entries = await this.prisma.gpaEntry.findMany({
       where: { studentId: user.id },
-      orderBy: [{ createdAt: 'asc' }, { order: 'asc' }],
+      orderBy: [{ level: 'asc' }, { semester: 'asc' }, { order: 'asc' }],
     })
     return entries.map(e => this.withPoint(e))
   }
@@ -32,19 +32,20 @@ export class GpaService {
     }
 
     const maxOrder = await this.prisma.gpaEntry.aggregate({
-      where: { studentId: user.id, semesterLabel: dto.semesterLabel },
+      where: { studentId: user.id, level: dto.level, semester: dto.semester },
       _max: { order: true },
     })
 
     const entry = await this.prisma.gpaEntry.create({
       data: {
         studentId: user.id,
-        semesterLabel: dto.semesterLabel,
+        level: dto.level,
+        semester: dto.semester,
         courseTitle: dto.courseTitle,
         creditUnits: dto.creditUnits,
         grade,
         scale: dto.scale,
-        order: (maxOrder._max.order ?? -1) + 1,
+        order: (maxOrder._max?.order ?? -1) + 1,
       },
     })
     return this.withPoint(entry)

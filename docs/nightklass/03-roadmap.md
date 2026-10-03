@@ -48,4 +48,3 @@ Maps [01-product-vision.md](01-product-vision.md) and [02-onboarding-and-curricu
 - CCMAS data source for the level-2 tier.
 - OTP channel for Phase 7 (email first; SMS costs money).
 - AI provider abstraction (spec §11) should land before Phase 4 grows the AI surface further.
-- Existing schema drift: `GpaEntry` in `schema.prisma` uses `level`/`semester`, but `gpa.service.ts` and its migration still use `semesterLabel`, so the API doesn't typecheck. Fix before the next deploy.

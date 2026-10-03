@@ -8,16 +8,21 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { celebrate } from '@/lib/celebrate'
 
 type Scale = 'FIVE' | 'FOUR'
+type Semester = 'FIRST' | 'SECOND'
 
 interface GpaEntry {
   id: string
-  semesterLabel: string
+  level: number
+  semester: Semester
   courseTitle: string
   creditUnits: number
   grade: string
   scale: Scale
   gradePoint: number
 }
+
+const LEVELS = [100, 200, 300, 400, 500, 600]
+const SEMESTER_LABEL: Record<Semester, string> = { FIRST: 'First Semester', SECOND: 'Second Semester' }
 
 const GRADES: Record<Scale, string[]> = {
   FIVE: ['A', 'B', 'C', 'D', 'E', 'F'],
@@ -39,7 +44,7 @@ export default function GpaPage() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const [form, setForm] = useState({ semesterLabel: '', courseTitle: '', creditUnits: '3', grade: 'A' })
+  const [form, setForm] = useState({ level: '100', semester: 'FIRST' as Semester, courseTitle: '', creditUnits: '3', grade: 'A' })
 
   function load() {
     api
@@ -47,7 +52,10 @@ export default function GpaPage() {
       .then(list => {
         setEntries(list)
         const last = list[list.length - 1]
-        if (last) setScale(last.scale)
+        if (last) {
+          setScale(last.scale)
+          setForm(f => ({ ...f, level: String(last.level), semester: last.semester }))
+        }
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Failed to load your grades'))
   }
@@ -67,7 +75,8 @@ export default function GpaPage() {
     setSaving(true)
     try {
       const entry = await api.post<GpaEntry>('/gpa', {
-        semesterLabel: form.semesterLabel,
+        level: Number(form.level),
+        semester: form.semester,
         courseTitle: form.courseTitle,
         creditUnits: Number(form.creditUnits),
         grade: form.grade,
@@ -92,7 +101,10 @@ export default function GpaPage() {
 
   const bySemester = useMemo(() => {
     const map = new Map<string, GpaEntry[]>()
-    for (const e of visible) map.set(e.semesterLabel, [...(map.get(e.semesterLabel) ?? []), e])
+    for (const e of visible) {
+      const label = `${e.level}L ${SEMESTER_LABEL[e.semester]}`
+      map.set(label, [...(map.get(label) ?? []), e])
+    }
     return map
   }, [visible])
 
@@ -194,13 +206,32 @@ export default function GpaPage() {
 
           <form onSubmit={handleAdd} className="card p-6 space-y-3">
             <p className="text-sm font-bold text-slate-800">Add a course</p>
-            <input
-              required
-              value={form.semesterLabel}
-              onChange={e => setForm(f => ({ ...f, semesterLabel: e.target.value }))}
-              placeholder="Semester (e.g. 200L First Semester)"
-              className="input-base"
-            />
+            <div className="flex gap-2">
+              <select
+                value={form.level}
+                onChange={e => setForm(f => ({ ...f, level: e.target.value }))}
+                className="input-base flex-1"
+                aria-label="Level"
+              >
+                {LEVELS.map(l => (
+                  <option key={l} value={l}>
+                    {l} Level
+                  </option>
+                ))}
+              </select>
+              <select
+                value={form.semester}
+                onChange={e => setForm(f => ({ ...f, semester: e.target.value as Semester }))}
+                className="input-base flex-1"
+                aria-label="Semester"
+              >
+                {(Object.keys(SEMESTER_LABEL) as Semester[]).map(s => (
+                  <option key={s} value={s}>
+                    {SEMESTER_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex gap-2">
               <input
                 required

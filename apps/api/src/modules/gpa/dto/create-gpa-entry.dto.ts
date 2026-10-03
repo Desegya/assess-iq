@@ -1,13 +1,17 @@
 import { IsString, IsInt, IsEnum, Min, Max, MinLength, MaxLength } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
-import { GpaScale } from '@assessiq/types'
+import { GpaScale, Semester } from '@assessiq/types'
 
 export class CreateGpaEntryDto {
-  @ApiProperty({ example: '300L First Semester' })
-  @IsString()
-  @MinLength(2)
-  @MaxLength(60)
-  semesterLabel!: string
+  @ApiProperty({ example: 300, description: 'University level (100-600)' })
+  @IsInt()
+  @Min(100)
+  @Max(600)
+  level!: number
+
+  @ApiProperty({ enum: Semester, example: Semester.FIRST })
+  @IsEnum(Semester)
+  semester!: Semester
 
   @ApiProperty({ example: 'Data Structures & Algorithms' })
   @IsString()
