@@ -49,7 +49,7 @@ export function RegisterForm() {
 
       const data = (await res.json()) as RegisterResponse
       login(data.user, data.accessToken, data.refreshToken, data.expiresIn)
-      router.push('/dashboard')
+      router.push('/onboarding')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {

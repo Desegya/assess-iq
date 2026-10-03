@@ -23,6 +23,7 @@ interface Course {
   courseCode: string | null
   level: number | null
   semester: 'FIRST' | 'SECOND' | null
+  isCarryover: boolean
   topics: Topic[]
 }
 
@@ -294,11 +295,12 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
         <div>
           <h1 className="font-heading text-2xl font-bold text-slate-900">{course.title}</h1>
           {course.subject !== course.title && <p className="text-slate-500 text-sm mt-1">{course.subject}</p>}
-          {(course.courseCode || course.level || course.semester) && (
+          {(course.courseCode || course.level || course.semester || course.isCarryover) && (
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
               {course.courseCode && <span className={`badge ${color.bgSoft} ${color.text}`}>{course.courseCode}</span>}
               {course.level && <span className="badge bg-slate-100 text-slate-600">{course.level}L</span>}
               {course.semester && <span className="badge bg-slate-100 text-slate-600">{SEMESTER_LABEL[course.semester]}</span>}
+              {course.isCarryover && <span className="badge bg-amber-50 text-amber-700">Carryover</span>}
             </div>
           )}
           {hasPlan && (

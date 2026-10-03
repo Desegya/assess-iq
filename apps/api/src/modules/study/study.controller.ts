@@ -11,6 +11,7 @@ import { ReviewFlashcardDto } from './dto/review-flashcard.dto'
 import { ChatDto } from './dto/chat.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { AuthUser } from '@assessiq/types'
+import { SuggestCoursesDto } from './dto/suggest-courses.dto'
 
 @ApiTags('Study')
 @ApiBearerAuth()
@@ -150,6 +151,14 @@ export class StudyController {
   @ApiOperation({ summary: "Get the student's streak and per-course progress" })
   getProgress(@CurrentUser() user: AuthUser) {
     return this.studyService.getProgress(user)
+  }
+
+  // ─── Course suggestions ───────────────────────────────────────────────────
+
+  @Post('course-suggestions')
+  @ApiOperation({ summary: "Suggest likely courses from the student's programme, level and semester (AI, not official)" })
+  suggestCourses(@Body() dto: SuggestCoursesDto, @CurrentUser() user: AuthUser) {
+    return this.studyService.suggestCourses(dto, user)
   }
 
   // ─── Topic suggestions & notes ────────────────────────────────────────────

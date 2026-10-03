@@ -23,6 +23,7 @@ export class CoursesService {
           level: dto.level,
           semester: dto.semester,
           creditUnits: dto.creditUnits,
+          isCarryover: dto.isCarryover ?? false,
           ownerId: user.id,
         },
       })

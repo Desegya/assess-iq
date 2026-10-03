@@ -9,6 +9,21 @@ import { PrismaService } from '../prisma/prisma.service'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { CreateStudentDto } from './dto/create-student.dto'
 import { BulkCreateStudentsDto } from './dto/bulk-create-students.dto'
+import { UpdateProfileDto } from './dto/update-profile.dto'
+
+const PROFILE_SELECT = {
+  name: true,
+  country: true,
+  institutionType: true,
+  programme: true,
+  currentLevel: true,
+  currentSemester: true,
+  institution: true,
+  faculty: true,
+  academicSession: true,
+  graduationYear: true,
+  profileCompletedAt: true,
+} as const
 
 @Injectable()
 export class UsersService {
@@ -108,6 +123,33 @@ export class UsersService {
   }
 
   // ─── Get a single user ────────────────────────────────────────────────────
+
+  async getProfile(user: AuthUser) {
+    return this.prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: PROFILE_SELECT })
+  }
+
+  async updateProfile(dto: UpdateProfileDto, user: AuthUser) {
+    const existing = await this.prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: { profileCompletedAt: true },
+    })
+    return this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        country: dto.country,
+        institutionType: dto.institutionType,
+        programme: dto.programme,
+        currentLevel: dto.currentLevel,
+        currentSemester: dto.currentSemester,
+        institution: dto.institution || null,
+        faculty: dto.faculty || null,
+        academicSession: dto.academicSession || null,
+        graduationYear: dto.graduationYear ?? null,
+        profileCompletedAt: existing.profileCompletedAt ?? new Date(),
+      },
+      select: PROFILE_SELECT,
+    })
+  }
 
   async findOne(id: string, user: AuthUser) {
     const found = await this.prisma.user.findFirst({

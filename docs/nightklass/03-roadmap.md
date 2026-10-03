@@ -4,17 +4,18 @@ Maps [01-product-vision.md](01-product-vision.md) and [02-onboarding-and-curricu
 
 **Already in place:** courses with code/level/semester, topics, document upload (PDF/DOCX/TXT) + topic extraction, study plan from availability + exam date, plan redistribution for missed sessions, MCQ/true-false self-quizzes, SM-2 flashcards, weak topics, streaks/progress, per-course AI chat, GPA calculator, AI topic suggestions from the course title, AI study notes per topic.
 
-## Phase 1 — First impression (frontend-heavy)
+## Phase 1 — First impression (frontend-heavy) ✅ done 2026-10-03
 - Landing page rewrite: descriptor, hero copy, primary/secondary CTA, "no syllabus required", 8-stage journey, dashboard preview. Drop "never for a grade".
 - Sidebar regrouped: Main / Learning / Progress / Account.
 - New Course: three-path entry (from my programme · manually · upload outline). Manual form = one code/title field + level + semester + optional credit units; Subject and Description removed (subject inferred).
 - Course page: after creating a course with no topics, offer "Generate outline with AI" immediately.
 
-## Phase 2 — Academic profile & course suggestions
+## Phase 2 — Academic profile & course suggestions ✅ done 2026-10-03
 - Profile onboarding after sign-up: country, institution type, programme, level, semester (+ optional institution, faculty, session, graduation year). Replaces `courseOfStudy` / `programYears`.
 - New-user dashboard: "Let's build your semester" instead of zero stats.
 - Course suggestions: AI tier (level 3) first, labelled as suggestions; tick to add, search, add electives/carryovers.
 - Carryover detection when course level ≠ student level.
+- Not yet: free-text search over a course catalogue (needs the Phase 6 curriculum database). Students add unlisted courses manually.
 
 ## Phase 3 — Two-layer outline & syllabus editing
 - Official/original outline stored separately from the Nightklass expanded learning outline; "Expand with AI" creates the expanded layer.

@@ -19,6 +19,12 @@ export interface RawExtractedTopic {
   description?: string
 }
 
+export interface RawSuggestedCourse {
+  courseCode?: string
+  title: string
+  creditUnits?: number
+}
+
 export interface RawFlashcard {
   front: string
   back: string
@@ -348,6 +354,32 @@ ${courseDescription}`
 
     const output = await this.complete(prompt, 2048, 'EXTRACT_TOPICS', opts)
     return this.parseJsonArray<RawExtractedTopic>(output)
+  }
+
+  // ─── Suggest likely courses for a student's programme, level and semester ─
+
+  async suggestProgrammeCourses(
+    studentContext: string,
+    existingTitles: string[],
+    opts: CourseGenerationOptions,
+  ): Promise<RawSuggestedCourse[]> {
+    const prompt = `You are an academic adviser familiar with Nigerian higher-education curricula (including the
+NUC CCMAS framework). Suggest the courses this student is most likely taking this semester.
+
+- Suggest between 6 and 12 courses typical for this programme, level and semester
+- Include core departmental courses first, then common faculty or general studies (GST) courses
+- Use the usual Nigerian course-code style (e.g. "BIO 201"); codes vary by institution, so pick the most typical
+- Give typical credit units (1-6) for each
+- Do NOT include any of these, which the student already has: ${existingTitles.length ? existingTitles.join('; ') : 'none'}
+
+Return ONLY a valid JSON array — no markdown, no explanation, just the array.
+Each item must match: {"courseCode":"...","title":"...","creditUnits":3}
+
+STUDENT:
+${studentContext}`
+
+    const output = await this.complete(prompt, 2048, 'EXTRACT_TOPICS', opts)
+    return this.parseJsonArray<RawSuggestedCourse>(output)
   }
 
   // ─── Generate study notes for a topic ─────────────────────────────────────

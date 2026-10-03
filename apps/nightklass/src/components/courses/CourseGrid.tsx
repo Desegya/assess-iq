@@ -10,6 +10,7 @@ export interface Course {
   courseCode: string | null
   level: number | null
   semester: 'FIRST' | 'SECOND' | null
+  isCarryover?: boolean
   _count: { documents: number; questions: number; assessments: number }
 }
 
@@ -49,6 +50,7 @@ export function CourseGrid({
                   {course.courseCode && <span className={`badge ${color.bgSoft} ${color.text}`}>{course.courseCode}</span>}
                   {course.level && <span className="badge bg-slate-100 text-slate-600">{course.level}L</span>}
                   {course.semester && <span className="badge bg-slate-100 text-slate-600">{SEMESTER_LABEL[course.semester]}</span>}
+                  {course.isCarryover && <span className="badge bg-amber-50 text-amber-700">Carryover</span>}
                 </div>
               </div>
               {p && p.topicsTotal > 0 && <ProgressRing percent={p.percent} size={48} strokeWidth={4} color={color.hex} />}

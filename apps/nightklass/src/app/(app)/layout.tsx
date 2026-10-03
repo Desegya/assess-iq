@@ -24,6 +24,7 @@ const ICONS = {
   weak: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
   flashcards: 'M4 6a2 2 0 012-2h9l5 5v9a2 2 0 01-2 2H6a2 2 0 01-2-2V6z M14 4v5h5',
   gpa: 'M9 7h6m-6 4h6m-6 4h3M5 3h14a1 1 0 011 1v16a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z',
+  profile: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
 }
 
 // Grouped per docs/nightklass/02-onboarding-and-curriculum.md §18 — only pages that exist are listed
@@ -46,6 +47,10 @@ const NAV_SECTIONS = [
   {
     label: 'Progress',
     items: [{ href: '/gpa', label: 'GPA / Grades', icon: ICONS.gpa }],
+  },
+  {
+    label: 'Account',
+    items: [{ href: '/onboarding', label: 'Profile', icon: ICONS.profile }],
   },
 ]
 
@@ -144,7 +149,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/gpa" className={`text-xs font-semibold ${isActive('/gpa') ? 'text-white' : 'text-slate-400'}`}>
             GPA
           </Link>
-          <Avatar name={user?.name ?? '?'} size={30} />
+          <Link href="/onboarding" aria-label="Profile">
+            <Avatar name={user?.name ?? '?'} size={30} />
+          </Link>
           <button onClick={() => void logout()} className="text-xs text-slate-400">
             Log out
           </button>

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, IsEnum, Min, Max, MinLength, MaxLength } from 'class-validator'
+import { IsString, IsOptional, IsInt, IsEnum, IsBoolean, Min, Max, MinLength, MaxLength } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Semester } from '@assessiq/types'
 
@@ -45,4 +45,9 @@ export class CreateCourseDto {
   @Max(12)
   @IsOptional()
   creditUnits?: number
+
+  @ApiPropertyOptional({ example: false, description: 'A course from a lower level the student is retaking' })
+  @IsBoolean()
+  @IsOptional()
+  isCarryover?: boolean
 }

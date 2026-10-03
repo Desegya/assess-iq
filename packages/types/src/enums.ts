@@ -139,6 +139,14 @@ export enum Semester {
   SECOND = 'SECOND',
 }
 
+export enum InstitutionType {
+  UNIVERSITY = 'UNIVERSITY',
+  POLYTECHNIC = 'POLYTECHNIC',
+  COLLEGE_OF_EDUCATION = 'COLLEGE_OF_EDUCATION',
+  SECONDARY_SCHOOL = 'SECONDARY_SCHOOL',
+  OTHER = 'OTHER',
+}
+
 export enum GpaScale {
   FIVE = 'FIVE',
   FOUR = 'FOUR',

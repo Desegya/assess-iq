@@ -11,6 +11,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { UsersService } from './users.service'
 import { CreateStudentDto } from './dto/create-student.dto'
 import { BulkCreateStudentsDto } from './dto/bulk-create-students.dto'
+import { UpdateProfileDto } from './dto/update-profile.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Roles } from '../auth/decorators/roles.decorator'
 import { RolesGuard } from '../auth/guards/roles.guard'
@@ -56,6 +57,20 @@ export class UsersController {
   @ApiOperation({ summary: 'Get the organisation join code' })
   getOrgJoinCode(@CurrentUser() user: AuthUser) {
     return this.usersService.getOrgJoinCode(user)
+  }
+
+  // GET /users/me/profile — the signed-in user's academic profile
+  @Get('me/profile')
+  @ApiOperation({ summary: "Get the current user's academic profile" })
+  getProfile(@CurrentUser() user: AuthUser) {
+    return this.usersService.getProfile(user)
+  }
+
+  // PATCH /users/me/profile — set during Nightklass onboarding, editable later
+  @Patch('me/profile')
+  @ApiOperation({ summary: "Create or update the current user's academic profile" })
+  updateProfile(@Body() dto: UpdateProfileDto, @CurrentUser() user: AuthUser) {
+    return this.usersService.updateProfile(dto, user)
   }
 
   // GET /users/:id

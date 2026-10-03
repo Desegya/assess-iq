@@ -1,7 +1,13 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { CoursesService } from '../courses/courses.service'
-import { AiService, type RawGeneratedQuestion, type RawFlashcard, type ChatMessage } from '../ai/ai.service'
+import {
+  AiService,
+  type RawGeneratedQuestion,
+  type RawFlashcard,
+  type RawSuggestedCourse,
+  type ChatMessage,
+} from '../ai/ai.service'
 import { QUESTION_BANK, scoreQuestion, buildTemplateQuestions } from '../questions/question-bank'
 import { AuthUser, QuestionType } from '@assessiq/types'
 import { SetAvailabilityDto } from './dto/set-availability.dto'
@@ -12,6 +18,7 @@ import { SubmitQuizDto } from './dto/submit-quiz.dto'
 import { GenerateFlashcardsDto } from './dto/generate-flashcards.dto'
 import { ReviewFlashcardDto, type FlashcardRating } from './dto/review-flashcard.dto'
 import { ChatDto } from './dto/chat.dto'
+import { SuggestCoursesDto } from './dto/suggest-courses.dto'
 
 const DEFAULT_TOPIC_MINUTES = 45
 const WEAK_TOPIC_THRESHOLD = 60
@@ -722,6 +729,60 @@ export class StudyService {
     })
 
     return { currentStreak, longestStreak, last30Days, courses: courseProgress }
+  }
+
+  // ─── Course suggestions from the academic profile ─────────────────────────
+
+  async suggestCourses(dto: SuggestCoursesDto, user: AuthUser) {
+    const profile = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } })
+    if (!profile.programme) {
+      throw new BadRequestException('Add your programme in your profile first so we can suggest courses')
+    }
+    const level = dto.level ?? profile.currentLevel
+    const semester = dto.semester ?? profile.currentSemester
+
+    const existing = await this.prisma.course.findMany({
+      where: { ownerId: user.id },
+      select: { title: true, courseCode: true },
+    })
+    const existingTitles = existing.map(c => (c.courseCode ? `${c.courseCode} ${c.title}` : c.title))
+
+    const studentContext = [
+      `Programme: ${profile.programme}`,
+      profile.faculty && `Faculty: ${profile.faculty}`,
+      profile.institution && `Institution: ${profile.institution}`,
+      profile.institutionType && `Institution type: ${profile.institutionType.replace(/_/g, ' ').toLowerCase()}`,
+      profile.country && `Country: ${profile.country}`,
+      level && `Level: ${level}`,
+      semester && `Semester: ${SEMESTER_LABEL[semester]}`,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    let raw: RawSuggestedCourse[]
+    try {
+      raw = await this.ai.suggestProgrammeCourses(studentContext, existingTitles, {
+        userId: user.id,
+        organizationId: user.organizationId ?? undefined,
+        relatedEntityId: user.id,
+      })
+    } catch (err) {
+      this.logger.warn(`AI course suggestion failed for user ${user.id}: ${err instanceof Error ? err.message : String(err)}`)
+      throw new BadRequestException("Couldn't suggest courses right now — try again in a moment, or add your courses manually")
+    }
+
+    const taken = new Set(existing.map(c => c.title.toLowerCase()))
+    const courses = raw
+      .filter(c => c.title && !taken.has(c.title.toLowerCase()))
+      .map(c => ({
+        courseCode: c.courseCode?.trim() || undefined,
+        title: c.title.trim(),
+        creditUnits: Number.isInteger(c.creditUnits) ? c.creditUnits : undefined,
+        level,
+        semester,
+      }))
+    // Level 3 of the curriculum hierarchy: AI suggestions, never presented as an official list
+    return { source: 'ai' as const, courses }
   }
 
   // ─── Topic suggestions & notes without uploaded material ──────────────────

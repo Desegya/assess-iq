@@ -151,6 +151,14 @@ enum Semester {
   SECOND
 }
 
+enum InstitutionType {
+  UNIVERSITY
+  POLYTECHNIC
+  COLLEGE_OF_EDUCATION
+  SECONDARY_SCHOOL
+  OTHER
+}
+
 enum GpaScale {
   FIVE
   FOUR
@@ -198,8 +206,17 @@ model User {
   role           UserRole
   status         UserStatus   @default(PENDING)
   avatarUrl      String?
-  courseOfStudy  String?
-  programYears   Int?
+  // Academic profile (Nightklass onboarding) — drives course suggestions and personalisation
+  country          String?
+  institutionType  InstitutionType?
+  programme        String?
+  currentLevel     Int?
+  currentSemester  Semester?
+  institution      String?
+  faculty          String?
+  academicSession  String?
+  graduationYear   Int?
+  profileCompletedAt DateTime?
   lastLoginAt    DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -261,6 +278,7 @@ model Course {
   level          Int?
   semester       Semester?
   creditUnits    Int?
+  isCarryover    Boolean      @default(false)
   isActive       Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt

@@ -6,8 +6,8 @@ import { useApi } from '@/hooks/use-api'
 import { useAuth } from '@/contexts/auth-context'
 import { getSubjectColor } from '@/lib/subject-color'
 import { SkeletonCard } from '@/components/ui/Skeleton'
-import { EmptyState } from '@/components/ui/EmptyState'
 import { CourseGrid, type Course, type CourseProgress } from '@/components/courses/CourseGrid'
+import { profileSummary, type AcademicProfile } from '@/lib/profile'
 
 interface Progress {
   currentStreak: number
@@ -52,9 +52,11 @@ export default function DashboardPage() {
   const [today, setToday] = useState<Session[] | null>(null)
   const [dueCount, setDueCount] = useState(0)
   const [weakCount, setWeakCount] = useState(0)
+  const [profile, setProfile] = useState<AcademicProfile | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    api.get<AcademicProfile>('/users/me/profile').then(setProfile).catch(() => undefined)
     api
       .get<Course[]>('/courses')
       .then(setCourses)
@@ -69,6 +71,8 @@ export default function DashboardPage() {
   const progressByCourse = new Map(progress?.courses.map(c => [c.courseId, c]) ?? [])
   const firstName = user?.name?.split(' ')[0] ?? 'there'
   const streak = progress?.currentStreak ?? 0
+  const isNewUser = courses?.length === 0
+  const hasProfile = !!profile?.profileCompletedAt
 
   return (
     <div className="space-y-6">
@@ -86,7 +90,9 @@ export default function DashboardPage() {
                 ? `You're on a ${streak}-day streak — don't break the chain tonight.`
                 : today && today.length > 0
                   ? `You've got ${today.length} session${today.length === 1 ? '' : 's'} lined up for today.`
-                  : 'Pick a course and let\'s get a plan going.'}
+                  : isNewUser && hasProfile && profile?.programme && profile.currentLevel
+                    ? `You're a ${profile.currentLevel}-level ${profile.programme} student. Let's set up your semester.`
+                    : 'Here’s where your semester stands.'}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -103,13 +109,59 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* New user: build the semester instead of showing a wall of zeros */}
+      {isNewUser && (
+        <section className="card p-6 sm:p-7">
+          {hasProfile ? (
+            <>
+              <h2 className="font-heading text-xl font-bold text-slate-900">Let&apos;s build your semester.</h2>
+              <p className="text-sm font-semibold text-blue-600 mt-1">{profileSummary(profile!)}</p>
+              <p className="text-sm text-slate-500 mt-3">
+                We can suggest courses commonly taken in your programme. Select the ones you&apos;re taking this semester.
+              </p>
+              <div className="flex flex-wrap gap-3 mt-5">
+                <Link href="/courses/new?path=programme" className="btn-primary">
+                  View suggested courses
+                </Link>
+                <Link href="/courses/new?path=manual" className="btn-secondary">
+                  Add course manually
+                </Link>
+                <Link href="/courses/new?path=outline" className="btn-secondary">
+                  Upload course outline
+                </Link>
+              </div>
+              <p className="text-xs text-slate-400 mt-5">
+                No syllabus? No problem. Nightklass can generate an editable course outline and study notes for you.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="font-heading text-xl font-bold text-slate-900">Tell us what you study</h2>
+              <p className="text-sm text-slate-500 mt-2">
+                Add your programme, level and semester and Nightklass will suggest your courses and set up your semester.
+              </p>
+              <div className="flex flex-wrap gap-3 mt-5">
+                <Link href="/onboarding" className="btn-primary">
+                  Set up my profile
+                </Link>
+                <Link href="/courses/new?path=manual" className="btn-secondary">
+                  Add a course instead
+                </Link>
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatTile href="/dashboard" label="Courses" value={courses?.length ?? 0} icon="📚" accent="bg-blue-100" />
-        <StatTile href="/flashcards" label="Due flashcards" value={dueCount} icon="🗂️" accent="bg-orange-100" />
-        <StatTile href="/weak-topics" label="Weak spots" value={weakCount} icon="🎯" accent="bg-lime-100" />
-        <StatTile href="/dashboard" label="Best streak" value={progress?.longestStreak ?? 0} icon="⚡" accent="bg-cyan-100" />
-      </div>
+      {!isNewUser && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatTile href="/courses" label="Courses" value={courses?.length ?? 0} icon="📚" accent="bg-blue-100" />
+          <StatTile href="/flashcards" label="Due flashcards" value={dueCount} icon="🗂️" accent="bg-orange-100" />
+          <StatTile href="/weak-topics" label="Weak spots" value={weakCount} icon="🎯" accent="bg-lime-100" />
+          <StatTile href="/dashboard" label="Best streak" value={progress?.longestStreak ?? 0} icon="⚡" accent="bg-cyan-100" />
+        </div>
+      )}
 
       {/* Today strip */}
       {today && today.length > 0 && (
@@ -141,7 +193,7 @@ export default function DashboardPage() {
       )}
 
       {/* 30-day heatmap */}
-      {progress && (
+      {progress && !isNewUser && (
         <div className="card p-5 animate-fade-in">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Last 30 days</p>
@@ -181,18 +233,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {courses?.length === 0 && (
-        <EmptyState
-          illustration="empty"
-          title="No courses yet"
-          subtitle="Create your first course to start building a study plan."
-          action={
-            <Link href="/courses/new" className="btn-primary inline-flex">
-              + New course
-            </Link>
-          }
-        />
-      )}
 
       {courses && courses.length > 0 && (
         <div>
