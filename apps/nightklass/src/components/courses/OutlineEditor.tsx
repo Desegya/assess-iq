@@ -211,7 +211,7 @@ export function OutlineEditor({
                 </div>
                 {!editing ? (
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    <Link href={`/topics/${topic.id}/notes`} className="text-xs text-blue-600 font-semibold">Notes</Link>
+                    <Link href={`/topics/${topic.id}/learn`} className="text-xs text-blue-600 font-semibold">Learn</Link>
                     <Link href={`/topics/${topic.id}/quiz`} className="text-xs text-blue-600 font-semibold">Quiz</Link>
                     <button
                       onClick={() => onFlashcards(topic.id)}

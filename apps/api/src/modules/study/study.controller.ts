@@ -230,18 +230,6 @@ export class StudyController {
     return this.studyService.suggestTopics(courseId, user)
   }
 
-  @Get('topics/:topicId/notes')
-  @ApiOperation({ summary: 'Get saved study notes for a topic' })
-  getTopicNotes(@Param('topicId') topicId: string, @CurrentUser() user: AuthUser) {
-    return this.studyService.getTopicNotes(topicId, user)
-  }
-
-  @Post('topics/:topicId/notes/generate')
-  @ApiOperation({ summary: 'Generate (or regenerate) study notes for a topic' })
-  generateTopicNotes(@Param('topicId') topicId: string, @CurrentUser() user: AuthUser) {
-    return this.studyService.generateTopicNotes(topicId, user)
-  }
-
   // ─── AI study chat ────────────────────────────────────────────────────────
 
   @Post('courses/:courseId/chat')

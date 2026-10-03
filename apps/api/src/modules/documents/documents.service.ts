@@ -12,6 +12,7 @@ import { AuthUser, UserRole } from '@assessiq/types'
 import { DocumentType } from '@assessiq/db'
 import { UploadDocumentDto } from './dto/upload-document.dto'
 import { extractTopicsHeuristically } from './topic-extraction-fallback'
+import { RetrievalService } from '../learning/retrieval.service'
 import pdfParse from 'pdf-parse'
 import mammoth from 'mammoth'
 import JSZip from 'jszip'
@@ -34,6 +35,7 @@ export class DocumentsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly ai: AiService,
+    private readonly retrieval: RetrievalService,
   ) {}
 
   // ─── Upload ────────────────────────────────────────────────────────────────
@@ -98,6 +100,11 @@ export class DocumentsService {
       this.logger.log(
         `Document ${doc.id} ready — ${chunks.length} chunks from ${file.originalname}`,
       )
+
+      // ── 4. Index passages for retrieval (course material only; never blocks the upload) ──
+      await this.retrieval
+        .indexDocument(ready, user)
+        .catch(err => this.logger.warn(`Indexing failed for document ${doc.id}: ${String(err)}`))
       return ready
     } catch (err) {
       this.logger.error(`Failed to process document ${doc.id}`, err)

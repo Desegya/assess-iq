@@ -131,6 +131,8 @@ enum AIAction {
   REVIEW_QUALITY
   WEAK_TOPIC_SUGGESTION
   ANSWER_QUESTION
+  EMBED_CONTENT
+  RECOMMEND_RESOURCES
 }
 
 enum StudyPlanStatus {
@@ -158,6 +160,12 @@ enum TopicSource {
   AI_SUGGESTED
   AI_EXPANDED
   STUDENT
+}
+
+enum LessonMode {
+  MATERIAL
+  AI
+  COMBINED
 }
 
 enum OutlineSource {
@@ -331,8 +339,9 @@ model Topic {
   order             Int       @default(0)
   estimatedMinutes  Int?
   importanceWeight  Float?
-  notes             String?   @db.Text
-  notesGeneratedAt  DateTime?
+  // Cached external resources (e.g. YouTube results) so we don't spend API quota on every view
+  resources         Json?
+  resourcesFetchedAt DateTime?
   // Which outline layer this topic belongs to (OUTLINE = the student's/lecturer's original; AI_* = Nightklass enrichment)
   source            TopicSource @default(STUDENT)
   // Archived instead of deleted when it has study progress, so edits never destroy history
@@ -347,6 +356,8 @@ model Topic {
   studySessions StudySession[]
   masteries     TopicMastery[]
   flashcards    Flashcard[]
+  lessons       TopicLesson[]
+  chunks        DocumentChunk[]
 
   @@index([courseId])
   @@map("topics")
@@ -367,6 +378,64 @@ model OutlineRevision {
 
   @@index([courseId])
   @@map("outline_revisions")
+}
+
+// ─── Document chunks (retrieval) ──────────────────────────────────────────────
+// Uploaded material split into passages with embeddings, so generation pulls the relevant parts
+
+model DocumentChunk {
+  id          String   @id @default(cuid())
+  documentId  String
+  courseId    String
+  index       Int
+  text        String   @db.Text
+  embedding   Float[]
+  // The course topic this passage best matches (set when the document is mapped to the outline)
+  topicId     String?
+  createdAt   DateTime @default(now())
+
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  topic       Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  @@index([courseId])
+  @@index([documentId])
+  @@map("document_chunks")
+}
+
+// ─── Lessons (generated learning content) ─────────────────────────────────────
+// Each regeneration adds a version; sources record exactly which passages grounded it
+
+model TopicLesson {
+  id                String     @id @default(cuid())
+  topicId           String
+  version           Int
+  mode              LessonMode
+  content           Json
+  sourceChunkIds    String[]
+  sourceDocumentIds String[]
+  model             String?
+  feedback          String?    @db.Text
+  createdById       String
+  createdAt         DateTime   @default(now())
+
+  topic             Topic      @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  reports           ContentReport[]
+
+  @@unique([topicId, version])
+  @@map("topic_lessons")
+}
+
+model ContentReport {
+  id        String      @id @default(cuid())
+  lessonId  String
+  userId    String
+  reason    String      @db.Text
+  createdAt DateTime    @default(now())
+
+  lesson    TopicLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+  @@map("content_reports")
 }
 
 // ─── Document ─────────────────────────────────────────────────────────────────
@@ -393,6 +462,7 @@ model Document {
   course         Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
   generatedQuestions Question[]
   flashcards     Flashcard[]
+  chunks         DocumentChunk[]
 
   @@index([organizationId])
   @@index([uploadedById])

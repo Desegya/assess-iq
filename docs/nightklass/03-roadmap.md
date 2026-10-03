@@ -24,12 +24,14 @@ Maps [01-product-vision.md](01-product-vision.md) and [02-onboarding-and-curricu
 - Outline input: paste text, PPTX, image/photo (via a vision-capable model rather than separate OCR).
 - Not yet: rolling the outline back to an earlier revision (history is recorded and viewable; archived topics can be restored individually).
 
-## Phase 4 — Learning content engine
+## Phase 4 — Learning content engine ✅ done 2026-10-03
 - Structured per-topic content: objectives, explanation, key terms, worked examples, applications, summary (builds on the existing notes feature).
 - Source tracking: material-grounded / AI-generated / combined, stored with version; regenerate, edit, report inaccurate.
 - Retrieval: chunk uploads and pull relevant sections per topic, instead of using the first 12k characters.
 - Map new uploads to existing topics and propose new ones.
 - Resources: real YouTube links via the YouTube Data API (the AI must not invent URLs).
+- Done alongside: AI provider abstraction (LlmProvider + OpenAiProvider), structured JSON outputs for lessons, and a fix for TXT/.doc uploads that the old file validator always rejected.
+- Not yet: editing lesson text inline (students can regenerate with feedback or report mistakes instead).
 
 ## Phase 5 — Plans, assessment & adaptation
 - Duration presets (5 weeks / 10 weeks / 3 months / custom); weekly targets + daily sessions; difficulty, confidence, credit units and quiz history as inputs.
@@ -49,4 +51,3 @@ Maps [01-product-vision.md](01-product-vision.md) and [02-onboarding-and-curricu
 - Phase 6 needs the EDSU prospectus/course data in hand.
 - CCMAS data source for the level-2 tier.
 - OTP channel for Phase 7 (email first; SMS costs money).
-- AI provider abstraction (spec §11) should land before Phase 4 grows the AI surface further.

@@ -2,6 +2,8 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { PrismaService } from '../prisma/prisma.service'
 import { CoursesService } from '../courses/courses.service'
 import { TopicsService } from '../topics/topics.service'
+import { RetrievalService } from '../learning/retrieval.service'
+import { describeCourse, SEMESTER_LABEL } from '../courses/describe-course'
 import { extractTopicsHeuristically } from '../documents/topic-extraction-fallback'
 import {
   AiService,
@@ -24,28 +26,6 @@ import { SuggestCoursesDto } from './dto/suggest-courses.dto'
 
 const DEFAULT_TOPIC_MINUTES = 45
 const WEAK_TOPIC_THRESHOLD = 60
-
-const SEMESTER_LABEL = { FIRST: 'first semester', SECOND: 'second semester' } as const
-
-// A plain-text description of a course, used as the AI's only context when the student hasn't uploaded material
-function describeCourse(course: {
-  title: string
-  subject: string
-  courseCode?: string | null
-  level?: number | null
-  semester?: 'FIRST' | 'SECOND' | null
-  description?: string | null
-}): string {
-  const details = [
-    course.courseCode,
-    course.subject,
-    course.level ? `${course.level} level` : null,
-    course.semester ? SEMESTER_LABEL[course.semester] : null,
-  ].filter(Boolean)
-  return `${course.title}${details.length ? ` (${details.join(', ')})` : ''} — a university course${
-    course.description ? `\nDescription: ${course.description}` : ''
-  }`
-}
 
 const RATING_QUALITY: Record<FlashcardRating, number> = { again: 2, hard: 3, good: 4, easy: 5 }
 
@@ -100,6 +80,7 @@ export class StudyService {
     private readonly coursesService: CoursesService,
     private readonly ai: AiService,
     private readonly topicsService: TopicsService,
+    private readonly retrieval: RetrievalService,
   ) {}
 
   // ─── Availability ─────────────────────────────────────────────────────────
@@ -395,14 +376,16 @@ export class StudyService {
     await this.coursesService.findOne(topic.courseId, user) // access check
 
     // Prefer a ready, extracted document for this course as grounding; fall back to the topic itself
-    const doc = await this.prisma.document.findFirst({
-      where: { courseId: topic.courseId, status: 'READY', extractedText: { not: null } },
-      orderBy: { createdAt: 'desc' },
-    })
+    // Ground in the passages of the student's material most relevant to this topic, if there are any
     const course = await this.prisma.course.findUniqueOrThrow({ where: { id: topic.courseId } })
-    const sourceText =
-      doc?.extractedText ||
-      `${describeCourse(course)}\nTopic: ${topic.name}${topic.description ? ` — ${topic.description}` : ''}`
+    const passages = await this.retrieval.retrieve(topic.courseId, `${topic.name}. ${topic.description ?? ''}`, user, {
+      k: 8,
+      topicIds: [topic.id],
+    })
+    const doc = passages[0] ? { id: passages[0].documentId } : null
+    const sourceText = passages.length
+      ? passages.map(p => p.text).join('\n\n')
+      : `${describeCourse(course)}\nTopic: ${topic.name}${topic.description ? ` — ${topic.description}` : ''}`
 
     // Try AI generation first; fall back to a local question bank if AI is
     // unavailable (no/invalid API key) or fails, so this never hard-blocks a
@@ -548,14 +531,16 @@ export class StudyService {
     if (!topic) throw new NotFoundException('Topic not found')
     await this.coursesService.findOne(topic.courseId, user) // access check
 
-    const doc = await this.prisma.document.findFirst({
-      where: { courseId: topic.courseId, status: 'READY', extractedText: { not: null } },
-      orderBy: { createdAt: 'desc' },
-    })
+    // Ground in the passages of the student's material most relevant to this topic, if there are any
     const course = await this.prisma.course.findUniqueOrThrow({ where: { id: topic.courseId } })
-    const sourceText =
-      doc?.extractedText ||
-      `${describeCourse(course)}\nTopic: ${topic.name}${topic.description ? ` — ${topic.description}` : ''}`
+    const passages = await this.retrieval.retrieve(topic.courseId, `${topic.name}. ${topic.description ?? ''}`, user, {
+      k: 8,
+      topicIds: [topic.id],
+    })
+    const doc = passages[0] ? { id: passages[0].documentId } : null
+    const sourceText = passages.length
+      ? passages.map(p => p.text).join('\n\n')
+      : `${describeCourse(course)}\nTopic: ${topic.name}${topic.description ? ` — ${topic.description}` : ''}`
 
     let raw: RawFlashcard[]
     try {
@@ -928,64 +913,15 @@ export class StudyService {
     }
   }
 
-  async getTopicNotes(topicId: string, user: AuthUser) {
-    const topic = await this.prisma.topic.findUnique({ where: { id: topicId } })
-    if (!topic) throw new NotFoundException('Topic not found')
-    const course = await this.coursesService.findOne(topic.courseId, user) // access check
-    return {
-      topic: { id: topic.id, name: topic.name, courseId: course.id, courseTitle: course.title },
-      notes: topic.notes,
-      notesGeneratedAt: topic.notesGeneratedAt,
-    }
-  }
-
-  async generateTopicNotes(topicId: string, user: AuthUser) {
-    const topic = await this.prisma.topic.findUnique({ where: { id: topicId } })
-    if (!topic) throw new NotFoundException('Topic not found')
-    const course = await this.coursesService.findOne(topic.courseId, user) // access check
-
-    const doc = await this.prisma.document.findFirst({
-      where: { courseId: topic.courseId, status: 'READY', extractedText: { not: null } },
-      orderBy: { createdAt: 'desc' },
-    })
-
-    let notes: string
-    try {
-      notes = await this.ai.generateTopicNotes(describeCourse(course), topic.name, doc?.extractedText ?? null, {
-        userId: user.id,
-        organizationId: user.organizationId ?? undefined,
-        relatedEntityId: topic.id,
-      })
-    } catch (err) {
-      this.logger.warn(
-        `AI notes generation failed for topic ${topicId}: ${err instanceof Error ? err.message : String(err)}`,
-      )
-      throw new BadRequestException("Couldn't generate notes right now — try again in a moment")
-    }
-
-    const updated = await this.prisma.topic.update({
-      where: { id: topic.id },
-      data: { notes, notesGeneratedAt: new Date() },
-    })
-    return {
-      topic: { id: topic.id, name: topic.name, courseId: course.id, courseTitle: course.title },
-      notes: updated.notes,
-      notesGeneratedAt: updated.notesGeneratedAt,
-      groundedInMaterial: !!doc,
-    }
-  }
-
   // ─── AI study chat ────────────────────────────────────────────────────────
 
   async chat(courseId: string, dto: ChatDto, user: AuthUser) {
     const course = await this.coursesService.findOne(courseId, user) // access check
 
-    const docs = await this.prisma.document.findMany({
-      where: { courseId, status: 'READY', extractedText: { not: null } },
-      orderBy: { createdAt: 'desc' },
-      take: 3,
-    })
-    const combinedText = docs.map(d => d.extractedText).join('\n\n').slice(0, 12000)
+    // Retrieve the passages most relevant to this question (plus the previous question, for follow-ups)
+    const previousQuestion = [...(dto.history ?? [])].reverse().find(m => m.role === 'user')?.content ?? ''
+    const passages = await this.retrieval.retrieve(courseId, `${dto.message}\n${previousQuestion}`.trim(), user, { k: 6 })
+    const combinedText = passages.map((p, i) => `[Passage ${i + 1} — ${p.documentName}]\n${p.text}`).join('\n\n')
     const topicNames = course.topics.map((t: { name: string }) => t.name).join(', ')
     const hasMaterial = !!combinedText.trim()
 

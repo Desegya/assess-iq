@@ -14,7 +14,7 @@ const STARS = [
   [92, 34, 1.1], [15, 55, 1.4], [50, 48, 1.2], [78, 52, 1.5], [95, 60, 1.2],
 ] as const
 
-const ENTRY_POINTS = [
+const ENTRY_POINTS: { title: string; desc: string; soon?: boolean }[] = [
   {
     title: 'Just a course title',
     desc: 'Type "Biostatistics" or "BIO 223" and Nightklass drafts a topic outline you can edit anytime.',
@@ -30,14 +30,13 @@ const ENTRY_POINTS = [
   {
     title: 'Department & level',
     desc: 'Tell us your programme and level and we suggest courses you’re likely taking this semester.',
-    soon: true,
   },
 ]
 
 const JOURNEY = [
   { title: 'Start anywhere', desc: 'Course title, syllabus or uploaded materials.' },
   { title: 'Build the course', desc: 'Generate or edit a topic outline.' },
-  { title: 'Learn', desc: 'Detailed notes from your uploads or AI.' },
+  { title: 'Learn', desc: 'Detailed lessons from your uploads or AI.' },
   { title: 'Plan', desc: 'A schedule built around your exam date.' },
   { title: 'Test', desc: 'Quizzes from basic to advanced.' },
   { title: 'Improve', desc: 'Spot weak areas and revise them.' },
@@ -45,18 +44,18 @@ const JOURNEY = [
   { title: 'Track', desc: 'Completion, streaks and mastery.' },
 ]
 
-const FEATURES = [
-  { text: 'No syllabus yet? Generate a topic outline and edit it anytime.' },
-  { text: 'Upload lecture notes, PDFs, Word documents and textbooks.' },
-  { text: 'Get detailed study notes for every topic, from your materials or with AI.' },
+const FEATURES: { text: string; soon?: boolean }[] = [
+  { text: 'No syllabus yet? Generate a topic outline and edit it anytime, or photograph the one you have.' },
+  { text: 'Upload lecture notes, slides, PDFs, Word documents and textbooks.' },
+  { text: 'Detailed lessons for every topic, built from your notes (with citations) or with AI.' },
   { text: 'Turn your course into a day-by-day study plan around your exam date.' },
   { text: 'Take quizzes from basic to advanced, and see exactly what you got wrong.' },
   { text: 'Flashcards that resurface right before you forget.' },
   { text: 'Track completion, weak areas and mastery per topic.' },
   { text: 'Ask AI anything about your course, even before you upload notes.' },
-  { text: 'Course suggestions based on your department and level.', soon: true },
+  { text: 'Course suggestions based on your department and level.' },
   { text: 'Essay and structured questions with feedback.', soon: true },
-  { text: 'Recommended videos and supplementary resources.', soon: true },
+  { text: 'Recommended videos and supplementary resources for every topic.' },
 ]
 
 const FAQS = [
@@ -135,8 +134,8 @@ function LandingContent() {
             <span className="bg-gradient-to-r from-cyan-300 to-lime-300 bg-clip-text text-transparent">actually works.</span>
           </h1>
           <p className="mt-5 text-base sm:text-lg text-blue-100/80 max-w-2xl mx-auto animate-slide-up delay-75">
-            Start with your course title, syllabus or study materials. Nightklass builds your learning path, creates
-            detailed study notes, plans what to study, tests what you understand and adapts until exam day.
+            Start with your department, course title, syllabus or study materials. Nightklass builds your learning path, creates
+            detailed lessons, plans what to study, tests what you understand and adapts until exam day.
           </p>
           <div className="mt-8 flex items-center justify-center gap-3 flex-wrap animate-slide-up delay-150">
             <Link href="/register" className="btn-primary !py-3 !px-6">

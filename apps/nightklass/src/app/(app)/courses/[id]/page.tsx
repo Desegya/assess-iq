@@ -34,6 +34,13 @@ interface UploadedDocument {
   fileName: string
 }
 
+interface DocumentMap {
+  documentId: string
+  fileName: string
+  covered: { topicId: string; name: string; passages: number }[]
+  newTopics: { name: string; description?: string }[]
+}
+
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 interface DaySlot {
@@ -57,8 +64,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
 
   const [uploadingNotes, setUploadingNotes] = useState(false)
   const [notesError, setNotesError] = useState<string | null>(null)
-  const [notesDoc, setNotesDoc] = useState<UploadedDocument | null>(null)
-  const [extractingNotes, setExtractingNotes] = useState(false)
+  const [notesMap, setNotesMap] = useState<DocumentMap | null>(null)
+  const [addingNewTopics, setAddingNewTopics] = useState(false)
 
   const [days, setDays] = useState<DaySlot[]>(
     DAYS.map(() => ({ enabled: false, startTime: '18:00', endTime: '19:00' })),
@@ -126,12 +133,13 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // Upload notes, then link them to the outline and surface topics they add (spec §16)
   async function handleNotesUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
     setNotesError(null)
-    setNotesDoc(null)
+    setNotesMap(null)
     setUploadingNotes(true)
     try {
       const formData = new FormData()
@@ -139,7 +147,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
       formData.append('courseId', id)
       const doc = await api.upload<UploadedDocument>('/documents/upload', formData)
       if (doc.status !== 'READY') throw new Error("We couldn't read that file. Try a different one.")
-      setNotesDoc(doc)
+      setNotesMap(await api.post<DocumentMap>(`/learning/documents/${doc.id}/map`, {}))
     } catch (err) {
       setNotesError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
@@ -147,18 +155,16 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     }
   }
 
-  async function handleTopicsFromNotes() {
-    if (!notesDoc) return
-    setNotesError(null)
-    setExtractingNotes(true)
+  async function handleAddNewTopics(topics: DocumentMap['newTopics']) {
+    setAddingNewTopics(true)
     try {
-      const r = await api.post<{ source: 'ai' | 'fallback'; proposals: TopicProposal[] }>(`/documents/${notesDoc.id}/extract-topics`, {})
-      setProposalSet({ source: 'MATERIAL', proposals: r.proposals, fallback: r.source === 'fallback' })
-      setNotesDoc(null)
+      await api.post(`/courses/${id}/topics/bulk`, { source: 'MATERIAL', topics })
+      setNotesMap(m => (m ? { ...m, newTopics: m.newTopics.filter(t => !topics.includes(t)) } : m))
+      load()
     } catch (err) {
-      setNotesError(err instanceof Error ? err.message : 'Failed to suggest topics')
+      setNotesError(err instanceof Error ? err.message : 'Failed to add topics')
     } finally {
-      setExtractingNotes(false)
+      setAddingNewTopics(false)
     }
   }
 
@@ -244,7 +250,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
         <section className={`card p-6 ${color.bgSoft} ${color.border}`}>
           <h2 className="font-heading font-bold text-slate-900 mb-1">Quick practice</h2>
           <p className="text-slate-500 text-sm mb-4">
-            No need to wait for a full plan — try a quiz or flashcards right now.
+            No need to wait for a full plan. Start the first lesson, or test yourself right now.
           </p>
           {flashcardError && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">
@@ -252,7 +258,10 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
             </div>
           )}
           <div className="flex items-center gap-3 flex-wrap">
-            <Link href={`/topics/${course.topics.find(t => !t.parentTopicId)!.id}/quiz`} className="btn-primary">
+            <Link href={`/topics/${course.topics.find(t => !t.parentTopicId)!.id}/learn`} className="btn-primary">
+              Start learning
+            </Link>
+            <Link href={`/topics/${course.topics.find(t => !t.parentTopicId)!.id}/quiz`} className="btn-secondary">
               Try a quick quiz
             </Link>
             <button
@@ -346,12 +355,54 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
           />
           {uploadingNotes && <span className="text-sm text-slate-400">Uploading & reading…</span>}
         </div>
-        {notesDoc && !uploadingNotes && (
-          <div className="mt-3 flex items-center gap-3 flex-wrap text-sm">
-            <span className="text-emerald-700">✓ {notesDoc.fileName} added.</span>
-            <button onClick={handleTopicsFromNotes} disabled={extractingNotes || !!proposalSet} className="btn-secondary !py-1.5 !px-3 text-xs">
-              {extractingNotes ? 'Finding topics…' : 'Suggest topics from it'}
-            </button>
+        {notesMap && !uploadingNotes && (
+          <div className="mt-4 rounded-xl bg-slate-50 p-4 space-y-3 text-sm">
+            <p className="text-emerald-700 font-semibold">✓ {notesMap.fileName} added</p>
+            {notesMap.covered.length > 0 ? (
+              <div>
+                <p className="text-xs text-slate-500 mb-1.5">Linked to your outline. Lessons and quizzes for these topics will use it:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {notesMap.covered.map(c => (
+                    <span key={c.topicId} className="badge bg-emerald-50 text-emerald-700">
+                      {c.name} · {c.passages} passage{c.passages === 1 ? '' : 's'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">It didn&apos;t clearly match any topic in your outline yet.</p>
+            )}
+            {notesMap.newTopics.length > 0 && (
+              <div>
+                <p className="text-xs text-slate-500 mb-1.5">It also covers topics that aren&apos;t in your outline:</p>
+                <ul className="space-y-1.5">
+                  {notesMap.newTopics.map(t => (
+                    <li key={t.name} className="flex items-center justify-between gap-3">
+                      <span>
+                        <span className="font-semibold text-slate-800">{t.name}</span>
+                        {t.description && <span className="text-xs text-slate-500"> · {t.description}</span>}
+                      </span>
+                      <button
+                        onClick={() => void handleAddNewTopics([t])}
+                        disabled={addingNewTopics}
+                        className="text-xs font-semibold text-blue-600 flex-shrink-0"
+                      >
+                        + Add
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {notesMap.newTopics.length > 1 && (
+                  <button
+                    onClick={() => void handleAddNewTopics(notesMap.newTopics)}
+                    disabled={addingNewTopics}
+                    className="btn-secondary !py-1.5 !px-3 text-xs mt-2"
+                  >
+                    {addingNewTopics ? 'Adding…' : `Add all ${notesMap.newTopics.length}`}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </section>

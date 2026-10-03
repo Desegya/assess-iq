@@ -10,7 +10,6 @@ import {
   UseInterceptors,
   ParseFilePipe,
   MaxFileSizeValidator,
-  FileTypeValidator,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common'
@@ -24,6 +23,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger'
 import { DocumentsService } from './documents.service'
+import { DocumentFileValidator } from './document-file.validator'
 import { UploadDocumentDto } from './dto/upload-document.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Roles } from '../auth/decorators/roles.decorator'
@@ -56,10 +56,7 @@ export class DocumentsController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 20 * 1024 * 1024 }), // 20 MB
-          new FileTypeValidator({
-            fileType:
-              /^(application\/pdf|application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation)|application\/msword|text\/plain)$/,
-          }),
+          new DocumentFileValidator(),
         ],
       }),
     )
