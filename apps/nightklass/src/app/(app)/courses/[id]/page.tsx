@@ -92,7 +92,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     DAYS.map(() => ({ enabled: false, startTime: '18:00', endTime: '19:00' })),
   )
   const [examDate, setExamDate] = useState('')
-  const [planLength, setPlanLength] = useState<'exam' | '5' | '10' | '13' | 'custom'>('exam')
+  // Default to a semester-length plan: most students don't know their exam date when they start
+  const [planLength, setPlanLength] = useState<'semester' | '5' | '10' | 'custom' | 'exam'>('semester')
   const [customWeeks, setCustomWeeks] = useState('8')
   const [readiness, setReadiness] = useState<Readiness | null>(null)
   const [planLoading, setPlanLoading] = useState(false)
@@ -206,7 +207,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
       if (slots.length === 0) {
         throw new Error('Select at least one available day')
       }
-      const weeks = planLength === 'exam' ? undefined : Number(planLength === 'custom' ? customWeeks : planLength)
+      const weeks =
+        planLength === 'exam' ? undefined : planLength === 'semester' ? 13 : Number(planLength === 'custom' ? customWeeks : planLength)
       if (planLength === 'exam' && !examDate) throw new Error('Set your exam date')
       if (weeks !== undefined && (!Number.isInteger(weeks) || weeks < 1 || weeks > 52)) {
         throw new Error('Choose between 1 and 52 weeks')
@@ -529,11 +531,11 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
             <p className="block text-sm font-medium text-slate-700 mb-1.5">Plan length</p>
             <div className="flex flex-wrap gap-2">
               {([
-                ['exam', 'Until my exam'],
+                ['semester', 'This semester (13 weeks)'],
                 ['5', '5 weeks'],
                 ['10', '10 weeks'],
-                ['13', '3 months'],
                 ['custom', 'Custom'],
+                ['exam', 'I know my exam date'],
               ] as const).map(([value, label]) => (
                 <button
                   key={value}
@@ -568,8 +570,10 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
               </div>
             )}
             <p className="text-xs text-slate-400 mt-2">
-              We schedule weekly topics and daily sessions, add spaced reviews, and save the end for revision. Weak topics get
-              more time, and the plan adapts as you go.
+              {planLength === 'exam'
+                ? 'The plan ends on your exam day, with the final stretch saved for revision.'
+                : "Don't know your exam date yet? That's fine. Add it on your plan whenever it's announced and the plan adjusts to it."}{' '}
+              Weak topics get more time, and spaced reviews keep earlier topics fresh.
             </p>
           </div>
 

@@ -18,3 +18,9 @@ export class GeneratePlanDto {
   @IsOptional()
   weeks?: number
 }
+
+export class SetExamDateDto {
+  @ApiProperty({ example: '2026-12-10', description: 'Examination date (ISO date string)' })
+  @IsDateString()
+  examDate!: string
+}

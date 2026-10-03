@@ -38,7 +38,8 @@ Maps [01-product-vision.md](01-product-vision.md) and [02-onboarding-and-curricu
 - Assessments: short answer, structured, calculation and essay, with AI grading and feedback; basic → advanced difficulty.
 - Adaptation: poor scores add revision and simpler content; good scores raise difficulty; revision intensifies near the exam; syllabus edits recalculate sessions.
 - Flashcards generated from weak areas; exam-readiness score.
-- Not yet: credit units as a cross-course priority (plans are still per course and don't share time between courses), and calculation questions as their own type (they're short-answer questions with numeric answers).
+- Plans share study time across courses: each slot is split by credit units (boosted within 3 weeks of an exam) into non-overlapping windows, or rotated whole when splits would be too short. Exam dates are optional and can be added later.
+- Not yet: calculation questions as their own type (they're short-answer questions with numeric answers).
 
 ## Phase 6 — Curriculum database & admin CMS
 - Institution → faculty → programme → level → semester → course, with outline, credit units, source document, session, version, status (official / curated / AI).

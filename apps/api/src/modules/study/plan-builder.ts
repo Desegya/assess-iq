@@ -49,9 +49,12 @@ export function topicWeight(t: Pick<PlanTopic, 'mastery' | 'confidence'>): numbe
   return 1
 }
 
+function baseMinutes(t: PlanTopic): number {
+  return t.estimatedMinutes ?? Math.min(120, DEFAULT_TOPIC_MINUTES + 10 * t.subtopicCount)
+}
+
 export function learningNeed(t: PlanTopic): number {
-  const base = t.estimatedMinutes ?? Math.min(120, DEFAULT_TOPIC_MINUTES + 10 * t.subtopicCount)
-  return Math.max(0, Math.round(base * topicWeight(t)) - t.completedMinutes)
+  return Math.max(0, Math.round(baseMinutes(t) * topicWeight(t)) - t.completedMinutes)
 }
 
 export function buildPlan(
@@ -108,7 +111,16 @@ export function buildPlan(
       const chunk = Math.min(need.minutes, remaining)
       // Avoid tiny leftover fragments: a sliver under 15 minutes waits for the next slot
       if (chunk < 15 && need.minutes > chunk) break
-      push({ topicId: need.topic.id, kind: 'LEARN', estimatedMinutes: chunk })
+      // Time owed to a topic the student already studied fully is extra revision, not first-time learning
+      const alreadyLearned = need.topic.completedMinutes >= baseMinutes(need.topic)
+      push({
+        topicId: need.topic.id,
+        kind: alreadyLearned ? 'REVIEW' : 'LEARN',
+        estimatedMinutes: chunk,
+        ...(alreadyLearned &&
+          need.topic.mastery !== null &&
+          need.topic.mastery < 50 && { note: `Extra revision: quiz average ${Math.round(need.topic.mastery)}%` }),
+      })
       unscheduled.delete(need.topic.name)
       need.minutes -= chunk
       remaining -= chunk
@@ -136,4 +148,55 @@ export function buildPlan(
   })
 
   return { sessions, scaledDown, unscheduledTopics: [...unscheduled] }
+}
+
+// ─── Sharing study time between courses ─────────────────────────────────────
+
+export interface PlanWindow {
+  id: string
+  // Exclusive: the plan uses slots strictly before this date
+  end: Date
+  // Relative share of a slot on a given date (e.g. credit units, boosted near the exam)
+  weight: (date: Date) => number
+}
+
+const MIN_SPLIT_MINUTES = 25
+
+function addMinutes(time: string, minutes: number): string {
+  const [h, m] = time.split(':').map(Number)
+  const total = h! * 60 + m! + minutes
+  return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
+// Divides the student's study slots between their active course plans so sessions never overlap.
+// A slot is split into consecutive time windows by weight; when a split would leave a course under
+// MIN_SPLIT_MINUTES, the whole slot goes to whichever course is most owed time so far (fair rotation).
+export function allocateSlots(windows: PlanWindow[], slots: PlanSlot[]): Map<string, PlanSlot[]> {
+  const result = new Map<string, PlanSlot[]>(windows.map(w => [w.id, []]))
+  const owed = new Map<string, number>(windows.map(w => [w.id, 0]))
+
+  for (const slot of slots) {
+    const active = windows.filter(w => slot.date < w.end)
+    if (active.length === 0) continue
+    const weights = active.map(w => Math.max(0.01, w.weight(slot.date)))
+    const total = weights.reduce((a, b) => a + b, 0)
+    const shares = weights.map(w => (slot.capacityMinutes * w) / total)
+
+    if (active.length === 1 || Math.min(...shares) >= MIN_SPLIT_MINUTES) {
+      let offset = 0
+      active.forEach((w, i) => {
+        // Last course takes the remainder so rounding never loses minutes
+        const minutes = i === active.length - 1 ? slot.capacityMinutes - offset : Math.floor(shares[i]!)
+        const startTime = addMinutes(slot.startTime, offset)
+        result.get(w.id)!.push({ date: slot.date, startTime, endTime: addMinutes(startTime, minutes), capacityMinutes: minutes })
+        offset += minutes
+      })
+    } else {
+      active.forEach((w, i) => owed.set(w.id, owed.get(w.id)! + shares[i]!))
+      const pick = active.reduce((best, w) => (owed.get(w.id)! > owed.get(best.id)! ? w : best))
+      owed.set(pick.id, owed.get(pick.id)! - slot.capacityMinutes)
+      result.get(pick.id)!.push(slot)
+    }
+  }
+  return result
 }

@@ -18,7 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiConsumes } from '@nestjs/swagger'
 import { StudyService } from './study.service'
 import { SetAvailabilityDto } from './dto/set-availability.dto'
-import { GeneratePlanDto } from './dto/generate-plan.dto'
+import { GeneratePlanDto, SetExamDateDto } from './dto/generate-plan.dto'
 import { CompleteSessionDto } from './dto/complete-session.dto'
 import { GenerateQuizDto } from './dto/generate-quiz.dto'
 import { SubmitQuizDto } from './dto/submit-quiz.dto'
@@ -87,6 +87,12 @@ export class StudyController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.studyService.completeSession(id, dto, user)
+  }
+
+  @Post('plans/:id/exam-date')
+  @ApiOperation({ summary: 'Set or change the exam date on a plan and re-plan the remaining sessions around it' })
+  setExamDate(@Param('id') id: string, @Body() dto: SetExamDateDto, @CurrentUser() user: AuthUser) {
+    return this.studyService.setExamDate(id, dto.examDate, user)
   }
 
   @Post('plans/:id/adapt')

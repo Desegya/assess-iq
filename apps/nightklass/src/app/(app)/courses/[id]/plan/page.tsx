@@ -53,6 +53,8 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
   const [adapting, setAdapting] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [showPast, setShowPast] = useState(false)
+  const [examInput, setExamInput] = useState<string | null>(null)
+  const [savingExam, setSavingExam] = useState(false)
 
   function load() {
     api
@@ -81,6 +83,21 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
       setError(err instanceof Error ? err.message : 'Failed to update the plan')
     } finally {
       setAdapting(false)
+    }
+  }
+
+  async function handleSetExamDate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!plan || !examInput) return
+    setSavingExam(true)
+    try {
+      setPlan(await api.post<StudyPlan>(`/study/plans/${plan.id}/exam-date`, { examDate: examInput }))
+      setExamInput(null)
+      setShowHistory(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to set the exam date')
+    } finally {
+      setSavingExam(false)
     }
   }
 
@@ -129,8 +146,10 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
           <div>
             <h1 className="font-heading text-2xl font-bold text-slate-900">Study plan</h1>
             <p className="text-slate-500 text-sm mt-1">
-              {plan.planType === 'DURATION' && plan.weeks ? `${plan.weeks}-week plan, ends` : 'Exam'}{' '}
-              {new Date(plan.examDate).toDateString()} · {daysLeft} day{daysLeft === 1 ? '' : 's'} left · {done}/{total} sessions done
+              {plan.planType === 'EXAM_DATE'
+                ? `Exam ${new Date(plan.examDate).toDateString()} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} to go`
+                : `${plan.weeks ? `${plan.weeks}-week plan` : 'Plan'} · runs to ${new Date(plan.examDate).toDateString()}`}{' '}
+              · {done}/{total} sessions done
             </p>
           </div>
           <button onClick={handleAdapt} disabled={adapting} className="btn-secondary">
@@ -138,6 +157,38 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
           </button>
         </div>
       </div>
+
+      {examInput === null ? (
+        <div className={`rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap ${plan.planType === 'EXAM_DATE' ? 'bg-slate-50' : 'bg-blue-50 border border-blue-100'}`}>
+          <p className={`text-sm ${plan.planType === 'EXAM_DATE' ? 'text-slate-600' : 'text-blue-800'}`}>
+            {plan.planType === 'EXAM_DATE'
+              ? 'Exam date moved? Update it and the rest of your plan shifts with it.'
+              : 'No exam date yet. Add it when it’s announced and we’ll rework the plan to end at your exam, with revision before it.'}
+          </p>
+          <button onClick={() => setExamInput(plan.planType === 'EXAM_DATE' ? plan.examDate.slice(0, 10) : '')} className="btn-secondary !py-2 !px-3 text-sm">
+            {plan.planType === 'EXAM_DATE' ? 'Change exam date' : 'Add exam date'}
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={handleSetExamDate} className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 flex items-center gap-3 flex-wrap">
+          <label htmlFor="examDate" className="text-sm text-blue-800">Exam date</label>
+          <input
+            id="examDate"
+            type="date"
+            required
+            min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+            value={examInput}
+            onChange={e => setExamInput(e.target.value)}
+            className="input-base !w-auto !py-1.5"
+          />
+          <button type="submit" disabled={savingExam || !examInput} className="btn-primary !py-2 !px-3 text-sm">
+            {savingExam ? 'Reworking plan…' : 'Save & update plan'}
+          </button>
+          <button type="button" onClick={() => setExamInput(null)} className="text-sm text-slate-500">
+            Cancel
+          </button>
+        </form>
+      )}
 
       {(plan.missedCount > 0 || plan.outlineChanged) && (
         <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
