@@ -6,8 +6,9 @@ const STARS = [
 ] as const
 
 const PITCHES = [
-  'Turn your course outline into a day-by-day plan.',
-  'Self-quiz after every session — never for a grade.',
+  'No syllabus? Start with just your course title.',
+  'Detailed study notes and a day-by-day plan to exam day.',
+  'Scored quizzes that find your weak areas, so you know what to revise.',
   'Flashcards that resurface right when you\'re about to forget.',
 ]
 
@@ -24,7 +25,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="absolute -bottom-20 -left-10 w-72 h-72 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
         <div className="absolute top-24 -right-10 w-56 h-56 bg-lime-400/10 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
 
-        <Logo size="md" theme="white" />
+        <div>
+          <Logo size="md" theme="white" />
+          <p className="relative mt-2 text-xs font-semibold text-blue-200/70">Your AI Personal Study Coach</p>
+        </div>
 
         <div className="relative">
           <h2 className="font-heading text-3xl font-bold text-white leading-tight">
