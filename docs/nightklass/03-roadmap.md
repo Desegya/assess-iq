@@ -33,11 +33,12 @@ Maps [01-product-vision.md](01-product-vision.md) and [02-onboarding-and-curricu
 - Done alongside: AI provider abstraction (LlmProvider + OpenAiProvider), structured JSON outputs for lessons, and a fix for TXT/.doc uploads that the old file validator always rejected.
 - Not yet: editing lesson text inline (students can regenerate with feedback or report mistakes instead).
 
-## Phase 5 — Plans, assessment & adaptation
+## Phase 5 — Plans, assessment & adaptation ✅ done 2026-10-03
 - Duration presets (5 weeks / 10 weeks / 3 months / custom); weekly targets + daily sessions; difficulty, confidence, credit units and quiz history as inputs.
 - Assessments: short answer, structured, calculation and essay, with AI grading and feedback; basic → advanced difficulty.
 - Adaptation: poor scores add revision and simpler content; good scores raise difficulty; revision intensifies near the exam; syllabus edits recalculate sessions.
 - Flashcards generated from weak areas; exam-readiness score.
+- Not yet: credit units as a cross-course priority (plans are still per course and don't share time between courses), and calculation questions as their own type (they're short-answer questions with numeric answers).
 
 ## Phase 6 — Curriculum database & admin CMS
 - Institution → faculty → programme → level → semester → course, with outline, credit units, source document, session, version, status (official / curated / AI).

@@ -41,6 +41,24 @@ interface DocumentMap {
   newTopics: { name: string; description?: string }[]
 }
 
+interface Readiness {
+  score: number
+  label: string
+  mastery: number
+  coverage: number
+  retention: number | null
+  daysToExam: number | null
+  topics: { topicId: string; name: string; mastery: number | null; status: 'strong' | 'ok' | 'weak' | 'not-quizzed' | 'not-started' }[]
+}
+
+const READINESS_STATUS = {
+  strong: { label: 'Strong', className: 'bg-emerald-50 text-emerald-700' },
+  ok: { label: 'OK', className: 'bg-blue-50 text-blue-700' },
+  weak: { label: 'Weak', className: 'bg-red-50 text-red-700' },
+  'not-quizzed': { label: 'Not quizzed', className: 'bg-slate-100 text-slate-600' },
+  'not-started': { label: 'Not started', className: 'bg-slate-100 text-slate-400' },
+} as const
+
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 interface DaySlot {
@@ -71,6 +89,9 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     DAYS.map(() => ({ enabled: false, startTime: '18:00', endTime: '19:00' })),
   )
   const [examDate, setExamDate] = useState('')
+  const [planLength, setPlanLength] = useState<'exam' | '5' | '10' | '13' | 'custom'>('exam')
+  const [customWeeks, setCustomWeeks] = useState('8')
+  const [readiness, setReadiness] = useState<Readiness | null>(null)
   const [planLoading, setPlanLoading] = useState(false)
   const [planError, setPlanError] = useState<string | null>(null)
   const [hasPlan, setHasPlan] = useState(false)
@@ -86,6 +107,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
 
   useEffect(() => {
     load()
+    api.get<Readiness>(`/study/courses/${id}/readiness`).then(setReadiness).catch(() => undefined)
     api
       .get(`/study/plans/current?courseId=${id}`)
       .then(() => setHasPlan(true))
@@ -181,12 +203,14 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
       if (slots.length === 0) {
         throw new Error('Select at least one available day')
       }
-      if (!examDate) {
-        throw new Error('Set your exam date')
+      const weeks = planLength === 'exam' ? undefined : Number(planLength === 'custom' ? customWeeks : planLength)
+      if (planLength === 'exam' && !examDate) throw new Error('Set your exam date')
+      if (weeks !== undefined && (!Number.isInteger(weeks) || weeks < 1 || weeks > 52)) {
+        throw new Error('Choose between 1 and 52 weeks')
       }
 
       await api.post('/study/availability', { slots })
-      await api.post('/study/plans/generate', { courseId: id, examDate })
+      await api.post('/study/plans/generate', { courseId: id, ...(weeks ? { weeks } : { examDate }) })
       router.push(`/courses/${id}/plan`)
     } catch (err) {
       setPlanError(err instanceof Error ? err.message : 'Failed to generate plan')
@@ -271,6 +295,46 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
             >
               {generatingFlashcardsFor === course.topics.find(t => !t.parentTopicId)!.id ? 'Generating…' : 'Try flashcards'}
             </button>
+          </div>
+        </section>
+      )}
+
+      {readiness && readiness.topics.length > 0 && (
+        <section className="card p-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="font-heading font-bold text-slate-900">Exam readiness</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                {readiness.label}
+                {readiness.daysToExam !== null && ` · ${readiness.daysToExam} day${readiness.daysToExam === 1 ? '' : 's'} to go`}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="font-heading text-3xl font-bold text-slate-900">{readiness.score}%</p>
+            </div>
+          </div>
+          <div className="h-2 rounded-full bg-slate-100 mt-3 overflow-hidden">
+            <div
+              className={`h-full rounded-full ${readiness.score >= 70 ? 'bg-emerald-500' : readiness.score >= 40 ? 'bg-amber-500' : 'bg-red-400'}`}
+              style={{ width: `${readiness.score}%` }}
+            />
+          </div>
+          <p className="text-xs text-slate-400 mt-2">
+            Mastery {readiness.mastery}% · Covered {readiness.coverage}%
+            {readiness.retention !== null && ` · Flashcard retention ${readiness.retention}%`}
+          </p>
+          <div className="flex flex-wrap gap-1.5 mt-4">
+            {readiness.topics.map(t => (
+              <Link
+                key={t.topicId}
+                href={t.status === 'weak' || t.status === 'not-started' ? `/topics/${t.topicId}/learn` : `/topics/${t.topicId}/quiz`}
+                className={`badge ${READINESS_STATUS[t.status].className} hover:opacity-80`}
+                title={READINESS_STATUS[t.status].label}
+              >
+                {t.name}
+                {t.mastery !== null && ` · ${Math.round(t.mastery)}%`}
+              </Link>
+            ))}
           </div>
         </section>
       )}
@@ -442,14 +506,51 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Exam date</label>
-            <input
-              type="date"
-              required
-              value={examDate}
-              onChange={e => setExamDate(e.target.value)}
-              className="input-base w-48"
-            />
+            <p className="block text-sm font-medium text-slate-700 mb-1.5">Plan length</p>
+            <div className="flex flex-wrap gap-2">
+              {([
+                ['exam', 'Until my exam'],
+                ['5', '5 weeks'],
+                ['10', '10 weeks'],
+                ['13', '3 months'],
+                ['custom', 'Custom'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPlanLength(value)}
+                  className={`text-xs font-semibold rounded-xl px-3 py-2 transition-colors ${
+                    planLength === value ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {planLength === 'exam' && (
+              <div className="mt-3">
+                <label htmlFor="examDate" className="block text-xs text-slate-500 mb-1">Exam date</label>
+                <input id="examDate" type="date" value={examDate} onChange={e => setExamDate(e.target.value)} className="input-base w-48" />
+              </div>
+            )}
+            {planLength === 'custom' && (
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={52}
+                  value={customWeeks}
+                  onChange={e => setCustomWeeks(e.target.value)}
+                  aria-label="Number of weeks"
+                  className="input-base w-24"
+                />
+                <span className="text-sm text-slate-500">weeks</span>
+              </div>
+            )}
+            <p className="text-xs text-slate-400 mt-2">
+              We schedule weekly topics and daily sessions, add spaced reviews, and save the end for revision. Weak topics get
+              more time, and the plan adapts as you go.
+            </p>
           </div>
 
           <button type="submit" disabled={planLoading} className="btn-primary">

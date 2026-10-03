@@ -13,9 +13,13 @@ interface Session {
   endTime: string
   estimatedMinutes: number
   status: string
+  kind: 'LEARN' | 'REVIEW' | 'REVISION'
+  note: string | null
   topic: { id: string; name: string } | null
   course: { id: string; title: string }
 }
+
+const KIND_LABEL = { LEARN: 'Learn', REVIEW: 'Review', REVISION: 'Final revision' } as const
 
 const CONFIDENCE_LABELS = [
   '1 — I do not understand it',
@@ -79,9 +83,10 @@ export default function TodayPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className={`text-xs font-semibold ${getSubjectColor(s.course.id).text}`}>{s.course.title}</p>
-                <h2 className="font-heading font-bold text-slate-900 mt-0.5">{s.topic?.name ?? 'Revision / buffer'}</h2>
+                <h2 className="font-heading font-bold text-slate-900 mt-0.5">{s.topic?.name ?? 'Revision'}</h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  {s.startTime}–{s.endTime} · {s.estimatedMinutes} min
+                  {KIND_LABEL[s.kind]} · {s.startTime}–{s.endTime} · {s.estimatedMinutes} min
+                  {s.note && <span className="text-amber-700"> · {s.note}</span>}
                 </p>
               </div>
               <span
@@ -111,9 +116,14 @@ export default function TodayPage() {
                   Mark complete
                 </button>
                 {s.topic && (
-                  <Link href={`/topics/${s.topic.id}/quiz`} className="btn-secondary">
-                    Take a self-quiz
-                  </Link>
+                  <>
+                    <Link href={`/topics/${s.topic.id}/learn`} className="btn-secondary">
+                      {s.kind === 'LEARN' ? 'Open lesson' : 'Revise lesson'}
+                    </Link>
+                    <Link href={`/topics/${s.topic.id}/quiz`} className="btn-secondary">
+                      Take a quiz
+                    </Link>
+                  </>
                 )}
               </div>
             )}

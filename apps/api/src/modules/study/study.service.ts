@@ -359,7 +359,10 @@ export class StudyService {
     const today = startOfDay(new Date())
 
     if (scorePercent < 50) {
-      // Poor score: book a revision session in the next available slot within the coming days
+      // Poor score: book a revision session in the next available slot — once, not on every retake
+      if (plan.sessions.some(s => s.kind === 'REVIEW' && s.note?.startsWith('Added after'))) {
+        return `You already have a revision session booked for ${topic.name}.`
+      }
       const slot = (await this.datedSlots(user, new Date(today.getTime() + 24 * 60 * 60 * 1000), plan.examDate))[0]
       if (!slot) return null
       await this.prisma.$transaction([

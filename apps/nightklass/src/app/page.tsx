@@ -54,7 +54,7 @@ const FEATURES: { text: string; soon?: boolean }[] = [
   { text: 'Track completion, weak areas and mastery per topic.' },
   { text: 'Ask AI anything about your course, even before you upload notes.' },
   { text: 'Course suggestions based on your department and level.' },
-  { text: 'Essay and structured questions with feedback.', soon: true },
+  { text: 'Essay, structured and calculation questions, marked with feedback.' },
   { text: 'Recommended videos and supplementary resources for every topic.' },
 ]
 
