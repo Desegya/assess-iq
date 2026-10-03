@@ -141,6 +141,17 @@ enum StudyPlanStatus {
   ABANDONED
 }
 
+enum PlanType {
+  EXAM_DATE
+  DURATION
+}
+
+enum SessionKind {
+  LEARN
+  REVIEW
+  REVISION
+}
+
 enum StudySessionStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -487,6 +498,7 @@ model Question {
   bloomLevel       BloomLevel?
   status           QuestionStatus     @default(DRAFT)
   isAiGenerated    Boolean            @default(false)
+  marks            Int?               // structured/essay questions: marks available
   aiGenerationId   String?            // AIUsageLog.id
   tags             String[]
   createdAt        DateTime           @default(now())
@@ -710,6 +722,11 @@ model StudyPlan {
   startDate DateTime        @default(now())
   status    StudyPlanStatus @default(ACTIVE)
   version   Int             @default(1)
+  // EXAM_DATE: plan runs to examDate; DURATION: a fixed 5/10/13-week (or custom) plan ending on examDate
+  planType  PlanType        @default(EXAM_DATE)
+  weeks     Int?
+  // [{ at, reason }] — every automatic or manual adjustment, shown to the student
+  changeLog Json            @default("[]")
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
@@ -733,6 +750,10 @@ model StudySession {
   scheduledDate    DateTime
   startTime        String
   endTime          String
+  kind             SessionKind         @default(LEARN)
+  weekNumber       Int?
+  // Why this session exists when it wasn't in the original plan, e.g. "Added after a 40% quiz"
+  note             String?
   estimatedMinutes Int
   actualMinutes    Int?
   status           StudySessionStatus  @default(NOT_STARTED)
@@ -772,6 +793,25 @@ model TopicMastery {
   @@unique([studentId, topicId])
   @@index([studentId])
   @@map("topic_masteries")
+}
+
+// ─── Self-quiz attempt ────────────────────────────────────────────────────────
+// A graded Nightklass self-quiz; drives adaptive difficulty, mastery history and exam readiness
+
+model SelfQuizAttempt {
+  id           String             @id @default(cuid())
+  studentId    String
+  topicId      String
+  courseId     String
+  difficulty   QuestionDifficulty
+  scorePercent Int
+  questionCount Int
+  results      Json
+  createdAt    DateTime           @default(now())
+
+  @@index([studentId, topicId])
+  @@index([courseId])
+  @@map("self_quiz_attempts")
 }
 
 // ─── GPA Entry ────────────────────────────────────────────────────────────────

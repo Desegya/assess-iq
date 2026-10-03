@@ -4,9 +4,11 @@ import { CoursesService } from '../courses/courses.service'
 import { TopicsService } from '../topics/topics.service'
 import { RetrievalService } from '../learning/retrieval.service'
 import { describeCourse, SEMESTER_LABEL } from '../courses/describe-course'
+import { buildPlan, type PlanTopic } from './plan-builder'
 import { extractTopicsHeuristically } from '../documents/topic-extraction-fallback'
 import {
   AiService,
+  type WrittenAnswerGrade,
   type RawGeneratedQuestion,
   type RawFlashcard,
   type RawSuggestedCourse,
@@ -24,8 +26,25 @@ import { ReviewFlashcardDto, type FlashcardRating } from './dto/review-flashcard
 import { ChatDto } from './dto/chat.dto'
 import { SuggestCoursesDto } from './dto/suggest-courses.dto'
 
-const DEFAULT_TOPIC_MINUTES = 45
 const WEAK_TOPIC_THRESHOLD = 60
+
+// Marks per question type: objective 1, short answer/calculation 2, structured/essay as generated (default 8)
+function defaultMarks(type: QuestionType, marks?: number | null): number {
+  if (type === QuestionType.THEORY) return marks && marks > 0 ? Math.min(marks, 20) : 8
+  if (type === QuestionType.SHORT_ANSWER) return 2
+  return 1
+}
+
+const DIFFICULTY_STEPS = ['EASY', 'MEDIUM', 'HARD'] as const
+
+// Adaptive difficulty: step up after 80%+, step down below 50%
+function recommendDifficulty(current: string, scorePercent: number | null): (typeof DIFFICULTY_STEPS)[number] {
+  const i = Math.max(0, DIFFICULTY_STEPS.indexOf(current as (typeof DIFFICULTY_STEPS)[number]))
+  if (scorePercent === null) return DIFFICULTY_STEPS[i]!
+  if (scorePercent >= 80) return DIFFICULTY_STEPS[Math.min(2, i + 1)]!
+  if (scorePercent < 50) return DIFFICULTY_STEPS[Math.max(0, i - 1)]!
+  return DIFFICULTY_STEPS[i]!
+}
 
 const RATING_QUALITY: Record<FlashcardRating, number> = { again: 2, hard: 3, good: 4, easy: 5 }
 
@@ -108,144 +127,136 @@ export class StudyService {
     return this.getAvailability(user)
   }
 
-  // ─── Plan generation ──────────────────────────────────────────────────────
+  // ─── Plan generation & adaptation ─────────────────────────────────────────
 
-  async generatePlan(dto: GeneratePlanDto, user: AuthUser) {
-    await this.coursesService.findOne(dto.courseId, user) // access check (throws if inaccessible)
-
-    const examDate = startOfDay(new Date(dto.examDate))
-    const today = startOfDay(new Date())
-    if (examDate <= today) {
-      throw new BadRequestException('Exam date must be in the future')
-    }
-
-    // Plan around top-level topics; subtopics are studied within their parent's sessions
-    const topics = await this.prisma.topic.findMany({
-      where: { courseId: dto.courseId, parentTopicId: null, archivedAt: null },
-      orderBy: { order: 'asc' },
-    })
-    if (topics.length === 0) {
-      throw new BadRequestException('This course has no topics yet — add topics before generating a plan')
-    }
-
-    const availability = await this.prisma.studyAvailability.findMany({
-      where: { studentId: user.id, active: true },
-    })
+  // Concrete dated slots from `from` up to (not including) `until`, following the weekly availability
+  private async datedSlots(user: AuthUser, from: Date, until: Date): Promise<DatedSlot[]> {
+    const availability = await this.prisma.studyAvailability.findMany({ where: { studentId: user.id, active: true } })
     if (availability.length === 0) {
       throw new BadRequestException('Set your weekly study availability before generating a plan')
     }
+    const byDay = new Map<number, (typeof availability)[number]>()
+    for (const slot of availability) if (!byDay.has(slot.dayOfWeek)) byDay.set(slot.dayOfWeek, slot)
 
-    const availabilityByDay = new Map<number, (typeof availability)[number]>()
-    for (const slot of availability) {
-      if (!availabilityByDay.has(slot.dayOfWeek)) availabilityByDay.set(slot.dayOfWeek, slot)
-    }
-
-    // Expand the availability pattern into concrete dated slots up to (not including) the exam date
-    const datedSlots: DatedSlot[] = []
-    for (const d = new Date(today); d < examDate; d.setUTCDate(d.getUTCDate() + 1)) {
-      const slot = availabilityByDay.get(d.getUTCDay())
+    const slots: DatedSlot[] = []
+    for (const d = new Date(from); d < until; d.setUTCDate(d.getUTCDate() + 1)) {
+      const slot = byDay.get(d.getUTCDay())
       if (!slot) continue
-      datedSlots.push({
+      slots.push({
         date: new Date(d),
         startTime: slot.startTime,
         endTime: slot.endTime,
         capacityMinutes: slot.maxMinutes ?? minutesBetween(slot.startTime, slot.endTime),
       })
     }
-    if (datedSlots.length === 0) {
+    return slots
+  }
+
+  // Everything the scheduler weighs per topic: size, quiz mastery, self-rated confidence, time already spent
+  private async planTopics(courseId: string, user: AuthUser): Promise<PlanTopic[]> {
+    const topics = await this.prisma.topic.findMany({
+      where: { courseId, parentTopicId: null, archivedAt: null },
+      orderBy: { order: 'asc' },
+      include: { subTopics: { where: { archivedAt: null }, select: { id: true } } },
+    })
+    const ids = topics.map(t => t.id)
+    const [masteries, completed] = await Promise.all([
+      this.prisma.topicMastery.findMany({ where: { studentId: user.id, topicId: { in: ids } } }),
+      this.prisma.studySession.findMany({
+        where: { studentId: user.id, topicId: { in: ids }, status: 'COMPLETED' },
+        select: { topicId: true, kind: true, actualMinutes: true, estimatedMinutes: true, confidenceRating: true },
+      }),
+    ])
+    return topics.map(t => {
+      const mine = completed.filter(s => s.topicId === t.id)
+      const ratings = mine.map(s => s.confidenceRating).filter((r): r is number => r != null)
+      const mastery = masteries.find(m => m.topicId === t.id)
+      return {
+        id: t.id,
+        name: t.name,
+        estimatedMinutes: t.estimatedMinutes,
+        subtopicCount: t.subTopics.length,
+        mastery: mastery?.quizAverage ?? null,
+        confidence: ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null,
+        completedMinutes: mine
+          .filter(s => s.kind === 'LEARN')
+          .reduce((sum, s) => sum + (s.actualMinutes ?? s.estimatedMinutes), 0),
+      }
+    })
+  }
+
+  async generatePlan(dto: GeneratePlanDto, user: AuthUser) {
+    await this.coursesService.findOne(dto.courseId, user) // access check (throws if inaccessible)
+
+    const today = startOfDay(new Date())
+    if (!dto.examDate && !dto.weeks) throw new BadRequestException('Choose an exam date or a plan length')
+    const end = dto.weeks
+      ? new Date(today.getTime() + dto.weeks * 7 * 24 * 60 * 60 * 1000)
+      : startOfDay(new Date(dto.examDate!))
+    if (end <= today) throw new BadRequestException('Exam date must be in the future')
+
+    const topics = await this.planTopics(dto.courseId, user)
+    if (topics.length === 0) {
+      throw new BadRequestException('This course has no topics yet — add topics before generating a plan')
+    }
+    const slots = await this.datedSlots(user, today, end)
+    if (slots.length === 0) {
       throw new BadRequestException(
         'No available study slots before the exam date — widen your availability or move the exam date',
       )
     }
 
-    // Reserve the last slot as revision/buffer, if there's more than one
-    const revisionSlot = datedSlots.length > 1 ? datedSlots.pop()! : undefined
-
-    const sessionsToCreate: {
-      scheduledDate: Date
-      startTime: string
-      endTime: string
-      estimatedMinutes: number
-      topicId: string | null
-    }[] = []
-
-    let slotIndex = 0
-    let remainingInSlot = datedSlots[0]?.capacityMinutes ?? 0
-
-    for (const topic of topics) {
-      let remainingForTopic = topic.estimatedMinutes ?? DEFAULT_TOPIC_MINUTES
-
-      while (remainingForTopic > 0 && slotIndex < datedSlots.length) {
-        if (remainingInSlot <= 0) {
-          slotIndex += 1
-          if (slotIndex >= datedSlots.length) break
-          remainingInSlot = datedSlots[slotIndex]!.capacityMinutes
-        }
-        const slot = datedSlots[slotIndex]!
-        const chunk = Math.min(remainingForTopic, remainingInSlot)
-        sessionsToCreate.push({
-          scheduledDate: slot.date,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          estimatedMinutes: chunk,
-          topicId: topic.id,
-        })
-        remainingForTopic -= chunk
-        remainingInSlot -= chunk
-      }
-      // Best-effort: if slots run out before all topics are placed, remaining topics are simply left unscheduled.
-    }
-
-    if (revisionSlot) {
-      sessionsToCreate.push({
-        scheduledDate: revisionSlot.date,
-        startTime: revisionSlot.startTime,
-        endTime: revisionSlot.endTime,
-        estimatedMinutes: revisionSlot.capacityMinutes,
-        topicId: null,
-      })
-    }
+    const built = buildPlan(topics, slots, { planStart: today, examDate: end })
 
     // A fresh plan supersedes any previous active plan for this course
     await this.prisma.studyPlan.updateMany({
       where: { studentId: user.id, courseId: dto.courseId, status: 'ACTIVE' },
       data: { status: 'ABANDONED' },
     })
-    const priorVersions = await this.prisma.studyPlan.count({
-      where: { studentId: user.id, courseId: dto.courseId },
-    })
+    const priorVersions = await this.prisma.studyPlan.count({ where: { studentId: user.id, courseId: dto.courseId } })
 
-    return this.prisma.studyPlan.create({
+    const notes = [
+      dto.weeks ? `${dto.weeks}-week plan created` : 'Plan created for your exam date',
+      built.scaledDown && 'Topics were shortened to fit your available time',
+      built.unscheduledTopics.length && `Not enough time for: ${built.unscheduledTopics.join(', ')}`,
+    ].filter(Boolean) as string[]
+
+    await this.prisma.studyPlan.create({
       data: {
         studentId: user.id,
         courseId: dto.courseId,
-        examDate,
+        examDate: end,
         status: 'ACTIVE',
         version: priorVersions + 1,
-        sessions: {
-          create: sessionsToCreate.map(s => ({
-            studentId: user.id,
-            courseId: dto.courseId,
-            topicId: s.topicId,
-            scheduledDate: s.scheduledDate,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            estimatedMinutes: s.estimatedMinutes,
-          })),
-        },
+        planType: dto.weeks ? 'DURATION' : 'EXAM_DATE',
+        weeks: dto.weeks ?? null,
+        changeLog: [{ at: new Date().toISOString(), reason: notes.join('. ') }],
+        sessions: { create: built.sessions.map(s => ({ ...s, studentId: user.id, courseId: dto.courseId })) },
       },
-      include: { sessions: { orderBy: { scheduledDate: 'asc' }, include: { topic: true } } },
     })
+    return this.getCurrentPlan(dto.courseId, user)
   }
 
   async getCurrentPlan(courseId: string, user: AuthUser) {
     const plan = await this.prisma.studyPlan.findFirst({
       where: { studentId: user.id, courseId, status: 'ACTIVE' },
       orderBy: { version: 'desc' },
-      include: { sessions: { orderBy: { scheduledDate: 'asc' }, include: { topic: true } } },
+      include: { sessions: { orderBy: [{ scheduledDate: 'asc' }, { kind: 'asc' }], include: { topic: true } } },
     })
     if (!plan) throw new NotFoundException('No active study plan for this course')
-    return plan
+
+    const today = startOfDay(new Date())
+    const latestRevision = await this.prisma.outlineRevision.findFirst({
+      where: { courseId },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    })
+    return {
+      ...plan,
+      missedCount: plan.sessions.filter(s => s.status === 'NOT_STARTED' && s.scheduledDate < today).length,
+      // The outline was edited after the plan was last (re)built, so sessions may not match the topics
+      outlineChanged: !!latestRevision && latestRevision.createdAt > plan.updatedAt,
+    }
   }
 
   // ─── Sessions ─────────────────────────────────────────────────────────────
@@ -288,114 +299,141 @@ export class StudyService {
     return updated
   }
 
-  async redistribute(planId: string, user: AuthUser) {
-    const plan = await this.prisma.studyPlan.findUnique({
-      where: { id: planId },
-      include: { sessions: true },
-    })
-    if (!plan || plan.studentId !== user.id) throw new NotFoundException('Study plan not found')
+  // Re-plans everything from today: missed sessions, quiz results, confidence, outline edits and exam proximity
+  async adaptPlan(planId: string, user: AuthUser, reason = 'Plan updated') {
+    const plan = await this.prisma.studyPlan.findUnique({ where: { id: planId }, include: { sessions: true } })
+    if (!plan || plan.studentId !== user.id || plan.status !== 'ACTIVE') throw new NotFoundException('Study plan not found')
 
     const today = startOfDay(new Date())
+    if (plan.examDate <= today) throw new BadRequestException('This plan has ended — create a new one')
+
     const missed = plan.sessions.filter(s => s.status === 'NOT_STARTED' && s.scheduledDate < today)
-    if (missed.length === 0) {
-      return { message: 'No missed sessions to redistribute', createdCount: 0 }
-    }
-
-    const availability = await this.prisma.studyAvailability.findMany({
-      where: { studentId: user.id, active: true },
-    })
-    const availabilityByDay = new Map<number, (typeof availability)[number]>()
-    for (const slot of availability) {
-      if (!availabilityByDay.has(slot.dayOfWeek)) availabilityByDay.set(slot.dayOfWeek, slot)
-    }
-
-    const lastScheduled = plan.sessions.reduce(
-      (max, s) => (s.scheduledDate > max ? s.scheduledDate : max),
-      today,
-    )
-    const cursor = new Date(lastScheduled)
-    cursor.setUTCDate(cursor.getUTCDate() + 1)
-
-    const newSessions: {
-      scheduledDate: Date
-      startTime: string
-      endTime: string
-      estimatedMinutes: number
-      topicId: string | null
-    }[] = []
-
-    for (const session of missed) {
-      let daysChecked = 0
-      while (!availabilityByDay.has(cursor.getUTCDay()) && daysChecked < 30) {
-        cursor.setUTCDate(cursor.getUTCDate() + 1)
-        daysChecked += 1
-      }
-      const slot = availabilityByDay.get(cursor.getUTCDay())
-      if (!slot) break // no availability configured — nothing more we can do
-
-      newSessions.push({
-        scheduledDate: new Date(cursor),
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        estimatedMinutes: session.estimatedMinutes,
-        topicId: session.topicId,
-      })
-      cursor.setUTCDate(cursor.getUTCDate() + 1)
-    }
-
-    await this.prisma.studySession.updateMany({
-      where: { id: { in: missed.map(m => m.id) } },
-      data: { status: 'RESCHEDULED' },
+    const upcoming = plan.sessions.filter(s => s.status === 'NOT_STARTED' && s.scheduledDate >= today)
+    const topics = await this.planTopics(plan.courseId, user)
+    const built = buildPlan(topics, await this.datedSlots(user, today, plan.examDate), {
+      planStart: plan.startDate,
+      examDate: plan.examDate,
     })
 
-    const created = await this.prisma.$transaction(
-      newSessions.map(s =>
+    const previousTopicIds = new Set(plan.sessions.map(s => s.topicId).filter(Boolean))
+    const added = topics.filter(t => !previousTopicIds.has(t.id) && built.sessions.some(s => s.topicId === t.id))
+    const weak = topics.filter(t => t.mastery !== null && t.mastery < 50)
+    const summary = [
+      reason,
+      missed.length && `rescheduled ${missed.length} missed session${missed.length === 1 ? '' : 's'}`,
+      added.length && `added ${added.map(t => t.name).join(', ')}`,
+      weak.length && `more time for ${weak.map(t => t.name).join(', ')}`,
+      built.scaledDown && 'shortened topics to fit the time left',
+    ].filter(Boolean) as string[]
+
+    await this.prisma.$transaction([
+      this.prisma.studySession.updateMany({ where: { id: { in: missed.map(s => s.id) } }, data: { status: 'MISSED' } }),
+      this.prisma.studySession.deleteMany({ where: { id: { in: upcoming.map(s => s.id) } } }),
+      this.prisma.studySession.createMany({
+        data: built.sessions.map(s => ({ ...s, studyPlanId: plan.id, studentId: user.id, courseId: plan.courseId })),
+      }),
+      this.prisma.studyPlan.update({
+        where: { id: plan.id },
+        data: {
+          changeLog: [...((plan.changeLog as object[]) ?? []), { at: new Date().toISOString(), reason: summary.join('; ') }],
+        },
+      }),
+    ])
+    return this.getCurrentPlan(plan.courseId, user)
+  }
+
+  // Kept for existing clients: rescheduling missed sessions is now part of adapting the plan
+  async redistribute(planId: string, user: AuthUser) {
+    return this.adaptPlan(planId, user, 'Rescheduled missed sessions')
+  }
+
+  // Small, immediate adjustments after a quiz (a full re-plan happens on adaptPlan)
+  private async adjustPlanAfterQuiz(topicId: string, courseId: string, scorePercent: number, user: AuthUser) {
+    const plan = await this.prisma.studyPlan.findFirst({
+      where: { studentId: user.id, courseId, status: 'ACTIVE' },
+      include: { sessions: { where: { topicId, status: 'NOT_STARTED' } } },
+    })
+    if (!plan) return null
+    const topic = await this.prisma.topic.findUniqueOrThrow({ where: { id: topicId } })
+    const log = (plan.changeLog as object[]) ?? []
+    const today = startOfDay(new Date())
+
+    if (scorePercent < 50) {
+      // Poor score: book a revision session in the next available slot within the coming days
+      const slot = (await this.datedSlots(user, new Date(today.getTime() + 24 * 60 * 60 * 1000), plan.examDate))[0]
+      if (!slot) return null
+      await this.prisma.$transaction([
         this.prisma.studySession.create({
           data: {
             studyPlanId: plan.id,
             studentId: user.id,
-            courseId: plan.courseId,
-            topicId: s.topicId,
-            scheduledDate: s.scheduledDate,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            estimatedMinutes: s.estimatedMinutes,
+            courseId,
+            topicId,
+            scheduledDate: slot.date,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            estimatedMinutes: 30,
+            kind: 'REVIEW',
+            note: `Added after a ${scorePercent}% quiz`,
+            weekNumber: Math.floor((slot.date.getTime() - plan.startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1,
           },
         }),
-      ),
-    )
+        this.prisma.studyPlan.update({
+          where: { id: plan.id },
+          data: { changeLog: [...log, { at: new Date().toISOString(), reason: `Added a revision session for ${topic.name} after a ${scorePercent}% quiz` }] },
+        }),
+      ])
+      return `We added a 30-minute revision session for ${topic.name} on ${slot.date.toDateString()}.`
+    }
 
-    return { message: `Redistributed ${created.length} missed session(s)`, sessions: created }
+    const upcomingReviews = plan.sessions.filter(s => s.kind === 'REVIEW')
+    if (scorePercent >= 85 && upcomingReviews.length > 0) {
+      // Strong score: drop the extra reviews for this topic and move faster
+      await this.prisma.$transaction([
+        this.prisma.studySession.deleteMany({ where: { id: { in: upcomingReviews.map(s => s.id) } } }),
+        this.prisma.studyPlan.update({
+          where: { id: plan.id },
+          data: { changeLog: [...log, { at: new Date().toISOString(), reason: `Skipped extra reviews for ${topic.name} after a ${scorePercent}% quiz` }] },
+        }),
+      ])
+      return `Great score — we freed up ${upcomingReviews.length * 20} minutes of review time for ${topic.name}.`
+    }
+    return null
   }
 
   // ─── Self-quizzes ─────────────────────────────────────────────────────────
 
   async generateQuiz(topicId: string, dto: GenerateQuizDto, user: AuthUser) {
-    const topic = await this.prisma.topic.findUnique({ where: { id: topicId } })
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      include: { subTopics: { where: { archivedAt: null }, select: { id: true, name: true } } },
+    })
     if (!topic) throw new NotFoundException('Topic not found')
     await this.coursesService.findOne(topic.courseId, user) // access check
+    const types = dto.types?.length ? dto.types : [QuestionType.MCQ, QuestionType.TRUE_FALSE]
 
-    // Prefer a ready, extracted document for this course as grounding; fall back to the topic itself
     // Ground in the passages of the student's material most relevant to this topic, if there are any
     const course = await this.prisma.course.findUniqueOrThrow({ where: { id: topic.courseId } })
-    const passages = await this.retrieval.retrieve(topic.courseId, `${topic.name}. ${topic.description ?? ''}`, user, {
+    const query = [topic.name, topic.description, ...topic.subTopics.map(t => t.name)].filter(Boolean).join('. ')
+    const passages = await this.retrieval.retrieve(topic.courseId, query, user, {
       k: 8,
-      topicIds: [topic.id],
+      topicIds: [topic.id, ...topic.subTopics.map(t => t.id)],
     })
     const doc = passages[0] ? { id: passages[0].documentId } : null
     const sourceText = passages.length
       ? passages.map(p => p.text).join('\n\n')
-      : `${describeCourse(course)}\nTopic: ${topic.name}${topic.description ? ` — ${topic.description}` : ''}`
+      : `${describeCourse(course)}\nTopic: ${topic.name}${topic.description ? ` — ${topic.description}` : ''}${
+          topic.subTopics.length ? `\nSubtopics: ${topic.subTopics.map(t => t.name).join('; ')}` : ''
+        }`
 
-    // Try AI generation first; fall back to a local question bank if AI is
-    // unavailable (no/invalid API key) or fails, so this never hard-blocks a
-    // student — it just quietly degrades until a real key is configured.
+    // Try AI generation first; fall back to a local question bank (objective questions only) if AI is
+    // unavailable or fails, so this never hard-blocks a student.
     let raw: RawGeneratedQuestion[]
     let isAiGenerated = true
     try {
       raw = await this.ai.generateQuestions(sourceText, {
         count: dto.count,
-        types: [QuestionType.MCQ, QuestionType.TRUE_FALSE],
+        types,
         difficulty: dto.difficulty,
         topicHint: topic.name,
         userId: user.id,
@@ -403,6 +441,8 @@ export class StudyService {
         documentId: doc?.id ?? topic.id,
         groundedInMaterial: !!doc,
       })
+      raw = raw.filter(q => types.includes(q.type as QuestionType) && q.questionText && q.correctAnswer)
+      if (raw.length === 0) throw new Error('No usable questions returned')
     } catch (err) {
       this.logger.warn(
         `AI quiz generation failed for topic ${topicId}, using fallback question bank: ${
@@ -443,6 +483,7 @@ export class StudyService {
             correctAnswer: q.correctAnswer,
             explanation: q.explanation ?? null,
             difficulty: dto.difficulty,
+            marks: defaultMarks(q.type as QuestionType, q.marks),
             status: 'APPROVED', // self-quizzes are student-initiated and formative — no teacher review needed
             isAiGenerated,
             tags: isAiGenerated ? ['nightklass-self-quiz'] : ['nightklass-self-quiz', 'fallback'],
@@ -460,54 +501,215 @@ export class StudyService {
       where: { id: { in: dto.answers.map(a => a.questionId) }, topicId, createdById: user.id },
     })
     if (questions.length === 0) throw new NotFoundException('Quiz questions not found')
+    const topic = await this.prisma.topic.findUniqueOrThrow({ where: { id: topicId } })
+    const course = await this.coursesService.findOne(topic.courseId, user)
 
     const byId = new Map(questions.map(q => [q.id, q]))
-    let gradable = 0
-    let correctCount = 0
+    const answerFor = new Map(dto.answers.map(a => [a.questionId, a]))
 
+    // Written answers are marked by AI in one batch; if that fails they're shown ungraded with the model answer
+    const written = questions.filter(q => q.questionType === 'SHORT_ANSWER' || q.questionType === 'THEORY')
+    let grades = new Map<string, WrittenAnswerGrade>()
+    let gradingFailed = false
+    if (written.length) {
+      try {
+        const graded = await this.ai.gradeWrittenAnswers(
+          written.map(q => ({
+            id: q.id,
+            type: q.questionType as 'SHORT_ANSWER' | 'THEORY',
+            question: q.questionText,
+            modelAnswer: [q.correctAnswer, q.explanation && `Model answer: ${q.explanation}`].filter(Boolean).join('\n'),
+            marks: defaultMarks(q.questionType as QuestionType, q.marks),
+            studentAnswer: answerFor.get(q.id)?.textAnswer ?? '',
+          })),
+          `COURSE: ${describeCourse(course)}\nTOPIC: ${topic.name}`,
+          { userId: user.id, organizationId: user.organizationId ?? undefined, relatedEntityId: topicId },
+        )
+        grades = new Map(graded.map(g => [g.id, g]))
+      } catch (err) {
+        gradingFailed = true
+        this.logger.warn(`AI grading failed for topic ${topicId}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+
+    let earned = 0
+    let possible = 0
     const results = dto.answers.map(a => {
       const q = byId.get(a.questionId)
-      if (!q) return { questionId: a.questionId, isCorrect: null, correctAnswer: null, explanation: null }
+      if (!q) return { questionId: a.questionId, isCorrect: null, score: null, maxScore: null, correctAnswer: null, explanation: null }
 
-      const isObjective = q.questionType === 'MCQ' || q.questionType === 'TRUE_FALSE'
-      const isCorrect = isObjective ? a.selectedAnswer === q.correctAnswer : null
-      if (isObjective) {
-        gradable += 1
-        if (isCorrect) correctCount += 1
+      const maxScore = defaultMarks(q.questionType as QuestionType, q.marks)
+      if (q.questionType === 'MCQ' || q.questionType === 'TRUE_FALSE') {
+        const isCorrect = a.selectedAnswer === q.correctAnswer
+        earned += isCorrect ? 1 : 0
+        possible += 1
+        return { questionId: q.id, isCorrect, score: isCorrect ? 1 : 0, maxScore, correctAnswer: q.correctAnswer, explanation: q.explanation }
       }
 
-      return { questionId: a.questionId, isCorrect, correctAnswer: q.correctAnswer, explanation: q.explanation }
+      const grade = grades.get(q.id)
+      if (grade) {
+        earned += grade.score
+        possible += maxScore
+      }
+      return {
+        questionId: q.id,
+        isCorrect: grade ? grade.score / maxScore >= 0.6 : null,
+        score: grade?.score ?? null,
+        maxScore,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        feedback: grade?.feedback ?? null,
+        missingPoints: grade?.missingPoints ?? [],
+      }
     })
 
-    const scorePercent = gradable > 0 ? Math.round((correctCount / gradable) * 100) : null
+    const scorePercent = possible > 0 ? Math.round((earned / possible) * 100) : null
+    let planMessage: string | null = null
+    let attemptId: string | null = null
 
     if (scorePercent !== null) {
       const existing = await this.prisma.topicMastery.findUnique({
         where: { studentId_topicId: { studentId: user.id, topicId } },
       })
+      // Recent quizzes count more than older ones
       const newAverage =
-        existing?.quizAverage != null ? Math.round((existing.quizAverage + scorePercent) / 2) : scorePercent
+        existing?.quizAverage != null ? Math.round(0.6 * scorePercent + 0.4 * existing.quizAverage) : scorePercent
 
       await this.prisma.topicMastery.upsert({
         where: { studentId_topicId: { studentId: user.id, topicId } },
-        create: {
+        create: { studentId: user.id, topicId, quizAverage: newAverage, masteryScore: newAverage, revisionCount: 1, lastAssessedAt: new Date() },
+        update: { quizAverage: newAverage, masteryScore: newAverage, revisionCount: { increment: 1 }, lastAssessedAt: new Date() },
+      })
+
+      const attempt = await this.prisma.selfQuizAttempt.create({
+        data: {
           studentId: user.id,
           topicId,
-          quizAverage: newAverage,
-          masteryScore: newAverage,
-          revisionCount: 1,
-          lastAssessedAt: new Date(),
+          courseId: topic.courseId,
+          difficulty: questions[0]!.difficulty,
+          scorePercent,
+          questionCount: questions.length,
+          results: results as object[],
         },
-        update: {
-          quizAverage: newAverage,
-          masteryScore: newAverage,
-          revisionCount: { increment: 1 },
-          lastAssessedAt: new Date(),
-        },
+      })
+      attemptId = attempt.id
+      planMessage = await this.adjustPlanAfterQuiz(topicId, topic.courseId, scorePercent, user).catch(err => {
+        this.logger.warn(`Plan adjustment after quiz failed: ${String(err)}`)
+        return null
       })
     }
 
-    return { scorePercent, results }
+    const difficulty = questions[0]!.difficulty
+    return {
+      attemptId,
+      scorePercent,
+      results,
+      gradingFailed,
+      mistakes: results.filter(r => r.isCorrect === false).length,
+      isWeak: scorePercent !== null && scorePercent < WEAK_TOPIC_THRESHOLD,
+      recommendedDifficulty: recommendDifficulty(difficulty, scorePercent),
+      planMessage,
+    }
+  }
+
+  async getQuizHistory(topicId: string, user: AuthUser) {
+    const topic = await this.prisma.topic.findUnique({ where: { id: topicId } })
+    if (!topic) throw new NotFoundException('Topic not found')
+    await this.coursesService.findOne(topic.courseId, user)
+    const attempts = await this.prisma.selfQuizAttempt.findMany({
+      where: { studentId: user.id, topicId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { id: true, difficulty: true, scorePercent: true, questionCount: true, createdAt: true },
+    })
+    const last = attempts[0]
+    return {
+      attempts,
+      recommendedDifficulty: last ? recommendDifficulty(last.difficulty, last.scorePercent) : 'EASY',
+    }
+  }
+
+  // Turns the questions a student got wrong into flashcards (spec §9: retention from weak areas)
+  async flashcardsFromAttempt(attemptId: string, user: AuthUser) {
+    const attempt = await this.prisma.selfQuizAttempt.findUnique({ where: { id: attemptId } })
+    if (!attempt || attempt.studentId !== user.id) throw new NotFoundException('Quiz attempt not found')
+    const wrong = (attempt.results as { questionId: string; isCorrect: boolean | null }[]).filter(r => r.isCorrect === false)
+    if (wrong.length === 0) return { created: 0 }
+
+    const questions = await this.prisma.question.findMany({ where: { id: { in: wrong.map(r => r.questionId) } } })
+    const cards = questions.map(q => {
+      const options = (q.options as { key: string; text: string }[] | null) ?? []
+      const answer = options.find(o => o.key === q.correctAnswer)?.text ?? q.correctAnswer
+      return {
+        organizationId: user.organizationId ?? null,
+        studentId: user.id,
+        topicId: attempt.topicId,
+        courseId: attempt.courseId,
+        front: q.questionText,
+        back: q.explanation && q.questionType !== 'THEORY' ? `${answer} — ${q.explanation}` : answer,
+      }
+    })
+    await this.prisma.flashcard.createMany({ data: cards })
+    return { created: cards.length }
+  }
+
+  // ─── Exam readiness ───────────────────────────────────────────────────────
+
+  // 0-100 readiness: quiz mastery (55%), topic coverage (30%) and flashcard retention (15%, when the student
+  // uses flashcards). Never-quizzed topics count as 0 mastery, so readiness only rises with real evidence.
+  async getReadiness(courseId: string, user: AuthUser) {
+    await this.coursesService.findOne(courseId, user)
+    const topics = await this.prisma.topic.findMany({
+      where: { courseId, parentTopicId: null, archivedAt: null },
+      orderBy: { order: 'asc' },
+      select: { id: true, name: true },
+    })
+    const ids = topics.map(t => t.id)
+    const [masteries, sessions, lessons, attempts, cards, plan] = await Promise.all([
+      this.prisma.topicMastery.findMany({ where: { studentId: user.id, topicId: { in: ids } } }),
+      this.prisma.studySession.findMany({
+        where: { studentId: user.id, topicId: { in: ids }, status: 'COMPLETED' },
+        select: { topicId: true },
+      }),
+      this.prisma.topicLesson.findMany({ where: { topicId: { in: ids } }, select: { topicId: true }, distinct: ['topicId'] }),
+      this.prisma.selfQuizAttempt.findMany({ where: { studentId: user.id, topicId: { in: ids } }, select: { topicId: true }, distinct: ['topicId'] }),
+      this.prisma.flashcard.findMany({ where: { studentId: user.id, courseId }, select: { dueDate: true, repetitions: true } }),
+      this.prisma.studyPlan.findFirst({ where: { studentId: user.id, courseId, status: 'ACTIVE' }, select: { examDate: true } }),
+    ])
+
+    const studied = new Set([...sessions.map(s => s.topicId), ...attempts.map(a => a.topicId)])
+    const opened = new Set(lessons.map(l => l.topicId))
+    const perTopic = topics.map(t => {
+      const mastery = masteries.find(m => m.topicId === t.id)?.quizAverage ?? null
+      const coverage = studied.has(t.id) ? 1 : opened.has(t.id) ? 0.5 : 0
+      const status =
+        mastery === null ? (coverage > 0 ? 'not-quizzed' : 'not-started') : mastery >= 80 ? 'strong' : mastery >= WEAK_TOPIC_THRESHOLD ? 'ok' : 'weak'
+      return { topicId: t.id, name: t.name, mastery, coverage, status }
+    })
+
+    const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0)
+    const masteryScore = avg(perTopic.map(t => t.mastery ?? 0))
+    const coverageScore = avg(perTopic.map(t => t.coverage)) * 100
+    const reviewed = cards.filter(c => c.repetitions > 0)
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000
+    const retentionScore = reviewed.length ? (reviewed.filter(c => c.dueDate.getTime() >= dayAgo).length / reviewed.length) * 100 : null
+
+    const score = Math.round(
+      retentionScore === null
+        ? (masteryScore * 0.55 + coverageScore * 0.3) / 0.85
+        : masteryScore * 0.55 + coverageScore * 0.3 + retentionScore * 0.15,
+    )
+    const label = score >= 85 ? 'Exam ready' : score >= 70 ? 'On track' : score >= 40 ? 'Getting there' : 'Not ready yet'
+
+    return {
+      score: topics.length ? score : 0,
+      label,
+      mastery: Math.round(masteryScore),
+      coverage: Math.round(coverageScore),
+      retention: retentionScore === null ? null : Math.round(retentionScore),
+      daysToExam: plan ? Math.max(0, Math.ceil((plan.examDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000))) : null,
+      topics: perTopic,
+    }
   }
 
   // ─── Weak topics ──────────────────────────────────────────────────────────

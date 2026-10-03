@@ -89,6 +89,18 @@ export class StudyController {
     return this.studyService.completeSession(id, dto, user)
   }
 
+  @Post('plans/:id/adapt')
+  @ApiOperation({ summary: 'Re-plan from today using missed sessions, quiz results, outline edits and exam proximity' })
+  adaptPlan(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.studyService.adaptPlan(id, user)
+  }
+
+  @Get('courses/:courseId/readiness')
+  @ApiOperation({ summary: 'Exam readiness score with per-topic mastery and coverage' })
+  getReadiness(@Param('courseId') courseId: string, @CurrentUser() user: AuthUser) {
+    return this.studyService.getReadiness(courseId, user)
+  }
+
   // ─── Self-quizzes ─────────────────────────────────────────────────────────
 
   @Post('topics/:topicId/quiz/generate')
@@ -109,6 +121,18 @@ export class StudyController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.studyService.submitQuiz(topicId, dto, user)
+  }
+
+  @Get('topics/:topicId/quiz/history')
+  @ApiOperation({ summary: 'Recent self-quiz attempts and the recommended next difficulty' })
+  getQuizHistory(@Param('topicId') topicId: string, @CurrentUser() user: AuthUser) {
+    return this.studyService.getQuizHistory(topicId, user)
+  }
+
+  @Post('quiz-attempts/:id/flashcards')
+  @ApiOperation({ summary: 'Create flashcards from the questions missed in a self-quiz attempt' })
+  flashcardsFromAttempt(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.studyService.flashcardsFromAttempt(id, user)
   }
 
   // ─── Weak topics ──────────────────────────────────────────────────────────

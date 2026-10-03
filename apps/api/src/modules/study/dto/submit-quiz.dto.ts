@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { ArrayMinSize, IsArray, IsOptional, IsString, ValidateNested } from 'class-validator'
+import { ArrayMinSize, IsArray, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 
 export class QuizAnswerDto {
@@ -11,6 +11,12 @@ export class QuizAnswerDto {
   @IsString()
   @IsOptional()
   selectedAnswer?: string
+
+  @ApiPropertyOptional({ description: 'Written answer for SHORT_ANSWER/THEORY questions' })
+  @IsString()
+  @MaxLength(6000)
+  @IsOptional()
+  textAnswer?: string
 }
 
 export class SubmitQuizDto {

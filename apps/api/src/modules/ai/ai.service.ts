@@ -11,6 +11,23 @@ export interface RawGeneratedQuestion {
   options?: { key: string; text: string }[]
   correctAnswer: string
   explanation?: string
+  marks?: number
+}
+
+export interface WrittenAnswerToGrade {
+  id: string
+  type: 'SHORT_ANSWER' | 'THEORY'
+  question: string
+  modelAnswer: string
+  marks: number
+  studentAnswer: string
+}
+
+export interface WrittenAnswerGrade {
+  id: string
+  score: number
+  feedback: string
+  missingPoints: string[]
 }
 
 export interface RawExtractedTopic {
@@ -126,6 +143,7 @@ type AiAction =
   | 'ANSWER_QUESTION'
   | 'EMBED_CONTENT'
   | 'RECOMMEND_RESOURCES'
+  | 'REVIEW_QUALITY'
 
 @Injectable()
 export class AiService {
@@ -442,6 +460,68 @@ ${videos.map(v => `${v.id} | ${v.title} | ${v.channel} | ${v.description.slice(0
     return this.parseJsonArray<string>(output).filter(id => typeof id === 'string')
   }
 
+  // ─── Grade written answers against model answers / marking schemes ────────
+
+  async gradeWrittenAnswers(
+    answers: WrittenAnswerToGrade[],
+    context: string,
+    opts: CourseGenerationOptions,
+  ): Promise<WrittenAnswerGrade[]> {
+    const prompt = `You are a fair, encouraging university examiner marking a student's self-test.
+
+${context}
+
+For each answer, award marks out of the maximum using the model answer or marking scheme:
+- Give credit for correct ideas expressed in different words; don't require exact wording
+- For calculations, give method marks for correct working even if the final value is wrong
+- Award 0 for blank, irrelevant or entirely wrong answers
+- feedback: 1-3 sentences to the student — what they got right, then what to fix
+- missingPoints: key points from the marking scheme the answer missed (empty if full marks)
+
+Respond with a JSON object containing "grades", one per answer, using the same ids.
+
+ANSWERS:
+${answers
+  .map(
+    a => `--- id: ${a.id} (${a.type === 'THEORY' ? 'structured/essay' : 'short answer'}, max ${a.marks} marks)
+QUESTION: ${a.question}
+MODEL ANSWER / MARKING SCHEME: ${a.modelAnswer}
+STUDENT ANSWER: ${a.studentAnswer.trim() || '(blank)'}`,
+  )
+  .join('\n\n')}`
+
+    const output = await this.complete(prompt, 3000, 'REVIEW_QUALITY', opts, undefined, {
+      name: 'grades',
+      schema: {
+        type: 'object',
+        properties: {
+          grades: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                score: { type: 'number' },
+                feedback: { type: 'string' },
+                missingPoints: { type: 'array', items: { type: 'string' } },
+              },
+              required: ['id', 'score', 'feedback', 'missingPoints'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['grades'],
+        additionalProperties: false,
+      },
+    })
+    const parsed = this.parseJsonObject<{ grades: WrittenAnswerGrade[] }>(output)
+    const max = new Map(answers.map(a => [a.id, a.marks]))
+    // Clamp scores to the valid range in case the model over- or under-shoots
+    return (parsed.grades ?? [])
+      .filter(g => max.has(g.id))
+      .map(g => ({ ...g, score: Math.min(max.get(g.id)!, Math.max(0, Math.round(g.score * 2) / 2)) }))
+  }
+
   // ─── Study chat — answer a question grounded in course material ───────────
 
   async chat(messages: ChatMessage[], systemContext: string, opts: ChatOptions): Promise<string> {
@@ -540,7 +620,9 @@ ${videos.map(v => `${v.id} | ${v.title} | ${v.channel} | ${v.description.slice(0
         if (t === QuestionType.TRUE_FALSE)
           return 'TRUE_FALSE (options: A=True, B=False)'
         if (t === QuestionType.SHORT_ANSWER)
-          return 'SHORT_ANSWER (brief written answer)'
+          return 'SHORT_ANSWER (brief written answer, or a calculation with a numeric answer where the topic involves calculation)'
+        if (t === QuestionType.THEORY)
+          return 'THEORY (a structured or essay question worth 5-10 marks, with a marking scheme)'
         return t
       })
       .join(', ')
@@ -556,7 +638,7 @@ Generate exactly ${opts.count} exam questions ${
         ? 'from the text below'
         : 'using your own knowledge of the course and topic described below, at the level a university student would be examined on'
     }.
-- Difficulty: ${opts.difficulty}
+- Difficulty: ${opts.difficulty} (EASY = recall and definitions, MEDIUM = understanding and application, HARD = analysis, multi-step problems and evaluation)
 - Question types to use: ${typeDescriptions}${opts.topicHint ? `\n- Focus on topic: ${opts.topicHint}` : ''}
 - Distribute question types roughly evenly across the types listed
 - Make questions clear, unambiguous, and ${grounded ? 'directly based on the text' : 'factually accurate'}
@@ -571,7 +653,10 @@ MCQ / TRUE_FALSE:
 {"type":"MCQ","questionText":"...","options":[{"key":"A","text":"..."},...],"correctAnswer":"A","explanation":"...","difficulty":"${opts.difficulty}"}
 
 SHORT_ANSWER:
-{"type":"SHORT_ANSWER","questionText":"...","correctAnswer":"...","explanation":"...","difficulty":"${opts.difficulty}"}
+{"type":"SHORT_ANSWER","questionText":"...","correctAnswer":"<model answer; for calculations the final value with units>","explanation":"<working or reasoning>","difficulty":"${opts.difficulty}"}
+
+THEORY:
+{"type":"THEORY","questionText":"<question; structured questions use parts (a), (b), (c) with marks in brackets>","correctAnswer":"<marking scheme: the points a full answer must make, with marks per point>","explanation":"<a model answer>","marks":8,"difficulty":"${opts.difficulty}"}
 
 ${grounded ? 'TEXT TO USE' : 'COURSE AND TOPIC'}:
 ${text}`
