@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { CreateCourseDto } from './dto/create-course.dto'
+import { UpdateCourseDto } from './dto/update-course.dto'
 
 @Injectable()
 export class CoursesService {
@@ -88,7 +89,7 @@ export class CoursesService {
     return course
   }
 
-  async update(id: string, dto: Partial<CreateCourseDto>, user: AuthUser) {
+  async update(id: string, dto: UpdateCourseDto, user: AuthUser) {
     const course = await this.findOne(id, user)
 
     const canEdit =
@@ -99,7 +100,24 @@ export class CoursesService {
 
     if (!canEdit) throw new ForbiddenException('You do not have permission to edit this course')
 
-    return this.prisma.course.update({ where: { id }, data: dto })
+    // Only course details are editable — never ownership or organisation. null (or "") clears optional fields.
+    const has = (key: keyof UpdateCourseDto) => Object.prototype.hasOwnProperty.call(dto, key)
+    return this.prisma.course.update({
+      where: { id },
+      data: {
+        ...(dto.title !== undefined && dto.title !== null && { title: dto.title.trim() }),
+        ...(dto.subject !== undefined && dto.subject !== null
+          ? { subject: dto.subject.trim() }
+          : // Student courses default subject to the title; keep it in step so AI context isn't stale
+            dto.title && course.subject === course.title && { subject: dto.title.trim() }),
+        ...(has('description') && { description: dto.description?.trim() || null }),
+        ...(has('courseCode') && { courseCode: dto.courseCode?.trim().toUpperCase() || null }),
+        ...(has('level') && { level: dto.level ?? null }),
+        ...(has('semester') && { semester: dto.semester ?? null }),
+        ...(has('creditUnits') && { creditUnits: dto.creditUnits ?? null }),
+        ...(dto.isCarryover !== undefined && dto.isCarryover !== null && { isCarryover: dto.isCarryover }),
+      },
+    })
   }
 
   async remove(id: string, user: AuthUser) {

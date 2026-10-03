@@ -45,7 +45,7 @@ Maps [01-product-vision.md](01-product-vision.md) and [02-onboarding-and-curricu
 - Admin dashboard to manage it; Edo State University pilot data entry.
 - Suggestion hierarchy goes live: institution data → national framework (CCMAS) → AI.
 
-## Phase 7 — Account integrity
+## Phase 7 — Account integrity ⏸ deferred until email is set up on the domain (OTP needs it)
 - Trusted devices (2–3), OTP for new devices, new-device alerts, device management in Settings, concurrent-session limits.
 
 ## Dependencies & open questions

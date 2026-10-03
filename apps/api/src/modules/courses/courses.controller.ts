@@ -12,6 +12,7 @@ import {
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger'
 import { CoursesService } from './courses.service'
 import { CreateCourseDto } from './dto/create-course.dto'
+import { UpdateCourseDto } from './dto/update-course.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Roles } from '../auth/decorators/roles.decorator'
 import { AuthUser, UserRole } from '@assessiq/types'
@@ -46,7 +47,7 @@ export class CoursesController {
   @ApiOperation({ summary: 'Update a course' })
   update(
     @Param('id') id: string,
-    @Body() dto: Partial<CreateCourseDto>,
+    @Body() dto: UpdateCourseDto,
     @CurrentUser() user: AuthUser,
   ) {
     return this.coursesService.update(id, dto, user)

@@ -9,6 +9,7 @@ import { SkeletonCard } from '@/components/ui/Skeleton'
 import { OutlineEditor } from '@/components/courses/OutlineEditor'
 import { OutlineInput } from '@/components/courses/OutlineInput'
 import { ProposalReview } from '@/components/courses/ProposalReview'
+import { EditCourseForm } from '@/components/courses/EditCourseForm'
 import type { ProposalSet, Topic, TopicProposal } from '@/components/courses/outline-types'
 
 interface Course {
@@ -19,6 +20,7 @@ interface Course {
   courseCode: string | null
   level: number | null
   semester: 'FIRST' | 'SECOND' | null
+  creditUnits: number | null
   isCarryover: boolean
   outlineText: string | null
   outlineSource: 'UPLOAD' | 'PASTE' | 'PHOTO' | null
@@ -79,6 +81,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
   const [arrivalBusy, setArrivalBusy] = useState<string | null>(null)
   const [arrivalError, setArrivalError] = useState<string | null>(null)
   const [showOriginal, setShowOriginal] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   const [uploadingNotes, setUploadingNotes] = useState(false)
   const [notesError, setNotesError] = useState<string | null>(null)
@@ -247,28 +250,45 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-slate-900">{course.title}</h1>
-          {course.subject !== course.title && <p className="text-slate-500 text-sm mt-1">{course.subject}</p>}
-          {(course.courseCode || course.level || course.semester || course.isCarryover) && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {course.courseCode && <span className={`badge ${color.bgSoft} ${color.text}`}>{course.courseCode}</span>}
-              {course.level && <span className="badge bg-slate-100 text-slate-600">{course.level}L</span>}
-              {course.semester && <span className="badge bg-slate-100 text-slate-600">{SEMESTER_LABEL[course.semester]}</span>}
-              {course.isCarryover && <span className="badge bg-amber-50 text-amber-700">Carryover</span>}
-            </div>
-          )}
-          {hasPlan && (
-            <Link href={`/courses/${id}/plan`} className="inline-block mt-3 text-sm text-blue-600 font-semibold">
-              View current study plan →
+      {editing ? (
+        <EditCourseForm
+          course={course}
+          onSaved={() => {
+            setEditing(false)
+            load()
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="font-heading text-2xl font-bold text-slate-900">{course.title}</h1>
+            {course.subject !== course.title && <p className="text-slate-500 text-sm mt-1">{course.subject}</p>}
+            {(course.courseCode || course.level || course.semester || course.creditUnits != null || course.isCarryover) && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {course.courseCode && <span className={`badge ${color.bgSoft} ${color.text}`}>{course.courseCode}</span>}
+                {course.level && <span className="badge bg-slate-100 text-slate-600">{course.level}L</span>}
+                {course.semester && <span className="badge bg-slate-100 text-slate-600">{SEMESTER_LABEL[course.semester]}</span>}
+                {course.creditUnits != null && <span className="badge bg-slate-100 text-slate-600">{course.creditUnits} units</span>}
+                {course.isCarryover && <span className="badge bg-amber-50 text-amber-700">Carryover</span>}
+              </div>
+            )}
+            {hasPlan && (
+              <Link href={`/courses/${id}/plan`} className="inline-block mt-3 text-sm text-blue-600 font-semibold">
+                View current study plan →
+              </Link>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => setEditing(true)} className="btn-secondary">
+              Edit course
+            </button>
+            <Link href={`/courses/${id}/chat`} className="btn-secondary">
+              💬 Ask AI
             </Link>
-          )}
+          </div>
         </div>
-        <Link href={`/courses/${id}/chat`} className="btn-secondary flex-shrink-0">
-          💬 Ask AI about this course
-        </Link>
-      </div>
+      )}
 
       {course.topics.some(t => !t.parentTopicId) && (
         <section className={`card p-6 ${color.bgSoft} ${color.border}`}>
