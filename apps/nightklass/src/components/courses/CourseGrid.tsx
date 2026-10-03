@@ -44,7 +44,7 @@ export function CourseGrid({
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <h2 className="font-heading font-bold text-slate-900 truncate">{course.title}</h2>
-                <p className="text-slate-500 text-sm mt-1">{course.subject}</p>
+                {course.subject !== course.title && <p className="text-slate-500 text-sm mt-1">{course.subject}</p>}
                 <div className="flex flex-wrap items-center gap-1.5 mt-2">
                   {course.courseCode && <span className={`badge ${color.bgSoft} ${color.text}`}>{course.courseCode}</span>}
                   {course.level && <span className="badge bg-slate-100 text-slate-600">{course.level}L</span>}

@@ -9,11 +9,12 @@ export class CreateCourseDto {
   @MaxLength(100)
   title!: string
 
-  @ApiProperty({ example: 'Biology' })
+  @ApiPropertyOptional({ example: 'Biology', description: 'Defaults to the course title when omitted' })
   @IsString()
   @MinLength(2)
   @MaxLength(100)
-  subject!: string
+  @IsOptional()
+  subject?: string
 
   @ApiPropertyOptional({ example: 'Senior Secondary Biology — WAEC syllabus' })
   @IsString()
@@ -37,4 +38,11 @@ export class CreateCourseDto {
   @IsEnum(Semester)
   @IsOptional()
   semester?: Semester
+
+  @ApiPropertyOptional({ example: 3, description: 'Credit units (0 for non-credit courses)' })
+  @IsInt()
+  @Min(0)
+  @Max(12)
+  @IsOptional()
+  creditUnits?: number
 }

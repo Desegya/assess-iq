@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use as usePromise } from 'react'
+import { useEffect, useRef, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useApi } from '@/hooks/use-api'
@@ -105,6 +105,26 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // Arriving from the New Course flow: ?generate=1 drafts an AI outline, ?outline=<docId> extracts topics from
+  // the uploaded outline. The ref stops React strict mode from firing the AI call twice.
+  const handledArrival = useRef(false)
+  useEffect(() => {
+    if (handledArrival.current) return
+    handledArrival.current = true
+    const params = new URLSearchParams(window.location.search)
+    const outline = params.get('outline')
+    if (!outline && !params.get('generate')) return
+    router.replace(`/courses/${id}`)
+    if (outline === 'failed') {
+      setUploadError("Your course is ready, but we couldn't read that outline. Try another file, or let AI suggest topics below.")
+    } else if (outline) {
+      void extractTopicsFrom(outline)
+    } else {
+      void handleSuggestTopics()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
   async function handleAddTopic(e: React.FormEvent) {
     e.preventDefault()
     setAddingTopic(true)
@@ -153,12 +173,15 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
   }
 
   async function handleExtractTopics() {
-    if (!readyDoc) return
+    if (readyDoc) await extractTopicsFrom(readyDoc.id)
+  }
+
+  async function extractTopicsFrom(documentId: string) {
     setExtractError(null)
     setExtracting(true)
     try {
       const result = await api.post<{ source: 'ai' | 'fallback'; proposals: TopicProposal[] }>(
-        `/documents/${readyDoc.id}/extract-topics`,
+        `/documents/${documentId}/extract-topics`,
         {},
       )
       setProposals(result.proposals)
@@ -270,7 +293,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="font-heading text-2xl font-bold text-slate-900">{course.title}</h1>
-          <p className="text-slate-500 text-sm mt-1">{course.subject}</p>
+          {course.subject !== course.title && <p className="text-slate-500 text-sm mt-1">{course.subject}</p>}
           {(course.courseCode || course.level || course.semester) && (
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
               {course.courseCode && <span className={`badge ${color.bgSoft} ${color.text}`}>{course.courseCode}</span>}
@@ -350,8 +373,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
         <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
           <h2 className="font-heading font-bold text-slate-900">Topics</h2>
           {!proposals && (
-            <button onClick={handleSuggestTopics} disabled={suggesting} className="btn-secondary text-sm">
-              {suggesting ? 'Suggesting topics…' : '✨ Suggest topics with AI'}
+            <button onClick={handleSuggestTopics} disabled={suggesting || extracting} className="btn-secondary text-sm">
+              {suggesting ? 'Suggesting topics…' : extracting ? 'Reading your outline…' : '✨ Suggest topics with AI'}
             </button>
           )}
         </div>

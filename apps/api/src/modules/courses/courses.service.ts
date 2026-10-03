@@ -17,11 +17,12 @@ export class CoursesService {
       return this.prisma.course.create({
         data: {
           title: dto.title,
-          subject: dto.subject,
+          subject: dto.subject ?? dto.title,
           description: dto.description,
           courseCode: dto.courseCode,
           level: dto.level,
           semester: dto.semester,
+          creditUnits: dto.creditUnits,
           ownerId: user.id,
         },
       })
@@ -34,10 +35,11 @@ export class CoursesService {
     return this.prisma.course.create({
       data: {
         title: dto.title,
-        subject: dto.subject,
+        subject: dto.subject ?? dto.title,
         description: dto.description,
         courseCode: dto.courseCode,
         level: dto.level,
+        creditUnits: dto.creditUnits,
         semester: dto.semester,
         organizationId: user.organizationId,
         teacherId: user.id,
