@@ -24,7 +24,8 @@ export function RegisterForm() {
   const [loading, setLoading] = useState(false)
 
   function set(field: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [field]: e.target.value }))
+    return (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((f) => ({ ...f, [field]: e.target.value }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -62,14 +63,24 @@ export function RegisterForm() {
   return (
     <div>
       <div className="mb-8">
-        <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[.12em] text-violet-700"><Icon name="spark" className="h-4 w-4" />Your study space</p>
+        <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[.12em] text-violet-700">
+          <Icon name="spark" className="h-4 w-4" />
+          Your study space
+        </p>
         <h1 className="font-heading text-2xl font-bold text-slate-900">Create your account</h1>
-        <p className="text-slate-500 text-sm mt-1.5">No school or organisation needed — just you and your goals.</p>
+        <p className="text-slate-500 text-sm mt-1.5">
+          No school or organisation needed — just you and your goals.
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
+          <div
+            role="alert"
+            className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3"
+          >
+            {error}
+          </div>
         )}
 
         <div>
@@ -141,7 +152,12 @@ export function RegisterForm() {
           />
         </div>
 
-        <button type="button" onClick={() => setShowPassword(value => !value)} aria-pressed={showPassword} className="inline-flex min-h-11 items-center gap-2 text-xs font-medium text-slate-500 hover:text-violet-700">
+        <button
+          type="button"
+          onClick={() => setShowPassword((value) => !value)}
+          aria-pressed={showPassword}
+          className="inline-flex min-h-11 items-center gap-2 text-xs font-medium text-slate-500 hover:text-violet-700"
+        >
           <Icon name={showPassword ? 'eyeOff' : 'eye'} className="h-4 w-4" />
           {showPassword ? 'Hide password' : 'Show password'}
         </button>
@@ -153,7 +169,10 @@ export function RegisterForm() {
 
       <p className="text-center text-sm text-slate-500 mt-6">
         Already have an account?{' '}
-        <a href="/login" className="text-violet-600 hover:text-violet-700 font-semibold transition-colors">
+        <a
+          href="/login"
+          className="text-violet-600 hover:text-violet-700 font-semibold transition-colors"
+        >
           Sign in
         </a>
       </p>

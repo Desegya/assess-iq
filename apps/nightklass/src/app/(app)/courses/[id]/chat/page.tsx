@@ -19,7 +19,7 @@ interface Message {
 
 const SUGGESTED_PROMPTS = [
   'What topics does this course usually cover?',
-  'Explain the hardest topic like I\'m in a hurry',
+  "Explain the hardest topic like I'm in a hurry",
   'Quiz me on the basics',
 ]
 
@@ -35,12 +35,19 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    api.get<Course>(`/courses/${id}`).then(setCourse).catch(() => undefined)
+    api
+      .get<Course>(`/courses/${id}`)
+      .then(setCourse)
+      .catch(() => undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+    bottomRef.current?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'instant'
+        : 'smooth',
+    })
   }, [messages])
 
   async function handleSend(e: React.FormEvent) {
@@ -50,16 +57,22 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
 
     setError(null)
     setInput('')
-    const history = messages.map(m => ({ role: m.role, content: m.content }))
-    setMessages(prev => [...prev, { role: 'user', content: message }])
+    const history = messages.map((m) => ({ role: m.role, content: m.content }))
+    setMessages((prev) => [...prev, { role: 'user', content: message }])
     setSending(true)
 
     try {
-      const result = await api.post<{ source: 'ai' | 'general' | 'fallback'; reply: string }>(`/study/courses/${id}/chat`, {
-        message,
-        history,
-      })
-      setMessages(prev => [...prev, { role: 'assistant', content: result.reply, source: result.source }])
+      const result = await api.post<{ source: 'ai' | 'general' | 'fallback'; reply: string }>(
+        `/study/courses/${id}/chat`,
+        {
+          message,
+          history,
+        },
+      )
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: result.reply, source: result.source },
+      ])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reach the study buddy')
     } finally {
@@ -75,7 +88,8 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
         </Link>
         <h1 className="font-heading text-2xl font-bold text-slate-900 mt-2">Ask AI</h1>
         <p className="text-slate-400 text-sm mt-1">
-          Answers use your uploaded materials when you have them, and general course knowledge when you don&apos;t.
+          Answers use your uploaded materials when you have them, and general course knowledge when
+          you don&apos;t.
         </p>
       </div>
 
@@ -84,9 +98,11 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
           <div className="py-6 text-center">
             <StudyArtwork variant="chat" className="mx-auto mb-4" />
             <h2 className="product-display !text-[34px]">Let’s work through it.</h2>
-            <p className="text-sm text-slate-500 mb-4">Not sure where to start? Try one of these:</p>
+            <p className="text-sm text-slate-500 mb-4">
+              Not sure where to start? Try one of these:
+            </p>
             <div className="flex flex-wrap justify-center gap-2">
-              {SUGGESTED_PROMPTS.map(p => (
+              {SUGGESTED_PROMPTS.map((p) => (
                 <button
                   key={p}
                   onClick={() => setInput(p)}
@@ -102,14 +118,20 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-[92%] sm:max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                m.role === 'user' ? 'bg-[#7545cf] text-white' : 'bg-white border border-slate-200 text-slate-800'
+                m.role === 'user'
+                  ? 'bg-[#7545cf] text-white'
+                  : 'bg-white border border-slate-200 text-slate-800'
               }`}
             >
               {m.role === 'assistant' && m.source === 'fallback' && (
-                <p className="text-xs text-amber-600 font-semibold mb-1">Basic search (AI unavailable)</p>
+                <p className="text-xs text-amber-600 font-semibold mb-1">
+                  Basic search (AI unavailable)
+                </p>
               )}
               {m.role === 'assistant' && m.source === 'general' && (
-                <p className="text-xs text-slate-400 font-semibold mb-1">From general knowledge, not your notes</p>
+                <p className="text-xs text-slate-400 font-semibold mb-1">
+                  From general knowledge, not your notes
+                </p>
               )}
               <p className="whitespace-pre-wrap break-words leading-relaxed">{m.content}</p>
             </div>
@@ -119,19 +141,32 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
         <div ref={bottomRef} />
       </div>
 
-      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-3">{error}</div>}
+      {error && (
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-3"
+        >
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSend} className="mt-4 flex items-center gap-2 rounded-2xl bg-white">
         <input
           aria-label="Ask a question about your course"
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about your course material…"
           disabled={sending}
           className="input-base flex-1"
         />
-        <button type="submit" disabled={sending || !input.trim()} aria-label="Send message" className="btn-primary flex-shrink-0">
-          <Icon name="arrow" /><span className="hidden sm:inline">Send</span>
+        <button
+          type="submit"
+          disabled={sending || !input.trim()}
+          aria-label="Send message"
+          className="btn-primary flex-shrink-0"
+        >
+          <Icon name="arrow" />
+          <span className="hidden sm:inline">Send</span>
         </button>
       </form>
     </div>

@@ -40,7 +40,8 @@ export function EditCourseForm({
   const [error, setError] = useState<string | null>(null)
 
   function set(field: 'courseCode' | 'title' | 'level' | 'semester' | 'creditUnits') {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm(f => ({ ...f, [field]: e.target.value }))
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [field]: e.target.value }))
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -85,45 +86,107 @@ export function EditCourseForm({
   return (
     <form onSubmit={handleSave} className="card p-6 space-y-4">
       <h2 className="font-heading font-bold text-slate-900">Edit course</h2>
-      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+      {error && (
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3"
+        >
+          {error}
+        </div>
+      )}
 
       <div className="grid sm:grid-cols-[140px_1fr] gap-3">
         <div>
-          <label htmlFor="courseCode" className="block text-sm font-medium text-slate-700 mb-1.5">Course code</label>
-          <input id="courseCode" value={form.courseCode} onChange={set('courseCode')} placeholder="BIO 223" maxLength={20} disabled={saving} className="input-base" />
+          <label htmlFor="courseCode" className="block text-sm font-medium text-slate-700 mb-1.5">
+            Course code
+          </label>
+          <input
+            id="courseCode"
+            value={form.courseCode}
+            onChange={set('courseCode')}
+            placeholder="BIO 223"
+            maxLength={20}
+            disabled={saving}
+            className="input-base"
+          />
         </div>
         <div>
-          <label htmlFor="title" className="block text-sm font-medium text-slate-700 mb-1.5">Course title</label>
-          <input id="title" required minLength={2} maxLength={100} value={form.title} onChange={set('title')} disabled={saving} className="input-base" />
+          <label htmlFor="title" className="block text-sm font-medium text-slate-700 mb-1.5">
+            Course title
+          </label>
+          <input
+            id="title"
+            required
+            minLength={2}
+            maxLength={100}
+            value={form.title}
+            onChange={set('title')}
+            disabled={saving}
+            className="input-base"
+          />
         </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
-          <label htmlFor="level" className="block text-sm font-medium text-slate-700 mb-1.5">Level</label>
-          <select id="level" value={form.level} onChange={set('level')} disabled={saving} className="input-base">
+          <label htmlFor="level" className="block text-sm font-medium text-slate-700 mb-1.5">
+            Level
+          </label>
+          <select
+            id="level"
+            value={form.level}
+            onChange={set('level')}
+            disabled={saving}
+            className="input-base"
+          >
             <option value="">Not set</option>
-            {LEVELS.map(l => (
-              <option key={l} value={l}>{l}L</option>
+            {LEVELS.map((l) => (
+              <option key={l} value={l}>
+                {l}L
+              </option>
             ))}
           </select>
         </div>
         <div>
-          <label htmlFor="semester" className="block text-sm font-medium text-slate-700 mb-1.5">Semester</label>
-          <select id="semester" value={form.semester} onChange={set('semester')} disabled={saving} className="input-base">
+          <label htmlFor="semester" className="block text-sm font-medium text-slate-700 mb-1.5">
+            Semester
+          </label>
+          <select
+            id="semester"
+            value={form.semester}
+            onChange={set('semester')}
+            disabled={saving}
+            className="input-base"
+          >
             <option value="">Not set</option>
             <option value="FIRST">First</option>
             <option value="SECOND">Second</option>
           </select>
         </div>
         <div className="col-span-2 sm:col-span-1">
-          <label htmlFor="creditUnits" className="block text-sm font-medium text-slate-700 mb-1.5">Credit units</label>
-          <input id="creditUnits" type="number" min={0} max={12} value={form.creditUnits} onChange={set('creditUnits')} disabled={saving} className="input-base" />
+          <label htmlFor="creditUnits" className="block text-sm font-medium text-slate-700 mb-1.5">
+            Credit units
+          </label>
+          <input
+            id="creditUnits"
+            type="number"
+            min={0}
+            max={12}
+            value={form.creditUnits}
+            onChange={set('creditUnits')}
+            disabled={saving}
+            className="input-base"
+          />
         </div>
       </div>
 
       <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-        <input type="checkbox" checked={form.isCarryover} onChange={e => setForm(f => ({ ...f, isCarryover: e.target.checked }))} disabled={saving} />
+        <input
+          type="checkbox"
+          checked={form.isCarryover}
+          onChange={(e) => setForm((f) => ({ ...f, isCarryover: e.target.checked }))}
+          disabled={saving}
+        />
         This is a carryover course
       </label>
 
@@ -131,11 +194,22 @@ export function EditCourseForm({
         <button type="submit" disabled={saving || deleting} className="btn-primary">
           {saving ? 'Saving…' : 'Save changes'}
         </button>
-        <button type="button" onClick={onCancel} disabled={saving || deleting} className="btn-secondary">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving || deleting}
+          className="btn-secondary"
+        >
           Cancel
         </button>
-        <button type="button" onClick={() => void handleDelete()} disabled={saving || deleting} className="ml-auto text-sm font-semibold text-red-500 hover:text-red-700">
-          <Icon name="close" className="mr-1 inline h-4 w-4" />{deleting ? 'Deleting…' : 'Delete course'}
+        <button
+          type="button"
+          onClick={() => void handleDelete()}
+          disabled={saving || deleting}
+          className="ml-auto text-sm font-semibold text-red-500 hover:text-red-700"
+        >
+          <Icon name="close" className="mr-1 inline h-4 w-4" />
+          {deleting ? 'Deleting…' : 'Delete course'}
         </button>
       </div>
     </form>

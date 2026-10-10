@@ -61,7 +61,9 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
     api
       .get<StudyPlan>(`/study/plans/current?courseId=${id}`)
       .then(setPlan)
-      .catch(err => setError(err instanceof Error ? err.message : 'No active study plan for this course'))
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : 'No active study plan for this course'),
+      )
   }
 
   useEffect(() => {
@@ -96,7 +98,9 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
     if (!plan || !examInput) return
     setSavingExam(true)
     try {
-      setPlan(await api.post<StudyPlan>(`/study/plans/${plan.id}/exam-date`, { examDate: examInput }))
+      setPlan(
+        await api.post<StudyPlan>(`/study/plans/${plan.id}/exam-date`, { examDate: examInput }),
+      )
       setExamInput(null)
       setShowHistory(true)
     } catch (err) {
@@ -109,7 +113,12 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
   if (error) {
     return (
       <div>
-        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4"
+        >
+          {error}
+        </div>
         <Link href={`/courses/${id}`} className="text-violet-600 text-sm font-semibold">
           ← Back to course
         </Link>
@@ -126,7 +135,9 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
     )
 
   const today = new Date().toISOString().slice(0, 10)
-  const visible = plan.sessions.filter(s => showPast || s.scheduledDate.slice(0, 10) >= today || s.status === 'NOT_STARTED')
+  const visible = plan.sessions.filter(
+    (s) => showPast || s.scheduledDate.slice(0, 10) >= today || s.status === 'NOT_STARTED',
+  )
   const hiddenPast = plan.sessions.length - visible.length
 
   // Group into weeks, then days
@@ -136,9 +147,14 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
     weeks.set(w, [...(weeks.get(w) ?? []), s])
   }
 
-  const done = plan.sessions.filter(s => s.status === 'COMPLETED').length
-  const total = plan.sessions.filter(s => s.status !== 'MISSED' && s.status !== 'RESCHEDULED').length
-  const daysLeft = Math.max(0, Math.ceil((new Date(plan.examDate).getTime() - Date.now()) / 86400000))
+  const done = plan.sessions.filter((s) => s.status === 'COMPLETED').length
+  const total = plan.sessions.filter(
+    (s) => s.status !== 'MISSED' && s.status !== 'RESCHEDULED',
+  ).length
+  const daysLeft = Math.max(
+    0,
+    Math.ceil((new Date(plan.examDate).getTime() - Date.now()) / 86400000),
+  )
   const history = [...(plan.changeLog ?? [])].reverse()
 
   return (
@@ -164,36 +180,78 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
       </div>
 
       <div className="rounded-2xl border border-[#e6d8fb] bg-[#f7f2ff] p-5">
-        <div className="mb-3 flex items-center justify-between gap-3"><p className="flex items-center gap-2 text-sm font-medium"><Icon name="calendar" className="h-4 w-4 text-violet-700" />Your progress</p><span className="text-xs text-violet-700">{done} of {total} sessions complete</span></div>
-        <div role="progressbar" aria-label="Study plan completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={total > 0 ? Math.round(done / total * 100) : 0} className="h-2 overflow-hidden rounded-full bg-[#e9dff7]"><div className="h-full rounded-full bg-[#9060cf]" style={{ width: `${total > 0 ? Math.min(100, done / total * 100) : 0}%` }} /></div>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <Icon name="calendar" className="h-4 w-4 text-violet-700" />
+            Your progress
+          </p>
+          <span className="text-xs text-violet-700">
+            {done} of {total} sessions complete
+          </span>
+        </div>
+        <div
+          role="progressbar"
+          aria-label="Study plan completion"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={total > 0 ? Math.round((done / total) * 100) : 0}
+          className="h-2 overflow-hidden rounded-full bg-[#e9dff7]"
+        >
+          <div
+            className="h-full rounded-full bg-[#9060cf]"
+            style={{ width: `${total > 0 ? Math.min(100, (done / total) * 100) : 0}%` }}
+          />
+        </div>
       </div>
       {examInput === null ? (
-        <div className={`rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap ${plan.planType === 'EXAM_DATE' ? 'bg-slate-50' : 'bg-violet-50 border border-violet-100'}`}>
-          <p className={`text-sm ${plan.planType === 'EXAM_DATE' ? 'text-slate-600' : 'text-violet-800'}`}>
+        <div
+          className={`rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap ${plan.planType === 'EXAM_DATE' ? 'bg-slate-50' : 'bg-violet-50 border border-violet-100'}`}
+        >
+          <p
+            className={`text-sm ${plan.planType === 'EXAM_DATE' ? 'text-slate-600' : 'text-violet-800'}`}
+          >
             {plan.planType === 'EXAM_DATE'
               ? 'Exam date moved? Update it and the rest of your plan shifts with it.'
               : 'No exam date yet. Add it when it’s announced and we’ll rework the plan to end at your exam, with revision before it.'}
           </p>
-          <button onClick={() => setExamInput(plan.planType === 'EXAM_DATE' ? plan.examDate.slice(0, 10) : '')} className="btn-secondary !py-2 !px-3 text-sm">
+          <button
+            onClick={() =>
+              setExamInput(plan.planType === 'EXAM_DATE' ? plan.examDate.slice(0, 10) : '')
+            }
+            className="btn-secondary !py-2 !px-3 text-sm"
+          >
             {plan.planType === 'EXAM_DATE' ? 'Change exam date' : 'Add exam date'}
           </button>
         </div>
       ) : (
-        <form onSubmit={handleSetExamDate} className="rounded-xl bg-violet-50 border border-violet-100 px-4 py-3 flex items-center gap-3 flex-wrap">
-          <label htmlFor="examDate" className="text-sm text-violet-800">Exam date</label>
+        <form
+          onSubmit={handleSetExamDate}
+          className="rounded-xl bg-violet-50 border border-violet-100 px-4 py-3 flex items-center gap-3 flex-wrap"
+        >
+          <label htmlFor="examDate" className="text-sm text-violet-800">
+            Exam date
+          </label>
           <input
             id="examDate"
             type="date"
             required
             min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
             value={examInput}
-            onChange={e => setExamInput(e.target.value)}
+            onChange={(e) => setExamInput(e.target.value)}
             className="input-base !w-auto !py-1.5"
           />
-          <button type="submit" disabled={savingExam || !examInput} className="btn-primary !py-2 !px-3 text-sm">
+          <button
+            type="submit"
+            disabled={savingExam || !examInput}
+            className="btn-primary !py-2 !px-3 text-sm"
+          >
             {savingExam ? 'Reworking plan…' : 'Save & update plan'}
           </button>
-          <button type="button" onClick={() => setExamInput(null)} className="text-sm text-slate-500">
+          <button
+            type="button"
+            onClick={() => setExamInput(null)}
+            className="text-sm text-slate-500"
+          >
             Cancel
           </button>
         </form>
@@ -207,7 +265,11 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
             {plan.outlineChanged && 'Your course outline changed since this plan was made. '}
             Nightklass can rework the rest of your plan around it.
           </p>
-          <button onClick={handleAdapt} disabled={adapting} className="btn-primary !py-2 !px-3 text-sm">
+          <button
+            onClick={handleAdapt}
+            disabled={adapting}
+            className="btn-primary !py-2 !px-3 text-sm"
+          >
             {adapting ? 'Updating…' : 'Rework my plan'}
           </button>
         </div>
@@ -215,7 +277,10 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
 
       {history.length > 0 && (
         <div>
-          <button onClick={() => setShowHistory(v => !v)} className="text-xs font-semibold text-slate-500 hover:text-violet-600">
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            className="text-xs font-semibold text-slate-500 hover:text-violet-600"
+          >
             {showHistory ? 'Hide' : 'What changed'} ({history.length})
           </button>
           {showHistory && (
@@ -223,7 +288,9 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
               {history.map((h, i) => (
                 <li key={i} className="flex justify-between gap-3 text-xs">
                   <span className="text-slate-700">{h.reason}</span>
-                  <span className="text-slate-400 flex-shrink-0">{new Date(h.at).toLocaleDateString()}</span>
+                  <span className="text-slate-400 flex-shrink-0">
+                    {new Date(h.at).toLocaleDateString()}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -232,21 +299,33 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
       )}
 
       {hiddenPast > 0 && (
-        <button onClick={() => setShowPast(v => !v)} className="text-xs font-semibold text-slate-500 hover:text-violet-600">
-          {showPast ? 'Hide past sessions' : `Show ${hiddenPast} past session${hiddenPast === 1 ? '' : 's'}`}
+        <button
+          onClick={() => setShowPast((v) => !v)}
+          className="text-xs font-semibold text-slate-500 hover:text-violet-600"
+        >
+          {showPast
+            ? 'Hide past sessions'
+            : `Show ${hiddenPast} past session${hiddenPast === 1 ? '' : 's'}`}
         </button>
       )}
 
       {[...weeks.entries()].map(([week, sessions]) => {
-        const topicNames = [...new Set(sessions.filter(s => s.kind === 'LEARN' && s.topic).map(s => s.topic!.name))]
-        const weekDone = sessions.filter(s => s.status === 'COMPLETED').length
+        const topicNames = [
+          ...new Set(
+            sessions.filter((s) => s.kind === 'LEARN' && s.topic).map((s) => s.topic!.name),
+          ),
+        ]
+        const weekDone = sessions.filter((s) => s.status === 'COMPLETED').length
         const byDate = new Map<string, Session[]>()
         for (const s of sessions) {
           const key = s.scheduledDate.slice(0, 10)
           byDate.set(key, [...(byDate.get(key) ?? []), s])
         }
         return (
-          <section key={week} className="relative rounded-[20px] border border-[#eae6ef] bg-white p-5 sm:p-6">
+          <section
+            key={week}
+            className="relative rounded-[20px] border border-[#eae6ef] bg-white p-5 sm:p-6"
+          >
             <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
               <h2 className="font-heading font-bold text-slate-900">Week {week}</h2>
               <span className="text-xs font-semibold text-slate-500">
@@ -256,24 +335,37 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
             <p className="text-xs text-slate-500 mb-4">
               {topicNames.length > 0
                 ? `Target: ${topicNames.join(', ')}`
-                : sessions.some(s => s.kind === 'REVISION')
+                : sessions.some((s) => s.kind === 'REVISION')
                   ? 'Target: final revision before the exam'
                   : 'Target: review earlier topics'}
             </p>
             <div className="space-y-4">
               {[...byDate.entries()].map(([date, daySessions]) => (
                 <div key={date}>
-                  <p className={`text-xs font-semibold mb-1.5 ${date === today ? 'text-violet-600' : 'text-slate-500'}`}>
+                  <p
+                    className={`text-xs font-semibold mb-1.5 ${date === today ? 'text-violet-600' : 'text-slate-500'}`}
+                  >
                     {date === today ? 'Today · ' : ''}
-                    {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                    {new Date(date).toLocaleDateString(undefined, {
+                      weekday: 'long',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
                   </p>
                   <ul className="space-y-2">
-                    {daySessions.map(s => (
-                      <li key={s.id} className="bg-slate-50 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                    {daySessions.map((s) => (
+                      <li
+                        key={s.id}
+                        className="bg-slate-50 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap"
+                      >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`badge !text-[10px] ${KIND_BADGE[s.kind].className}`}>{KIND_BADGE[s.kind].label}</span>
-                            <p className="text-sm font-medium text-slate-800">{s.topic?.name ?? 'Revision'}</p>
+                            <span className={`badge !text-[10px] ${KIND_BADGE[s.kind].className}`}>
+                              {KIND_BADGE[s.kind].label}
+                            </span>
+                            <p className="text-sm font-medium text-slate-800">
+                              {s.topic?.name ?? 'Revision'}
+                            </p>
                           </div>
                           <p className="text-xs text-slate-400 mt-1">
                             {s.startTime}–{s.endTime} · {s.estimatedMinutes} min
@@ -285,20 +377,31 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
                             <>
                               {s.topic && (
                                 <>
-                                  <Link href={`/topics/${s.topic.id}/learn`} className="compact-action text-xs text-violet-700 font-semibold">
+                                  <Link
+                                    href={`/topics/${s.topic.id}/learn`}
+                                    className="compact-action text-xs text-violet-700 font-semibold"
+                                  >
                                     {s.kind === 'LEARN' ? 'Learn' : 'Revise'}
                                   </Link>
-                                  <Link href={`/topics/${s.topic.id}/quiz`} className="compact-action text-xs text-violet-700 font-semibold">
+                                  <Link
+                                    href={`/topics/${s.topic.id}/quiz`}
+                                    className="compact-action text-xs text-violet-700 font-semibold"
+                                  >
                                     Quiz
                                   </Link>
                                 </>
                               )}
-                              <button onClick={() => handleComplete(s.id)} className="compact-action text-xs text-slate-500 font-semibold hover:text-emerald-700">
+                              <button
+                                onClick={() => handleComplete(s.id)}
+                                className="compact-action text-xs text-slate-500 font-semibold hover:text-emerald-700"
+                              >
                                 Done
                               </button>
                             </>
                           ) : (
-                            <span className={`badge ${STATUS_BADGE[s.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                            <span
+                              className={`badge ${STATUS_BADGE[s.status] ?? 'bg-slate-100 text-slate-600'}`}
+                            >
                               {s.status.replace('_', ' ').toLowerCase()}
                             </span>
                           )}

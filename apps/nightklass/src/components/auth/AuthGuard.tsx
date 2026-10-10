@@ -20,9 +20,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-[#fcfbfe] flex flex-col items-center justify-center gap-4">
         <Brand />
         <div className="flex items-center gap-2 mt-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-          <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-          <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div
+            className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce"
+            style={{ animationDelay: '0ms' }}
+          />
+          <div
+            className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce"
+            style={{ animationDelay: '150ms' }}
+          />
+          <div
+            className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce"
+            style={{ animationDelay: '300ms' }}
+          />
         </div>
       </div>
     )

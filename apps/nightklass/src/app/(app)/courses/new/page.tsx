@@ -64,10 +64,10 @@ export default function NewCoursePage() {
   useEffect(() => {
     api
       .get<AcademicProfile>('/users/me/profile')
-      .then(p => {
+      .then((p) => {
         setProfile(p)
         // Default new courses to the student's current level and semester
-        setForm(f => ({
+        setForm((f) => ({
           ...f,
           level: f.level || (p.currentLevel ? String(p.currentLevel) : ''),
           semester: f.semester || (p.currentSemester ?? ''),
@@ -83,7 +83,8 @@ export default function NewCoursePage() {
   const hasProfile = !!profile?.profileCompletedAt
 
   useEffect(() => {
-    if (path === 'programme' && hasProfile && suggestions === null && !suggesting) void loadSuggestions()
+    if (path === 'programme' && hasProfile && suggestions === null && !suggesting)
+      void loadSuggestions()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, hasProfile])
 
@@ -102,7 +103,7 @@ export default function NewCoursePage() {
   }
 
   function toggleSuggestion(i: number) {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(i)) next.delete(i)
       else next.add(i)
@@ -134,11 +135,13 @@ export default function NewCoursePage() {
 
   const parsed = parseCourseInput(form.course)
   // Spec §11: course level below the student's level suggests a carryover
-  const levelMismatch = !!profile?.currentLevel && !!form.level && Number(form.level) < profile.currentLevel
+  const levelMismatch =
+    !!profile?.currentLevel && !!form.level && Number(form.level) < profile.currentLevel
   const codeOnly = !!parsed.courseCode && parsed.title === parsed.courseCode
 
   function set(field: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm(f => ({ ...f, [field]: e.target.value }))
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [field]: e.target.value }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -159,13 +162,23 @@ export default function NewCoursePage() {
         const formData = new FormData()
         formData.append('file', file)
         formData.append('courseId', course.id)
-        const doc = await api.upload<{ id: string; status: string }>('/documents/upload', formData).catch(() => null)
+        const doc = await api
+          .upload<{ id: string; status: string }>('/documents/upload', formData)
+          .catch(() => null)
         // The course exists either way; the course page explains what to do if the file couldn't be read
-        router.push(doc?.status === 'READY' ? `/courses/${course.id}?outline=${doc.id}` : `/courses/${course.id}?outline=failed`)
+        router.push(
+          doc?.status === 'READY'
+            ? `/courses/${course.id}?outline=${doc.id}`
+            : `/courses/${course.id}?outline=failed`,
+        )
         return
       }
 
-      router.push(path === 'manual' && generateOutline ? `/courses/${course.id}?generate=1` : `/courses/${course.id}`)
+      router.push(
+        path === 'manual' && generateOutline
+          ? `/courses/${course.id}?generate=1`
+          : `/courses/${course.id}`,
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create course')
       setLoading(false)
@@ -175,7 +188,12 @@ export default function NewCoursePage() {
   if (!path) {
     return (
       <div className="mx-auto max-w-3xl">
-        <PageHeader title="Start with what you have." description="A course title, your programme, or an outline. Choose a starting point and we’ll help with the rest." eyebrow="Build your semester" icon="book" />
+        <PageHeader
+          title="Start with what you have."
+          description="A course title, your programme, or an outline. Choose a starting point and we’ll help with the rest."
+          eyebrow="Build your semester"
+          icon="book"
+        />
         <div className="grid gap-4 md:grid-cols-3">
           {PATHS.map((p) => (
             <button
@@ -185,7 +203,9 @@ export default function NewCoursePage() {
               className="group w-full rounded-[20px] border border-[#eae6ef] bg-white p-6 text-left flex flex-col items-start gap-5 transition-colors hover:bg-[#faf7ff] hover:border-[#bca0e6]"
             >
               <span className="w-12 h-12 rounded-2xl bg-violet-50 text-violet-700 flex items-center justify-center flex-shrink-0">
-                <Icon name={p.id === 'programme' ? 'user' : p.id === 'outline' ? 'upload' : 'book'} />
+                <Icon
+                  name={p.id === 'programme' ? 'user' : p.id === 'outline' ? 'upload' : 'book'}
+                />
               </span>
               <span className="min-w-0">
                 <span className="block font-heading font-bold text-slate-900">{p.title}</span>
@@ -195,7 +215,8 @@ export default function NewCoursePage() {
           ))}
         </div>
         <p className="text-xs text-slate-400 mt-5">
-          No syllabus? No problem. Nightklass can generate an editable course outline and study notes for you.
+          No syllabus? No problem. Nightklass can generate an editable course outline and study
+          notes for you.
         </p>
       </div>
     )
@@ -204,15 +225,22 @@ export default function NewCoursePage() {
   if (path === 'programme') {
     return (
       <div className="mx-auto max-w-3xl">
-        <button type="button" onClick={() => setPath(null)} className="text-sm text-violet-600 font-semibold">
+        <button
+          type="button"
+          onClick={() => setPath(null)}
+          className="text-sm text-violet-600 font-semibold"
+        >
           ← Other ways to add a course
         </button>
-        <h1 className="font-heading text-2xl font-bold text-slate-900 mt-2">Choose from my programme</h1>
+        <h1 className="font-heading text-2xl font-bold text-slate-900 mt-2">
+          Choose from my programme
+        </h1>
 
         {profile && !hasProfile && (
           <div className="card p-6 mt-6">
             <p className="text-sm text-slate-600">
-              Tell us your programme, level and semester first, and we&apos;ll suggest the courses you&apos;re likely taking.
+              Tell us your programme, level and semester first, and we&apos;ll suggest the courses
+              you&apos;re likely taking.
             </p>
             <Link href="/onboarding" className="btn-primary inline-flex mt-4">
               Set up my profile
@@ -224,16 +252,28 @@ export default function NewCoursePage() {
           <>
             <p className="text-sm font-semibold text-violet-600 mt-1">{profileSummary(profile!)}</p>
             <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 mt-4">
-              AI suggestions based on courses commonly taken in your programme, not your school&apos;s official list. Course
-              codes may differ at your school. Untick anything you&apos;re not taking.
+              AI suggestions based on courses commonly taken in your programme, not your
+              school&apos;s official list. Course codes may differ at your school. Untick anything
+              you&apos;re not taking.
             </p>
 
-            {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mt-4">{error}</div>}
+            {error && (
+              <div
+                role="alert"
+                className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mt-4"
+              >
+                {error}
+              </div>
+            )}
 
-            {suggesting && <p className="text-sm text-slate-400 mt-6">Finding courses for your programme…</p>}
+            {suggesting && (
+              <p className="text-sm text-slate-400 mt-6">Finding courses for your programme…</p>
+            )}
 
             {suggestions && suggestions.length === 0 && (
-              <p className="text-sm text-slate-500 mt-6">No new suggestions. You may already have them all.</p>
+              <p className="text-sm text-slate-500 mt-6">
+                No new suggestions. You may already have them all.
+              </p>
             )}
 
             {suggestions && suggestions.length > 0 && (
@@ -241,14 +281,25 @@ export default function NewCoursePage() {
                 {suggestions.map((c, i) => (
                   <li key={i}>
                     <label className="flex items-center gap-3 px-5 py-3.5 cursor-pointer hover:bg-slate-50">
-                      <input type="checkbox" checked={selected.has(i)} onChange={() => toggleSuggestion(i)} disabled={loading} />
+                      <input
+                        type="checkbox"
+                        checked={selected.has(i)}
+                        onChange={() => toggleSuggestion(i)}
+                        disabled={loading}
+                      />
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm font-semibold text-slate-800">
-                          {c.courseCode && <span className="text-violet-600 mr-1.5">{c.courseCode}</span>}
+                          {c.courseCode && (
+                            <span className="text-violet-600 mr-1.5">{c.courseCode}</span>
+                          )}
                           {c.title}
                         </span>
                       </span>
-                      {c.creditUnits != null && <span className="text-xs text-slate-400 flex-shrink-0">{c.creditUnits} units</span>}
+                      {c.creditUnits != null && (
+                        <span className="text-xs text-slate-400 flex-shrink-0">
+                          {c.creditUnits} units
+                        </span>
+                      )}
                     </label>
                   </li>
                 ))}
@@ -257,15 +308,31 @@ export default function NewCoursePage() {
 
             <div className="flex flex-wrap items-center gap-3 mt-5">
               {suggestions && suggestions.length > 0 && (
-                <button onClick={handleAddSuggestions} disabled={loading || selected.size === 0} className="btn-primary">
-                  {loading ? 'Adding courses…' : `Add ${selected.size} course${selected.size === 1 ? '' : 's'}`}
+                <button
+                  onClick={handleAddSuggestions}
+                  disabled={loading || selected.size === 0}
+                  className="btn-primary"
+                >
+                  {loading
+                    ? 'Adding courses…'
+                    : `Add ${selected.size} course${selected.size === 1 ? '' : 's'}`}
                 </button>
               )}
-              <button type="button" onClick={() => setPath('manual')} disabled={loading} className="btn-secondary">
+              <button
+                type="button"
+                onClick={() => setPath('manual')}
+                disabled={loading}
+                className="btn-secondary"
+              >
                 Add a course that&apos;s not listed
               </button>
               {suggestions && (
-                <button type="button" onClick={() => void loadSuggestions()} disabled={loading || suggesting} className="text-sm text-violet-600 font-semibold">
+                <button
+                  type="button"
+                  onClick={() => void loadSuggestions()}
+                  disabled={loading || suggesting}
+                  className="text-sm text-violet-600 font-semibold"
+                >
                   Suggest again
                 </button>
               )}
@@ -281,14 +348,25 @@ export default function NewCoursePage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <button type="button" onClick={() => setPath(null)} className="text-sm text-violet-600 font-semibold">
+      <button
+        type="button"
+        onClick={() => setPath(null)}
+        className="text-sm text-violet-600 font-semibold"
+      >
         ← Other ways to add a course
       </button>
       <h1 className="font-heading text-2xl font-bold text-slate-900 mt-2 mb-6">
         {path === 'outline' ? 'Upload a course outline' : 'Add a course'}
       </h1>
       <form onSubmit={handleSubmit} className="card p-6 sm:p-8 space-y-5">
-        {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+        {error && (
+          <div
+            role="alert"
+            className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3"
+          >
+            {error}
+          </div>
+        )}
 
         <div>
           <label htmlFor="course" className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -305,7 +383,10 @@ export default function NewCoursePage() {
             className="input-base"
           />
           {codeOnly ? (
-            <p className="text-xs text-amber-700 mt-1.5">Add the course title too (e.g. {parsed.courseCode} Biostatistics) for better topic suggestions.</p>
+            <p className="text-xs text-amber-700 mt-1.5">
+              Add the course title too (e.g. {parsed.courseCode} Biostatistics) for better topic
+              suggestions.
+            </p>
           ) : parsed.courseCode ? (
             <p className="text-xs text-slate-400 mt-1.5">
               Code <span className="font-semibold text-slate-600">{parsed.courseCode}</span> · Title{' '}
@@ -316,10 +397,19 @@ export default function NewCoursePage() {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
-            <label htmlFor="level" className="block text-sm font-medium text-slate-700 mb-1.5">Level</label>
-            <select id="level" required value={form.level} onChange={set('level')} disabled={loading} className="input-base">
+            <label htmlFor="level" className="block text-sm font-medium text-slate-700 mb-1.5">
+              Level
+            </label>
+            <select
+              id="level"
+              required
+              value={form.level}
+              onChange={set('level')}
+              disabled={loading}
+              className="input-base"
+            >
               <option value="">Select</option>
-              {LEVELS.map(l => (
+              {LEVELS.map((l) => (
                 <option key={l} value={l}>
                   {l}L
                 </option>
@@ -327,15 +417,27 @@ export default function NewCoursePage() {
             </select>
           </div>
           <div>
-            <label htmlFor="semester" className="block text-sm font-medium text-slate-700 mb-1.5">Semester</label>
-            <select id="semester" required value={form.semester} onChange={set('semester')} disabled={loading} className="input-base">
+            <label htmlFor="semester" className="block text-sm font-medium text-slate-700 mb-1.5">
+              Semester
+            </label>
+            <select
+              id="semester"
+              required
+              value={form.semester}
+              onChange={set('semester')}
+              disabled={loading}
+              className="input-base"
+            >
               <option value="">Select</option>
               <option value="FIRST">First</option>
               <option value="SECOND">Second</option>
             </select>
           </div>
           <div className="col-span-2 sm:col-span-1">
-            <label htmlFor="creditUnits" className="block text-sm font-medium text-slate-700 mb-1.5">
+            <label
+              htmlFor="creditUnits"
+              className="block text-sm font-medium text-slate-700 mb-1.5"
+            >
               Credit units <span className="text-slate-400 font-normal">(optional)</span>
             </label>
             <input
@@ -357,14 +459,17 @@ export default function NewCoursePage() {
             <input
               type="checkbox"
               checked={isCarryover}
-              onChange={e => setIsCarryover(e.target.checked)}
+              onChange={(e) => setIsCarryover(e.target.checked)}
               disabled={loading}
               className="mt-0.5"
             />
             <span>
-              <span className="block text-sm font-semibold text-slate-800">Is this a carryover course?</span>
+              <span className="block text-sm font-semibold text-slate-800">
+                Is this a carryover course?
+              </span>
               <span className="block text-xs text-slate-500 mt-0.5">
-                You&apos;re in {profile!.currentLevel} Level and this is a {form.level} Level course.
+                You&apos;re in {profile!.currentLevel} Level and this is a {form.level} Level
+                course.
               </span>
             </span>
           </label>
@@ -375,14 +480,17 @@ export default function NewCoursePage() {
             <input
               type="checkbox"
               checked={generateOutline}
-              onChange={e => setGenerateOutline(e.target.checked)}
+              onChange={(e) => setGenerateOutline(e.target.checked)}
               disabled={loading}
               className="mt-0.5"
             />
             <span>
-              <span className="block text-sm font-semibold text-slate-800">Generate a topic outline with AI</span>
+              <span className="block text-sm font-semibold text-slate-800">
+                Generate a topic outline with AI
+              </span>
               <span className="block text-xs text-slate-500 mt-0.5">
-                We&apos;ll suggest the topics this course usually covers. You review and edit them before anything is added.
+                We&apos;ll suggest the topics this course usually covers. You review and edit them
+                before anything is added.
               </span>
             </span>
           </label>
@@ -390,23 +498,30 @@ export default function NewCoursePage() {
 
         {path === 'outline' && (
           <div>
-            <label htmlFor="outline" className="block text-sm font-medium text-slate-700 mb-1.5">Course outline</label>
+            <label htmlFor="outline" className="block text-sm font-medium text-slate-700 mb-1.5">
+              Course outline
+            </label>
             <input
               id="outline"
               type="file"
               accept=".pdf,.doc,.docx,.pptx,.txt"
-              onChange={e => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               disabled={loading}
               className="text-sm"
             />
             <p className="text-xs text-slate-400 mt-1.5">
-              PDF, Word, PowerPoint or text. Only have a printout? Skip this and take a photo or paste it on the next screen.
+              PDF, Word, PowerPoint or text. Only have a printout? Skip this and take a photo or
+              paste it on the next screen.
             </p>
           </div>
         )}
 
         <button type="submit" disabled={loading} className="btn-primary w-full">
-          {loading ? (path === 'outline' ? 'Creating & reading your outline…' : 'Creating…') : 'Create course'}
+          {loading
+            ? path === 'outline'
+              ? 'Creating & reading your outline…'
+              : 'Creating…'
+            : 'Create course'}
         </button>
       </form>
     </div>

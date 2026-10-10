@@ -39,7 +39,7 @@ export default function OnboardingPage() {
   useEffect(() => {
     api
       .get<AcademicProfile>('/users/me/profile')
-      .then(p => {
+      .then((p) => {
         if (!p.profileCompletedAt) return
         setIsEdit(true)
         setForm({
@@ -60,7 +60,8 @@ export default function OnboardingPage() {
   }, [])
 
   function set(field: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm(f => ({ ...f, [field]: e.target.value }))
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [field]: e.target.value }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -101,10 +102,23 @@ export default function OnboardingPage() {
 
       <div className="mb-6 flex items-center gap-4 rounded-2xl border border-[#e9def8] bg-[#f7f2ff] px-5 py-4">
         <StudyArtwork className="hidden !w-28 shrink-0 sm:block" />
-        <div><p className="text-sm font-semibold">A semester that fits you.</p><p className="mt-1 text-xs leading-relaxed text-slate-500">Your programme and level help us suggest a starting point. You can always add and edit your own courses.</p></div>
+        <div>
+          <p className="text-sm font-semibold">A semester that fits you.</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+            Your programme and level help us suggest a starting point. You can always add and edit
+            your own courses.
+          </p>
+        </div>
       </div>
       <form onSubmit={handleSubmit} className="card p-6 sm:p-8 space-y-5">
-        {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+        {error && (
+          <div
+            role="alert"
+            className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3"
+          >
+            {error}
+          </div>
+        )}
 
         <div>
           <label htmlFor="programme" className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -124,10 +138,22 @@ export default function OnboardingPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="currentLevel" className="block text-sm font-medium text-slate-700 mb-1.5">Current level</label>
-            <select id="currentLevel" required value={form.currentLevel} onChange={set('currentLevel')} disabled={saving} className="input-base">
+            <label
+              htmlFor="currentLevel"
+              className="block text-sm font-medium text-slate-700 mb-1.5"
+            >
+              Current level
+            </label>
+            <select
+              id="currentLevel"
+              required
+              value={form.currentLevel}
+              onChange={set('currentLevel')}
+              disabled={saving}
+              className="input-base"
+            >
               <option value="">Select</option>
-              {LEVELS.map(l => (
+              {LEVELS.map((l) => (
                 <option key={l} value={l}>
                   {l} Level
                 </option>
@@ -135,10 +161,22 @@ export default function OnboardingPage() {
             </select>
           </div>
           <div>
-            <label htmlFor="currentSemester" className="block text-sm font-medium text-slate-700 mb-1.5">Current semester</label>
-            <select id="currentSemester" required value={form.currentSemester} onChange={set('currentSemester')} disabled={saving} className="input-base">
+            <label
+              htmlFor="currentSemester"
+              className="block text-sm font-medium text-slate-700 mb-1.5"
+            >
+              Current semester
+            </label>
+            <select
+              id="currentSemester"
+              required
+              value={form.currentSemester}
+              onChange={set('currentSemester')}
+              disabled={saving}
+              className="input-base"
+            >
               <option value="">Select</option>
-              {(Object.keys(SEMESTER_LABEL) as Semester[]).map(s => (
+              {(Object.keys(SEMESTER_LABEL) as Semester[]).map((s) => (
                 <option key={s} value={s}>
                   {SEMESTER_LABEL[s]}
                 </option>
@@ -149,9 +187,21 @@ export default function OnboardingPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="institutionType" className="block text-sm font-medium text-slate-700 mb-1.5">Institution type</label>
-            <select id="institutionType" required value={form.institutionType} onChange={set('institutionType')} disabled={saving} className="input-base">
-              {(Object.keys(INSTITUTION_TYPE_LABEL) as InstitutionType[]).map(t => (
+            <label
+              htmlFor="institutionType"
+              className="block text-sm font-medium text-slate-700 mb-1.5"
+            >
+              Institution type
+            </label>
+            <select
+              id="institutionType"
+              required
+              value={form.institutionType}
+              onChange={set('institutionType')}
+              disabled={saving}
+              className="input-base"
+            >
+              {(Object.keys(INSTITUTION_TYPE_LABEL) as InstitutionType[]).map((t) => (
                 <option key={t} value={t}>
                   {INSTITUTION_TYPE_LABEL[t]}
                 </option>
@@ -159,33 +209,85 @@ export default function OnboardingPage() {
             </select>
           </div>
           <div>
-            <label htmlFor="country" className="block text-sm font-medium text-slate-700 mb-1.5">Country</label>
-            <input id="country" required minLength={2} value={form.country} onChange={set('country')} disabled={saving} className="input-base" />
+            <label htmlFor="country" className="block text-sm font-medium text-slate-700 mb-1.5">
+              Country
+            </label>
+            <input
+              id="country"
+              required
+              minLength={2}
+              value={form.country}
+              onChange={set('country')}
+              disabled={saving}
+              className="input-base"
+            />
           </div>
         </div>
 
         {!showMore ? (
-          <button type="button" onClick={() => setShowMore(true)} className="text-sm text-violet-600 font-semibold">
+          <button
+            type="button"
+            onClick={() => setShowMore(true)}
+            className="text-sm text-violet-600 font-semibold"
+          >
             + Add your school and faculty (optional, for better suggestions)
           </button>
         ) : (
           <div className="pt-2 border-t border-slate-100 space-y-3">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Optional</p>
             <div>
-              <label htmlFor="institution" className="block text-sm font-medium text-slate-700 mb-1.5">Institution</label>
-              <input id="institution" value={form.institution} onChange={set('institution')} placeholder="Edo State University" disabled={saving} className="input-base" />
+              <label
+                htmlFor="institution"
+                className="block text-sm font-medium text-slate-700 mb-1.5"
+              >
+                Institution
+              </label>
+              <input
+                id="institution"
+                value={form.institution}
+                onChange={set('institution')}
+                placeholder="Edo State University"
+                disabled={saving}
+                className="input-base"
+              />
             </div>
             <div>
-              <label htmlFor="faculty" className="block text-sm font-medium text-slate-700 mb-1.5">Faculty</label>
-              <input id="faculty" value={form.faculty} onChange={set('faculty')} placeholder="Faculty of Science" disabled={saving} className="input-base" />
+              <label htmlFor="faculty" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Faculty
+              </label>
+              <input
+                id="faculty"
+                value={form.faculty}
+                onChange={set('faculty')}
+                placeholder="Faculty of Science"
+                disabled={saving}
+                className="input-base"
+              />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="academicSession" className="block text-sm font-medium text-slate-700 mb-1.5">Academic session</label>
-                <input id="academicSession" value={form.academicSession} onChange={set('academicSession')} placeholder="2026/2027" disabled={saving} className="input-base" />
+                <label
+                  htmlFor="academicSession"
+                  className="block text-sm font-medium text-slate-700 mb-1.5"
+                >
+                  Academic session
+                </label>
+                <input
+                  id="academicSession"
+                  value={form.academicSession}
+                  onChange={set('academicSession')}
+                  placeholder="2026/2027"
+                  disabled={saving}
+                  className="input-base"
+                />
               </div>
               <div>
-                <label htmlFor="graduationYear" className="block text-sm font-medium text-slate-700 mb-1.5">Graduation year</label>
+                <label
+                  htmlFor="graduationYear"
+                  className="block text-sm font-medium text-slate-700 mb-1.5"
+                >
+                  Graduation year
+                </label>
                 <input
                   id="graduationYear"
                   type="number"
