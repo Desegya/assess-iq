@@ -2,6 +2,8 @@
 
 import { useState, use as usePromise, useEffect } from 'react'
 import Link from 'next/link'
+import { PageHeader } from '@/components/product/PageHeader'
+import { Icon } from '@/components/product/Icon'
 import { useApi } from '@/hooks/use-api'
 import { ProgressRing } from '@/components/ui/ProgressRing'
 import { celebrate } from '@/lib/celebrate'
@@ -155,11 +157,8 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   const score = result?.scorePercent
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="font-heading text-2xl font-bold text-slate-900 mb-1">Quiz</h1>
-      <p className="text-slate-500 text-sm mb-6">
-        Scored to track your mastery and weak areas. Just for you, never shared with your school.
-      </p>
+    <div className="mx-auto max-w-3xl">
+      <PageHeader title="See what you know." description="Test your understanding, spot what needs another pass, and get feedback. Your scores stay yours." eyebrow="Practice, not pressure" icon="target" />
 
       {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-6">{error}</div>}
 
@@ -167,11 +166,12 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
         <div className="card p-6 space-y-5">
           <div>
             <p className="text-sm font-medium text-slate-700 mb-2">Level</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {DIFFICULTIES.map(d => (
                 <button
                   key={d.value}
                   type="button"
+                  aria-pressed={difficulty === d.value}
                   onClick={() => setDifficulty(d.value)}
                   className={`rounded-xl px-3 py-2.5 text-left border-2 transition-colors ${
                     difficulty === d.value ? 'border-violet-500 bg-violet-50' : 'border-slate-100 hover:border-slate-200'
@@ -196,6 +196,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                 <button
                   key={f.id}
                   type="button"
+                  aria-pressed={formats.has(f.id)}
                   onClick={() => toggleFormat(f.id)}
                   className={`text-xs font-semibold rounded-xl px-3 py-2 transition-colors ${
                     formats.has(f.id) ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -216,14 +217,14 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
           </div>
 
           <button onClick={() => void handleGenerate()} disabled={loading} className="btn-primary w-full">
-            {loading ? 'Writing your quiz…' : 'Start quiz'}
+            <Icon name="target" />{loading ? 'Writing your quiz…' : 'Start quiz'}
           </button>
         </div>
       )}
 
       {questions && !result && (
         <div className="space-y-4">
-          <div className="flex items-center justify-center gap-1.5">
+          <div aria-label={`${answeredCount} of ${questions.length} questions answered`} className="flex flex-wrap items-center justify-center gap-1.5">
             {questions.map((q, i) => (
               <span
                 key={q.id}
@@ -241,7 +242,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
           {questions.map((q, i) => (
             <div key={q.id} className="card p-6">
               <div className="flex items-start justify-between gap-3 mb-3">
-                <p className="text-sm font-medium text-slate-800 whitespace-pre-wrap">
+                <p className="text-base font-medium leading-relaxed text-slate-800 whitespace-pre-wrap">
                   {i + 1}. {q.questionText}
                 </p>
                 {q.questionType === 'THEORY' && q.marks && (
@@ -262,7 +263,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                   {(q.options ?? []).map(opt => (
                     <label
                       key={opt.key}
-                      className={`flex items-center gap-2 text-sm text-slate-700 rounded-xl px-3 py-2 border-2 cursor-pointer transition-colors ${
+                      className={`flex items-center gap-2 text-sm text-slate-700 rounded-xl px-4 py-3 min-h-12 border cursor-pointer transition-colors ${
                         answers[q.id] === opt.key ? 'border-violet-400 bg-violet-50' : 'border-transparent hover:bg-slate-50'
                       }`}
                     >
@@ -298,7 +299,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                     percent={score}
                     size={96}
                     strokeWidth={8}
-                    color={score >= 70 ? '#84cc16' : score >= 40 ? '#f59e0b' : '#f43f5e'}
+                    color={score >= 70 ? '#16a34a' : score >= 40 ? '#f59e0b' : '#f43f5e'}
                     label={<span className="font-heading text-2xl font-bold text-slate-900">{score}%</span>}
                   />
                 </div>
@@ -319,7 +320,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
               <p className="text-xs text-amber-700 mt-2">We couldn&apos;t mark the written answers right now. Compare yours with the model answers below.</p>
             )}
             {result.planMessage && (
-              <p className="text-xs text-violet-700 bg-violet-50 rounded-lg px-3 py-2 mt-4">📅 {result.planMessage}</p>
+              <p className="text-xs text-violet-700 bg-violet-50 rounded-lg px-3 py-2 mt-4"><span className="inline-flex items-center gap-2"><Icon name="calendar" className="h-4 w-4" />{result.planMessage}</span></p>
             )}
             <div className="flex flex-wrap justify-center gap-2 mt-5">
               {result.isWeak && (
@@ -354,7 +355,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
             return (
               <div key={q.id} className="card p-6">
                 <div className="flex items-start justify-between gap-3 mb-2">
-                  <p className="text-sm font-medium text-slate-800 whitespace-pre-wrap">
+                  <p className="text-base font-medium leading-relaxed text-slate-800 whitespace-pre-wrap">
                     {i + 1}. {q.questionText}
                   </p>
                   {r?.score != null && r.maxScore != null && isWritten(q.questionType) && (

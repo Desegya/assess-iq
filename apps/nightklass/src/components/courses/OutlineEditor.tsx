@@ -201,8 +201,8 @@ export function OutlineEditor({
           const children = childrenOf(topic.id)
           return (
             <li key={topic.id} className="bg-slate-50 rounded-xl px-4 py-3">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="min-w-0 flex-1">
+              <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:flex-wrap">
+                <div className="w-full min-w-0 flex-1 sm:w-auto">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold text-slate-400">{i + 1}.</span>
                     {renderName(topic, 'text-sm font-semibold text-slate-800')}

@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { Icon } from '@/components/product/Icon'
 import { useApi } from '@/hooks/use-api'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -61,7 +63,7 @@ export default function FlashcardsPage() {
   if (error) return <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
   if (cards === null)
     return (
-      <div className="max-w-lg space-y-3">
+      <div className="mx-auto max-w-2xl space-y-3">
         <Skeleton className="h-56 w-full rounded-3xl" />
         <Skeleton className="h-11 w-full" />
       </div>
@@ -71,24 +73,28 @@ export default function FlashcardsPage() {
 
   if (!card) {
     return (
-      <div className="max-w-lg">
+      <div className="mx-auto max-w-2xl">
         <EmptyState
           illustration="celebrate"
           title={reviewedCount > 0 ? `Nice — you reviewed ${reviewedCount} card${reviewedCount === 1 ? '' : 's'}` : 'All caught up'}
           subtitle="Generate more from a topic on your course page, or check back later."
+          action={<Link href="/courses" className="btn-primary"><Icon name="book" />Explore your courses</Link>}
         />
       </div>
     )
   }
 
   return (
-    <div className="max-w-lg">
+    <div className="mx-auto max-w-2xl">
+      <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[.12em] text-violet-700"><Icon name="cards" className="h-4 w-4" />A little practice that sticks</p>
       <div className="flex items-center justify-between mb-4">
         <h1 className="font-heading text-2xl font-bold text-slate-900">Flashcards</h1>
         <span className="text-sm text-slate-400">
           {index + 1} / {cards.length}
         </span>
       </div>
+
+      <div role="progressbar" aria-label="Flashcard review progress" aria-valuemin={0} aria-valuemax={cards.length} aria-valuenow={index} className="mb-6 h-1.5 overflow-hidden rounded-full bg-[#e9dff7]"><div className="h-full bg-[#9060cf]" style={{ width: `${index / cards.length * 100}%` }} /></div>
 
       {(card.course || card.topic) && (
         <p className="text-xs text-violet-600 font-semibold mb-2">
@@ -97,13 +103,15 @@ export default function FlashcardsPage() {
         </p>
       )}
 
-      <div className="flip-scene min-h-[220px]" onClick={() => setFlipped(f => !f)}>
-        <div className={`flip-card cursor-pointer w-full h-[220px] ${flipped ? 'is-flipped' : ''}`}>
-          <div className="flip-face card w-full h-full p-10 flex items-center justify-center text-center absolute inset-0">
-            <p className="text-lg font-medium text-slate-900">{card.front}</p>
+      <div className="flip-scene min-h-[320px] rounded-[20px]" role="button" tabIndex={0} aria-label={flipped ? 'Show question' : 'Reveal answer'} onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFlipped(f => !f) }
+      }} onClick={() => setFlipped(f => !f)}>
+        <div className={`flip-card cursor-pointer w-full h-[320px] ${flipped ? 'is-flipped' : ''}`}>
+          <div aria-hidden={flipped} className="flip-face card w-full h-full p-6 sm:p-10 overflow-y-auto flex items-center justify-center text-center absolute inset-0">
+            <p className="max-h-full text-lg font-medium leading-relaxed text-slate-900">{card.front}</p>
           </div>
-          <div className="flip-face flip-face-back card w-full h-full p-10 flex items-center justify-center text-center bg-gradient-to-br from-violet-50 to-cyan-50">
-            <p className="text-lg font-medium text-slate-900">{card.back}</p>
+          <div aria-hidden={!flipped} className="flip-face flip-face-back card w-full h-full p-6 sm:p-10 overflow-y-auto flex items-center justify-center text-center !bg-[#f7f2ff]">
+            <p className="max-h-full text-lg font-medium leading-relaxed text-slate-900">{card.back}</p>
           </div>
         </div>
       </div>
@@ -113,13 +121,13 @@ export default function FlashcardsPage() {
           Show answer
         </button>
       ) : (
-        <div className="grid grid-cols-4 gap-2 mt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
           {RATING_BUTTONS.map(b => (
             <button
               key={b.rating}
               disabled={submitting}
               onClick={() => handleRate(b.rating)}
-              className={`py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60 ${b.className}`}
+              className={`min-h-11 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60 ${b.className}`}
             >
               {b.label}
             </button>

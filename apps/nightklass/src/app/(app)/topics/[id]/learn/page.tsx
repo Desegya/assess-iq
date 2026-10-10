@@ -3,6 +3,8 @@
 import { useEffect, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
+import { Icon } from '@/components/product/Icon'
+import { StudyArtwork } from '@/components/product/StudyArtwork'
 import { useApi } from '@/hooks/use-api'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 
@@ -102,7 +104,7 @@ function Md({ children }: { children: string }) {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="card p-6">
+    <section id={`lesson-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className="lesson-section scroll-mt-24">
       <h2 className="font-heading font-bold text-slate-900 mb-3">{title}</h2>
       <div className="text-sm text-slate-700 leading-relaxed">{children}</div>
     </section>
@@ -152,7 +154,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
       setPanel(null)
       setFeedback('')
       await load()
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate the lesson')
     } finally {
@@ -187,6 +189,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
             key={m}
             type="button"
             disabled={disabled || generating}
+            aria-pressed={mode === m}
             onClick={() => setMode(m)}
             title={disabled ? 'Upload notes for this course first' : undefined}
             className={`text-xs font-semibold rounded-xl px-3 py-2 transition-colors disabled:opacity-40 ${
@@ -204,7 +207,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
   const latest = data?.versions[0]
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="mx-auto max-w-4xl space-y-6">
       <div>
         {data && (
           <Link href={`/courses/${data.topic.courseId}`} className="text-sm text-violet-600 font-semibold">
@@ -221,7 +224,8 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
       {notice && <div className="bg-violet-50 border border-violet-100 text-violet-800 text-sm rounded-xl px-4 py-3">{notice}</div>}
 
       {data && !lesson && (
-        <section className="card p-6">
+        <section className="relative overflow-hidden rounded-[20px] border border-[#e6d8fb] bg-[#f7f2ff] p-6 lg:pr-[230px]">
+          <StudyArtwork className="absolute bottom-5 right-4 hidden !w-48 lg:block" />
           <h2 className="font-heading font-bold text-slate-900">Your lesson for this topic</h2>
           <p className="text-sm text-slate-500 mt-1 mb-4">
             Objectives, detailed explanations, worked examples, key terms, a summary and likely exam questions.
@@ -248,13 +252,13 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
           </div>
 
           {data && data.versions.length > 1 && (
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <label htmlFor="version" className="text-slate-500">Version</label>
               <select
                 id="version"
                 value={lesson.id}
                 onChange={e => void showVersion(e.target.value)}
-                className="input-base !py-1 !w-auto text-xs"
+                className="input-base !py-1 !w-auto max-w-full text-xs"
               >
                 {data.versions.map(v => (
                   <option key={v.id} value={v.id}>
@@ -266,6 +270,13 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
             </div>
           )}
 
+          <nav aria-label="Lesson contents" className="rounded-2xl border border-[#eae6ef] bg-white p-5">
+            <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-500"><Icon name="book" className="h-4 w-4 text-violet-700" />In this lesson</p>
+            <div className="flex flex-wrap gap-x-5 gap-y-1">
+              {["What you'll learn", ...c.sections.map((section, index) => `${index + 1}. ${section.heading}`), ...(c.workedExamples.length ? ['Worked examples'] : []), ...(c.keyTerms.length ? ['Key terms'] : []), 'Summary'].map(title => <a key={title} href={`#lesson-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className="inline-flex min-h-11 items-center text-xs font-medium text-violet-700 hover:underline">{title}</a>)}
+            </div>
+          </nav>
+          <div className="rounded-[20px] border border-[#eae6ef] bg-white px-5 sm:px-8 lg:px-10">
           <Card title="What you'll learn">
             <ul className="list-disc pl-5 space-y-1 mb-4">
               {c.objectives.map((o, i) => (
@@ -378,9 +389,11 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
             </Card>
           )}
 
+          </div>
+
           <div className="flex items-center gap-3 flex-wrap">
             <Link href={`/topics/${id}/quiz`} className="btn-primary">
-              Quiz me on this
+              <Icon name="target" />Quiz me on this
             </Link>
             <button onClick={() => setPanel(panel === 'regenerate' ? null : 'regenerate')} className="btn-secondary">
               Regenerate

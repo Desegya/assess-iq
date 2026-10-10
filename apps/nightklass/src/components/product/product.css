@@ -8,7 +8,7 @@
   min-height: 100dvh;
 }
 .nk-product .font-heading { font-family: var(--product-sans), sans-serif; }
-.nk-product h1, .nk-product .product-display {
+.nk-product h1, .nk-product h1.font-heading, .nk-product .product-display {
   font-family: var(--product-serif), Georgia, serif;
   font-weight: 400;
   font-size: clamp(2.25rem, 3.8vw, 3.25rem);

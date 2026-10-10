@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { PageHeader } from '@/components/product/PageHeader'
+import { Icon } from '@/components/product/Icon'
 import { useApi } from '@/hooks/use-api'
 import { ProgressRing } from '@/components/ui/ProgressRing'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -123,26 +125,12 @@ export default function GpaPage() {
   }, [Math.round(cgpa * 100)])
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-slate-900">GPA calculator</h1>
-          <p className="text-slate-500 text-sm mt-1">Log your grades and watch your CGPA update as you go.</p>
+    <div className="space-y-6">
+      <PageHeader title="Your progress, in perspective." description="Keep your grades together and see how each semester adds up." eyebrow="GPA & grades" icon="chart" action={
+        <div className="inline-flex rounded-xl border border-[#eae6ef] bg-white p-1">
+          {(['FIVE', 'FOUR'] as Scale[]).map(s => <button key={s} aria-pressed={scale === s} onClick={() => setScale(s)} className={`min-h-11 rounded-lg px-4 text-xs font-medium transition-colors ${scale === s ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}>{s === 'FIVE' ? '5.0 scale' : '4.0 scale'}</button>)}
         </div>
-        <div className="inline-flex bg-slate-100 rounded-xl p-1">
-          {(['FIVE', 'FOUR'] as Scale[]).map(s => (
-            <button
-              key={s}
-              onClick={() => setScale(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                scale === s ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-500'
-              }`}
-            >
-              {s === 'FIVE' ? '5.0 scale' : '4.0 scale'}
-            </button>
-          ))}
-        </div>
-      </div>
+      } />
 
       {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
 
@@ -156,7 +144,7 @@ export default function GpaPage() {
       {entries && (
         <>
           {visible.length > 0 && (
-            <div className="card p-6 flex items-center gap-5">
+            <div className="flex flex-wrap items-center gap-5 rounded-[20px] border border-[#e6d8fb] bg-[#f7f2ff] p-6">
               <ProgressRing
                 percent={(cgpa / maxScale) * 100}
                 size={80}
@@ -183,6 +171,8 @@ export default function GpaPage() {
             <EmptyState illustration="empty" title="No grades yet" subtitle="Add your first course below to start tracking your GPA." />
           )}
 
+          <div className="grid items-start gap-6 xl:grid-cols-[1.15fr_1fr]">
+          <div className="space-y-4">
           {[...bySemester.entries()].map(([label, list]) => (
             <div key={label} className="card p-5">
               <div className="flex items-center justify-between mb-3">
@@ -191,11 +181,11 @@ export default function GpaPage() {
               </div>
               <ul className="space-y-1.5">
                 {list.map(e => (
-                  <li key={e.id} className="flex items-center justify-between text-sm py-1">
-                    <span className="text-slate-700 truncate flex-1">{e.courseTitle}</span>
+                  <li key={e.id} className="flex flex-wrap items-center justify-between gap-y-2 border-b border-[#f3edf7] py-3 text-sm last:border-0">
+                    <span className="text-slate-700 min-w-0 flex-1">{e.courseTitle}</span>
                     <span className="text-slate-400 text-xs mx-3">{e.creditUnits}cu</span>
                     <span className="w-6 text-center font-bold text-slate-800">{e.grade}</span>
-                    <button onClick={() => handleRemove(e.id)} className="text-xs text-red-500 ml-3 flex-shrink-0">
+                    <button onClick={() => handleRemove(e.id)} aria-label={`Remove grade for ${e.courseTitle}`} className="inline-flex min-h-11 items-center text-xs text-red-600 ml-3 flex-shrink-0">
                       Remove
                     </button>
                   </li>
@@ -204,9 +194,11 @@ export default function GpaPage() {
             </div>
           ))}
 
+          </div>
+
           <form onSubmit={handleAdd} className="card p-6 space-y-3">
             <p className="text-sm font-bold text-slate-800">Add a course</p>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <select
                 value={form.level}
                 onChange={e => setForm(f => ({ ...f, level: e.target.value }))}
@@ -232,13 +224,14 @@ export default function GpaPage() {
                 ))}
               </select>
             </div>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <input
                 required
                 value={form.courseTitle}
                 onChange={e => setForm(f => ({ ...f, courseTitle: e.target.value }))}
                 placeholder="Course title"
-                className="input-base flex-1"
+                aria-label="Course title"
+                className="input-base col-span-2"
               />
               <input
                 required
@@ -247,9 +240,10 @@ export default function GpaPage() {
                 max={12}
                 value={form.creditUnits}
                 onChange={e => setForm(f => ({ ...f, creditUnits: e.target.value }))}
-                className="input-base w-20"
+                aria-label="Credit units"
+                className="input-base w-full"
               />
-              <select value={form.grade} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} className="input-base w-20">
+              <select value={form.grade} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} aria-label="Grade" className="input-base w-full">
                 {GRADES[scale].map(g => (
                   <option key={g} value={g}>
                     {g}
@@ -258,9 +252,10 @@ export default function GpaPage() {
               </select>
             </div>
             <button type="submit" disabled={saving} className="btn-primary w-full">
-              {saving ? 'Adding…' : '+ Add course'}
+              <Icon name="plus" />{saving ? 'Adding…' : 'Add course'}
             </button>
           </form>
+          </div>
         </>
       )}
     </div>
