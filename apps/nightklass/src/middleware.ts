@@ -28,7 +28,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  return NextResponse.next()
+  const response = NextResponse.next()
+  if (pathname !== '/' && !['/robots.txt', '/sitemap.xml', '/opengraph-image'].includes(pathname)) {
+    response.headers.set('X-Robots-Tag', 'noindex, follow')
+  }
+  return response
 }
 
 export const config = {

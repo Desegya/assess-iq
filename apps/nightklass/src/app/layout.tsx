@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { SITE_URL, SITE_DESCRIPTION } from '@/lib/seo'
 import { Inter, Space_Grotesk } from 'next/font/google'
 import { Providers } from '@/components/providers'
 import '../styles/globals.css'
@@ -17,11 +18,28 @@ const spaceGrotesk = Space_Grotesk({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
+  applicationName: 'Nightklass',
+  robots: { index: false, follow: true },
   title: {
     template: '%s | Nightklass',
-    default: 'Nightklass — Your Personal Study Coach',
+    default: 'Nightklass — AI Study Planner & Personal Study Coach',
   },
-  description: 'Turn your course outlines into a personalised, measurable study plan.',
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    type: 'website',
+    siteName: 'Nightklass',
+    locale: 'en_US',
+    title: 'Nightklass — AI Study Planner & Personal Study Coach',
+    description: SITE_DESCRIPTION,
+    images: [{ url: '/opengraph-image', width: 1200, height: 630, alt: 'Nightklass — Study smarter. Know exactly what to do next.' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Nightklass — AI Study Planner & Personal Study Coach',
+    description: SITE_DESCRIPTION,
+    images: ['/opengraph-image'],
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
