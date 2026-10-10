@@ -6,7 +6,6 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Geist, Instrument_Serif } from 'next/font/google'
 import { useAuth } from '@/contexts/auth-context'
-import { Logo } from '@/components/ui/Logo'
 
 const geist = Geist({ subsets: ['latin'], display: 'swap' })
 
@@ -399,10 +398,33 @@ function LandingContent() {
         </div>
       </section>
 
-      <footer className="border-t border-slate-200 py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between flex-wrap gap-4">
-          <Logo size="sm" theme="dark" />
-          <p className="text-xs text-slate-400">&copy; {new Date().getFullYear()} Nightklass. All rights reserved.</p>
+      <footer className={`${geist.className} bg-white text-black`}>
+        <div className="mx-auto max-w-[1272px] px-5 pt-14 sm:px-8 sm:pt-16 lg:px-0 lg:pt-20">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-10 pb-10 sm:grid-cols-[1.5fr_1fr_1fr] sm:gap-x-10 sm:pb-14 lg:gap-x-20">
+            <div className="col-span-2 sm:col-span-1">
+              <Link href="/" aria-label="NightKlass home" className="inline-flex min-h-11 items-center gap-3 text-base font-semibold tracking-[-0.4px]">
+                <Image src="/landing/nightklass-logo.svg" alt="" width={35} height={35} />
+                NightKlass
+              </Link>
+              <p className={`${instrumentSerif.className} mt-5 max-w-[330px] text-[32px] leading-[1.15] tracking-[-0.5px] sm:text-[36px]`}>A little more clarity.<br />A lot more confidence.</p>
+              <p className="mt-4 max-w-[300px] text-sm leading-relaxed text-[#767676]">Your course, your pace, your path to exam day.</p>
+            </div>
+            <nav aria-label="Footer explore navigation">
+              <p className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-[#9060ef]">Explore</p>
+              <a href="#how-it-works" className="flex min-h-11 w-fit items-center text-sm text-[#707070] transition-colors hover:text-[#7040ff]">How it works</a>
+              <a href="#features" className="flex min-h-11 w-fit items-center text-sm text-[#707070] transition-colors hover:text-[#7040ff]">Features</a>
+              <a href="#faqs" className="flex min-h-11 w-fit items-center text-sm text-[#707070] transition-colors hover:text-[#7040ff]">FAQs</a>
+            </nav>
+            <nav aria-label="Footer account navigation">
+              <p className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-[#9060ef]">Your next step</p>
+              <Link href="/register" className="flex min-h-11 w-fit items-center gap-2 text-sm font-medium transition-colors hover:text-[#7040ff]">Start studying <span aria-hidden="true">↗</span></Link>
+              <Link href="/login" className="flex min-h-11 w-fit items-center text-sm text-[#707070] transition-colors hover:text-[#7040ff]">Sign in</Link>
+            </nav>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-[#eee] py-6 text-xs text-[#767676] sm:flex-row sm:items-center sm:justify-between sm:py-7">
+            <p>&copy; {new Date().getFullYear()} NightKlass. All rights reserved.</p>
+            <a href="#hero-heading" className="inline-flex min-h-11 w-fit items-center gap-2 transition-colors hover:text-[#7040ff]">Back to top <span aria-hidden="true">↑</span></a>
+          </div>
         </div>
       </footer>
     </div>
