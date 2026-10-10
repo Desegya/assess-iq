@@ -3,16 +3,16 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
+import { Geist, Instrument_Serif } from 'next/font/google'
 import { useAuth } from '@/contexts/auth-context'
 import { Logo } from '@/components/ui/Logo'
 import { getSubjectColor } from '@/lib/subject-color'
-import { ProgressRing } from '@/components/ui/ProgressRing'
 import { StudyScene } from '@/components/ui/NightIllustration'
 
-const STARS = [
-  [8, 12, 1.6], [22, 30, 1.2], [42, 8, 1.8], [65, 22, 1.3], [85, 14, 1.6],
-  [92, 34, 1.1], [15, 55, 1.4], [50, 48, 1.2], [78, 52, 1.5], [95, 60, 1.2],
-] as const
+const geist = Geist({ subsets: ['latin'], display: 'swap' })
+
+const instrumentSerif = Instrument_Serif({ subsets: ['latin'], weight: '400', display: 'swap' })
 
 const ENTRY_POINTS: { title: string; desc: string; soon?: boolean }[] = [
   {
@@ -96,89 +96,102 @@ function SoonTag() {
 function LandingContent() {
   return (
     <div className="min-h-screen bg-brand-bg">
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur sticky top-0 z-20">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Logo size="sm" theme="dark" />
-            <span className="hidden md:inline text-xs font-semibold text-slate-500 border-l border-slate-200 pl-3">
-              Your AI Personal Study Coach
-            </span>
-          </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <Link href="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+      <header className={`${geist.className} bg-white`}>
+        <div className="relative mx-auto grid min-h-[76px] max-w-[1272px] grid-cols-[1fr_auto] items-center gap-x-4 border-x border-[#f1f1f1] px-4 py-4 sm:gap-y-3 sm:px-6 lg:min-h-[106px] lg:grid-cols-[1fr_auto_1fr] lg:px-6 lg:py-0 xl:px-1">
+          <Link href="/" aria-label="NightKlass home" className="inline-flex min-h-11 w-fit items-center gap-2 text-[16px] font-semibold tracking-[-0.4px] text-black sm:gap-3">
+            <Image src="/landing/nightklass-logo.svg" alt="" width={35} height={35} priority className="shrink-0" />
+            NightKlass
+          </Link>
+          <nav aria-label="Main navigation" className="col-span-2 row-start-2 hidden items-center justify-center gap-8 text-sm text-[#707070] sm:flex lg:col-span-1 lg:col-start-2 lg:row-start-1">
+            <a href="#how-it-works" className="inline-flex min-h-11 items-center transition-colors hover:text-[#7040ff]">How it works</a>
+            <a href="#features" className="inline-flex min-h-11 items-center transition-colors hover:text-[#7040ff]">Features</a>
+            <a href="#faqs" className="inline-flex min-h-11 items-center transition-colors hover:text-[#7040ff]">FAQs</a>
+          </nav>
+          <div className="col-start-2 row-start-1 hidden items-center justify-end gap-6 sm:flex lg:col-start-3 lg:gap-8">
+            <Link href="/login" className="inline-flex min-h-11 items-center whitespace-nowrap text-sm font-semibold text-black transition-colors hover:text-[#7040ff]">
               Sign in
             </Link>
-            <Link href="/register" className="btn-primary !py-2 !px-4">
-              Start free
+            <Link href="/register" className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-2xl bg-[#a477ff] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#9060ef]">
+              Start Studying Free
             </Link>
           </div>
+          <details className="group col-start-2 row-start-1 sm:hidden">
+            <summary aria-label="Toggle navigation menu" className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-xl text-[#7040ff] hover:bg-[#f6f1ff] [&::-webkit-details-marker]:hidden">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="group-open:hidden"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="hidden group-open:block"><path d="m6 6 12 12M18 6 6 18" /></svg>
+            </summary>
+            <nav aria-label="Mobile navigation" className="absolute left-0 right-0 top-full z-30 flex flex-col gap-1 border-b border-[#eee] bg-white px-4 pb-5 pt-2 shadow-lg" onClick={event => {
+              if ((event.target as HTMLElement).closest('a')) event.currentTarget.closest('details')?.removeAttribute('open')
+            }}>
+              <a href="#how-it-works" className="flex min-h-11 items-center rounded-lg px-3 text-sm text-[#707070] hover:bg-[#f6f1ff]">How it works</a>
+              <a href="#features" className="flex min-h-11 items-center rounded-lg px-3 text-sm text-[#707070] hover:bg-[#f6f1ff]">Features</a>
+              <a href="#faqs" className="flex min-h-11 items-center rounded-lg px-3 text-sm text-[#707070] hover:bg-[#f6f1ff]">FAQs</a>
+              <Link href="/login" className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-black hover:bg-[#f6f1ff]">Sign in</Link>
+              <Link href="/register" className="mt-2 flex min-h-11 items-center justify-center rounded-2xl bg-[#a477ff] px-4 text-sm font-semibold text-white hover:bg-[#9060ef]">Start Studying Free</Link>
+            </nav>
+          </details>
         </div>
       </header>
 
-      <section className="relative overflow-hidden bg-gradient-to-b from-brand-dark via-brand-dark to-brand-bg">
-        <svg className="absolute inset-0 w-full h-full opacity-70 pointer-events-none" preserveAspectRatio="none" aria-hidden="true">
-          {STARS.map(([x, y, r], i) => (
-            <circle key={i} cx={`${x}%`} cy={`${y}%`} r={r} fill="white" className="animate-twinkle" style={{ animationDelay: `${i * 0.35}s` }} />
-          ))}
-        </svg>
-        <div className="absolute top-16 -right-16 w-72 h-72 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
-        <div className="absolute top-0 -left-16 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
-
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-16 text-center">
-          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur text-blue-100 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 animate-fade-in">
-            <span>✨</span>
-            No syllabus required. Start with just your course title.
-          </div>
-          <h1 className="font-heading text-4xl sm:text-5xl font-bold text-white leading-tight animate-slide-up">
-            Study like the plan{' '}
-            <span className="bg-gradient-to-r from-cyan-300 to-lime-300 bg-clip-text text-transparent">actually works.</span>
-          </h1>
-          <p className="mt-5 text-base sm:text-lg text-blue-100/80 max-w-2xl mx-auto animate-slide-up delay-75">
-            Start with your department, course title, syllabus or study materials. Nightklass builds your learning path, creates
-            detailed lessons, plans what to study, tests what you understand and adapts until exam day.
+      <section aria-labelledby="hero-heading" className={`${geist.className} bg-white text-black`}>
+        <div className="relative mx-auto max-w-[1272px] border-x border-[#f1f1f1] px-5 pb-11 pt-12 text-center sm:px-8 sm:pt-16 lg:pt-16">
+          <p className="flex items-center justify-center gap-2 text-xs text-[#606060] sm:text-sm">
+            <span aria-hidden="true" className="text-xl leading-none text-black">✦</span>
+            <span><span className="text-black">Your AI</span> Personal Study Coach</span>
           </p>
-          <div className="mt-8 flex items-center justify-center gap-3 flex-wrap animate-slide-up delay-150">
-            <Link href="/register" className="btn-primary !py-3 !px-6">
+          <h1 id="hero-heading" className={`${instrumentSerif.className} mx-auto mt-6 max-w-[760px] text-[clamp(42px,6vw,76px)] font-normal leading-[1.08] tracking-[-1.5px] sm:tracking-[-2px]`}>
+            Study smarter. Know<br className="hidden sm:block" /> exactly what to do next.
+          </h1>
+          <p className="mx-auto mt-6 max-w-[430px] text-sm leading-[1.5] text-[#777]">
+            Nightklass helps you plan what to study, understand your courses, test yourself, and revise your weak areas.
+          </p>
+          <div className="relative mt-10 flex justify-center before:absolute before:left-[-21px] before:right-[-21px] before:top-1/2 before:h-px before:bg-[#f3ebff] sm:before:left-[-33px] sm:before:right-[-33px]">
+            <Link href="/register" className="relative inline-flex min-h-[46px] items-center justify-center rounded-2xl bg-[#a477ff] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#9060ef]">
               Start Studying Free
             </Link>
-            <a href="#how-it-works" className="bg-white/10 hover:bg-white/15 text-white font-semibold py-3 px-6 rounded-2xl text-sm transition-colors">
-              See How Nightklass Works
-            </a>
           </div>
         </div>
 
-        {/* Product preview */}
-        <div className="relative max-w-3xl mx-auto px-4 sm:px-6 pb-16 sm:pb-20 animate-slide-up delay-150">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 p-5 sm:p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-300" />
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-300" />
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-300" />
-            </div>
-            <div className="grid sm:grid-cols-[1.3fr_1fr] gap-4">
-              <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 p-4 sm:p-5 text-left">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-100">Today’s study</p>
-                <p className="text-white font-heading font-bold text-base sm:text-lg mt-1">BIO 223 — Descriptive Statistics</p>
-                <p className="text-blue-100 text-xs mt-1">Mean, median and mode · 45 minutes</p>
-                <div className="flex flex-wrap gap-2 mt-4">
-                  <span className="bg-white text-blue-700 text-xs font-bold rounded-lg px-3 py-1.5">Continue lesson</span>
-                  <span className="bg-white/15 text-white text-xs font-bold rounded-lg px-3 py-1.5">Take revision quiz</span>
+        <div className="mx-auto max-w-[1272px] px-4 sm:px-0">
+          <div className="relative isolate overflow-hidden px-4 py-8 sm:px-8 lg:py-8" style={{ background: 'radial-gradient(ellipse at 60% 0%, #f1c7f7 0%, transparent 54%), radial-gradient(ellipse at 10% 100%, #e6b8f8 0%, transparent 62%), linear-gradient(135deg, #7040f5, #c284fa 64%, #7644fa)' }}>
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 opacity-40" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent 0, transparent 82px, rgba(255,255,255,.35) 83px, transparent 85px)' }} />
+            <div className="relative mx-auto max-w-[500px] pb-4">
+              <div aria-hidden="true" className="absolute bottom-0 left-[5%] right-[5%] top-6 rounded-[20px] bg-white/95" />
+              <article aria-label="Example of your daily study plan" className="relative rounded-[22px] bg-white p-5 shadow-[0_4px_0_rgba(255,255,255,.25)] sm:p-5">
+                <div className="flex items-center justify-between gap-3 px-0 text-xs sm:px-3 sm:text-sm">
+                  <p className="flex items-center gap-2 font-semibold">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="17" rx="2" fill="#b482ff" /><path d="M7 2v6M17 2v6M3 10h18" stroke="#b482ff" strokeWidth="2" /><path d="M7 14h2m3 0h2m3 0h1M7 18h2m3 0h2" stroke="white" strokeWidth="2" /></svg>
+                    Today&apos;s Study
+                  </p>
+                  <p className="flex shrink-0 items-center gap-3 text-[11px] text-[#777] sm:text-xs">Tue, 14 Oct <span aria-hidden="true" className="tracking-widest text-black">•••</span></p>
                 </div>
-              </div>
-              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 flex items-center gap-3 text-left">
-                <ProgressRing percent={67} size={56} strokeWidth={5} color="#2563eb" />
-                <div>
-                  <p className="text-xs font-semibold text-slate-700">Weekly plan</p>
-                  <p className="text-xs text-slate-400 mt-0.5">67% completed</p>
+                <h2 className="mt-7 text-[28px] font-bold leading-tight sm:text-[30px]">BIO 223</h2>
+                <p className="mt-1.5 text-sm">Descriptive Statistics</p>
+                <div className="mt-7 flex items-center gap-2.5 sm:mt-8">
+                  <div aria-hidden="true" className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-[#f6f1ff]"><div className="h-full w-[28%] rounded-full bg-gradient-to-r from-[#bd85ff] to-[#e5bdf7]" /></div>
+                  <p className="shrink-0 text-[11px] text-[#666] sm:text-xs">3 of 5 lessons</p>
                 </div>
-              </div>
-            </div>
-            <div className="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 flex items-center justify-between gap-3 text-left">
-              <div>
-                <p className="text-xs font-semibold text-amber-800">Recent quiz: 8/10</p>
-                <p className="text-xs text-amber-700/80 mt-0.5">Revise measures of dispersion</p>
-              </div>
-              <span className="text-xs font-bold text-amber-800 flex-shrink-0">Weak area →</span>
+                <div className="mt-6 sm:mt-7">
+                  {[
+                    { title: 'Measures of Dispersion', icon: 'book' },
+                    { title: 'Measure of Central Tendency', icon: 'clock' },
+                  ].map((lesson, index) => (
+                    <div key={lesson.title} className={`flex items-center justify-between gap-3 py-3 ${index === 0 ? 'border-b border-[#f1f1f1]' : ''}`}>
+                      <p className="flex shrink-0 items-center gap-2 text-[11px] text-[#777] sm:text-xs">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#19202b" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          {lesson.icon === 'book' ? <><rect x="3" y="4" width="4" height="16" rx="1" /><rect x="8" y="4" width="4" height="16" rx="1" /><path d="m13 5 4-1 4 15-4 1z" /></> : <><circle cx="12" cy="13" r="8" /><path d="M12 8v5l3 2M3 5l3-3m12 0 3 3" /></>}
+                        </svg>
+                        Next lesson
+                      </p>
+                      <p className="flex min-w-0 items-center gap-2 text-right text-[11px] leading-relaxed sm:gap-4 sm:text-xs"><span>{lesson.title}</span><span aria-hidden="true" className="text-xl">›</span></p>
+                    </div>
+                  ))}
+                </div>
+                <Link href="/register" className="mt-5 flex min-h-[46px] items-center gap-3 rounded-2xl bg-[#a477ff] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#9060ef]">
+                  <svg width="16" height="18" viewBox="0 0 16 18" fill="currentColor" aria-hidden="true"><path d="M2 1.5a1 1 0 0 1 1.5-.85l11 7.5a1 1 0 0 1 0 1.7l-11 7.5A1 1 0 0 1 2 16.5z" /></svg>
+                  Continue Learning <span aria-hidden="true" className="ml-auto text-xl font-normal">→</span>
+                </Link>
+              </article>
             </div>
           </div>
         </div>
@@ -237,7 +250,7 @@ function LandingContent() {
         </div>
       </section>
 
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
+      <section id="features" className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
         <div className="text-center mb-10">
           <h2 className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">
             More than flashcards. A study system.
@@ -257,7 +270,7 @@ function LandingContent() {
         </ul>
       </section>
 
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 py-16">
+      <section id="faqs" className="max-w-4xl mx-auto px-4 sm:px-6 py-16">
         <h2 className="font-heading text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-10">
           Questions people actually ask
         </h2>
