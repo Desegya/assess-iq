@@ -29,59 +29,28 @@ const COURSE_STEPS = [
   },
 ] as const
 
-// Replaced by the full-frame Figma exports when they are supplied.
+const COURSE_PREVIEWS = {
+  course: '/landing/add-course.png',
+  upload: '/landing/upload-materials.png',
+  path: '/landing/study-path.png',
+} as const
+
 function CourseStepPreview({ kind }: { kind: typeof COURSE_STEPS[number]['kind'] }) {
   return (
     <div aria-hidden="true" className="relative aspect-square overflow-hidden bg-[#f2f2f2]">
-      <div className="absolute -right-[18%] -top-[25%] h-[75%] w-[55%] rotate-[35deg] rounded-[70px] border-[14px] border-white/70 shadow-[inset_0_0_12px_#ccc,0_0_12px_#ddd]" />
-      <div className="absolute -right-[20%] top-[10%] h-[30%] w-[70%] -rotate-[35deg] rounded-full border-[12px] border-white/60 shadow-[inset_0_0_8px_#ccc]" />
-      {kind === 'upload' ? (
-        <div className="absolute bottom-[-9%] left-[12%] right-[10%] top-[9%] bg-white shadow-sm">
-          <div className="border-b border-[#eee] py-[5%] text-center text-[clamp(10px,1vw,14px)] font-semibold">▣ Upload files</div>
-          <div className="mx-[5%] mt-[5%] rounded-xl border border-dashed border-[#e8e8e8] bg-[#fafafa] px-[5%] pb-[8%] pt-[4%] text-center">
-            <svg className="mx-auto mb-[5%] w-[14%]" viewBox="0 0 32 28" fill="#ccc"><path d="M2 4a3 3 0 0 1 3-3h8l4 4h10a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3Z" /></svg>
-            <p className="text-[clamp(9px,0.9vw,12px)]">Drag and drop file(s) or <span className="text-[#0098ff]">choose file(s)</span></p>
-            <p className="mt-1 text-[clamp(8px,0.8vw,11px)] text-[#aaa]">Max 25MB each, Only Pdf, PNG, JPEG</p>
-          </div>
-          <div className="relative px-[7%] pt-[5%]">
-            {['Arrays & Linked Lists', 'Sorting Algorithms', 'Introduction to Data Structure'].map((file, index) => (
-              <div key={file} className={`mb-[6%] text-[clamp(9px,0.9vw,12px)] ${index > 0 ? 'blur-[1px]' : ''}`}>
-                <p className="truncate">📄 {file}</p><p className="mt-1 text-[10px] text-[#999]">{index === 0 ? '✓ Completed' : 'Uploading'}</p>
-                <div className="mt-2 h-1 rounded-full bg-[#eee]"><div className="h-full w-2/3 rounded-full bg-[#8fd9ff]" /></div>
-              </div>
-            ))}
-          </div>
-          <div className="pointer-events-none absolute bottom-0 left-[-7%] right-[-4%] h-[37%] rounded-t-[48px] border border-white bg-white/35 backdrop-blur-[2px]" />
-        </div>
-      ) : (
-        <div className="absolute bottom-0 left-[11%] right-[11%] top-[12%] overflow-hidden bg-white">
-          <div className="absolute inset-x-0 top-0 grid grid-cols-6 gap-4 p-1 text-center text-xl text-[#eee4ff]">
-            {Array.from({ length: 36 }, (_, i) => <span key={i}>{['▣', '▤', '▰', '◆'][i % 4]}</span>)}
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-white/80 to-white" />
-          {kind === 'course' ? (
-            <div className="absolute inset-x-[10%] top-[43%] text-center">
-              <p className="rounded-2xl bg-[#f2f2f2] px-2 py-3 text-[clamp(10px,1vw,14px)] font-medium"><span className="mr-2 text-[#ff413d]">▣</span> CSC 201 - Data Structure</p>
-              <div className="mx-auto mt-5 w-[84%] rounded-2xl bg-[#a477ff] px-2 py-3 text-[clamp(11px,1vw,14px)] font-semibold text-white">Add Course <span className="ml-2">⊕</span></div>
-            </div>
-          ) : (
-            <div className="absolute inset-x-[7%] top-[13%]">
-              <div className="mx-auto mb-[11%] flex h-8 w-8 items-center justify-center rounded-full bg-[#a477ff] text-xl text-white">✓</div>
-              {[
-                { title: 'Topic', detail: '12 key concept', icon: '▰', color: 'bg-purple-50 text-purple-500' },
-                { title: 'Lessons', detail: '32 lessons', icon: '▤', color: 'bg-blue-50 text-blue-500' },
-                { title: 'Quizzes', detail: '8 practice quizzes', icon: '?', color: 'bg-emerald-50 text-emerald-500' },
-                { title: 'Revision', detail: '12 key concept', icon: '⟳', color: 'bg-amber-50 text-amber-500' },
-              ].map(item => (
-                <div key={item.title} className="mb-3 flex items-center gap-2 rounded-xl border border-[#f4f4f4] bg-white p-1.5">
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-2xl ${item.color}`}>{item.icon}</span>
-                  <div><p className="text-[clamp(10px,1vw,14px)] font-medium">{item.title}</p><p className="text-[clamp(8px,0.8vw,11px)] text-[#555]">{item.detail}</p></div><span className="ml-auto pr-1">›</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {kind !== 'upload' && <>
+        <div className="absolute -right-[18%] -top-[25%] h-[75%] w-[55%] rotate-[35deg] rounded-[70px] border-[14px] border-white/70 shadow-[inset_0_0_12px_#ccc,0_0_12px_#ddd]" />
+        <div className="absolute -right-[20%] top-[10%] h-[30%] w-[70%] -rotate-[35deg] rounded-full border-[12px] border-white/60 shadow-[inset_0_0_8px_#ccc]" />
+      </>}
+      <div className={kind === 'upload' ? 'absolute inset-0' : 'absolute bottom-0 left-[11%] right-[11%] top-[12%]'}>
+        <Image
+          src={COURSE_PREVIEWS[kind]}
+          alt=""
+          fill
+          sizes="(min-width: 1280px) 424px, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+          className="object-contain object-bottom"
+        />
+      </div>
     </div>
   )
 }
@@ -334,6 +303,47 @@ function LandingContent() {
             </div>
             <div className="mx-auto w-full max-w-[597px]"><FaqIllustration /></div>
           </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="student-benefits-heading" className={`${geist.className} bg-[#fafafa] text-black`}>
+        <div className="mx-auto max-w-[1272px] px-5 py-14 sm:px-8 sm:py-16 lg:px-0 lg:pb-[86px] lg:pt-[68px]">
+          <h2 id="student-benefits-heading" className="text-xs font-medium uppercase text-[#a477ff] sm:text-sm">
+            Why students stick with Nightklass
+          </h2>
+          <ul className="mt-10 grid grid-cols-1 gap-x-8 gap-y-8 sm:mt-14 sm:grid-cols-2 lg:mt-[84px] lg:grid-cols-5 lg:gap-x-8 lg:px-4">
+            {[
+              {
+                text: 'Know exactly what to study each day, without wasting time figuring it out.',
+                path: 'M8 3v4m8-4v4M4 10h16M5 5h14a1 1 0 0 1 1 1v8l-6 6H4V6a1 1 0 0 1 1-1Zm9 15v-6h6',
+              },
+              {
+                text: 'Turn your notes, slides, and syllabus into a clear study path you can follow.',
+                path: 'M3 7V5a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z',
+              },
+              {
+                text: 'Test yourself as you study and quickly see what you actually understand.',
+                path: 'M21 11.5a9 9 0 0 1-9 9 10 10 0 0 1-4-.9L3 21l1.4-4.6A9 9 0 1 1 21 11.5ZM9.5 8a2.5 2.5 0 1 1 4.5 1.5c-1 1-2 1-2 2.5M12 16h.01',
+              },
+              {
+                text: 'Focus your revision on weak areas instead of going over everything again.',
+                path: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-4 0a5 5 0 1 1-10 0 5 5 0 0 1 10 0Zm-3 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',
+              },
+              {
+                text: 'Keep your courses, progress, quizzes, and study plans together in one place.',
+                path: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM12 3v18M3 12h18',
+              },
+            ].map(benefit => (
+              <li key={benefit.text} className="flex items-start gap-4 sm:block">
+                <span className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full border border-[#efefef] bg-white">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d={benefit.path} />
+                  </svg>
+                </span>
+                <p className="max-w-[360px] text-sm leading-[1.6] text-[#767676] sm:mt-2 lg:max-w-none">{benefit.text}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
