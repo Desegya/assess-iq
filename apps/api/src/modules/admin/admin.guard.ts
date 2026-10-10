@@ -7,6 +7,7 @@ export class NightklassAdminGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest()
+    req.res?.setHeader('Cache-Control', 'no-store')
     if (!req.user?.id) throw new ForbiddenException('Nightklass administrator access required')
     const grant = await this.prisma.nightklassAdmin.findUnique({
       where: { userId: req.user.id },

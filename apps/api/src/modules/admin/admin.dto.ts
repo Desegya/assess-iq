@@ -1,5 +1,17 @@
-import { Type } from 'class-transformer'
-import { ArrayMaxSize, IsArray, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator'
+import { Transform, Type } from 'class-transformer'
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator'
 
 export class AdminQueryDto {
   @IsOptional() @IsString() @MaxLength(100) search?: string
@@ -28,8 +40,16 @@ class LessonSectionDto {
 }
 export class AdminLessonDto extends AdminReasonDto {
   @IsString() @MinLength(1) @MaxLength(10000) introduction!: string
-  @IsArray() @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => LessonSectionDto) sections!: LessonSectionDto[]
-  @IsArray() @ArrayMaxSize(30) @IsString({ each: true }) @MaxLength(2000, { each: true }) summary!: string[]
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => LessonSectionDto)
+  sections!: LessonSectionDto[]
+  @IsArray()
+  @ArrayMaxSize(30)
+  @IsString({ each: true })
+  @MaxLength(2000, { each: true })
+  summary!: string[]
   @IsInt() @Min(1) expectedVersion!: number
 }
 class QuestionOptionDto {
@@ -39,12 +59,21 @@ class QuestionOptionDto {
 export class AdminQuestionDto {
   @IsString() @MaxLength(100) topicId!: string
   @IsString() @MinLength(5) @MaxLength(10000) questionText!: string
-  @IsIn(['MCQ', 'TRUE_FALSE', 'SHORT_ANSWER', 'THEORY']) questionType!: 'MCQ' | 'TRUE_FALSE' | 'SHORT_ANSWER' | 'THEORY'
+  @IsIn(['MCQ', 'TRUE_FALSE', 'SHORT_ANSWER', 'THEORY']) questionType!:
+    | 'MCQ'
+    | 'TRUE_FALSE'
+    | 'SHORT_ANSWER'
+    | 'THEORY'
   @IsString() @MinLength(1) @MaxLength(10000) correctAnswer!: string
   @IsString() @MaxLength(10000) explanation!: string
   @IsIn(['EASY', 'MEDIUM', 'HARD']) difficulty!: 'EASY' | 'MEDIUM' | 'HARD'
   @IsIn(['DRAFT', 'APPROVED', 'ARCHIVED']) status!: 'DRAFT' | 'APPROVED' | 'ARCHIVED'
-  @IsOptional() @IsArray() @ArrayMaxSize(6) @ValidateNested({ each: true }) @Type(() => QuestionOptionDto) options?: QuestionOptionDto[]
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @ValidateNested({ each: true })
+  @Type(() => QuestionOptionDto)
+  options?: QuestionOptionDto[]
   @IsOptional() @IsInt() @Min(1) @Max(100) marks?: number
   @IsString() @MinLength(5) @MaxLength(500) reason!: string
 }

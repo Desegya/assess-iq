@@ -7,7 +7,10 @@ import { PrismaService } from '../prisma/prisma.service'
 
 @Controller('admin/nightklass-auth')
 export class AdminAuthController {
-  constructor(private readonly auth: AuthService, private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly prisma: PrismaService,
+  ) {}
   @Public()
   @Post('login')
   @UseGuards(ThrottlerGuard)
@@ -20,7 +23,9 @@ export class AdminAuthController {
       await this.auth.logout(result.refreshToken)
       throw new ForbiddenException('Nightklass administrator access required')
     }
-    await this.prisma.nightklassAdminAudit.create({ data: { actorId: user.id, action: 'ADMIN_LOGIN', resourceType: 'user', resourceId: user.id } })
+    await this.prisma.nightklassAdminAudit.create({
+      data: { actorId: user.id, action: 'ADMIN_LOGIN', resourceType: 'user', resourceId: user.id },
+    })
     return { ...result, adminRole: grant.role }
   }
 }
