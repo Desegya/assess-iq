@@ -138,7 +138,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="mx-4 mb-5 rounded-2xl border border-[#eee5fa] bg-[#faf7ff] p-4">
           <p className="product-display !text-[26px]">One topic at a time.</p>
-          <p className="mt-1 text-xs leading-relaxed text-[#797080]">
+          <p className="mt-1 text-xs leading-relaxed text-[#6d6378]">
             Small study sessions add up.
           </p>
           <Link
@@ -152,12 +152,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
           <Avatar name={user?.name ?? '?'} size={36} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{user?.name}</p>
-            <p className="text-xs text-[#797080]">Your study space</p>
+            <p className="text-xs text-[#6d6378]">Your study space</p>
           </div>
           <button
             onClick={() => void logout()}
             aria-label="Log out"
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-[#797080] hover:bg-[#f3edff]"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-[#6d6378] hover:bg-[#f3edff]"
           >
             <ProductIcon name="logout" />
           </button>
@@ -191,7 +191,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
             <button
               onClick={() => void logout()}
               aria-label="Log out"
-              className="flex h-11 w-11 items-center justify-center rounded-xl text-[#797080] hover:bg-[#f3edff] lg:hidden"
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-[#6d6378] hover:bg-[#f3edff] lg:hidden"
             >
               <ProductIcon name="logout" />
             </button>
@@ -216,7 +216,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
               key={item.href}
               href={item.href}
               aria-current={active ? 'page' : undefined}
-              className={`relative flex min-h-[72px] min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium ${active ? 'text-[#7545cf]' : 'text-[#797080]'}`}
+              className={`relative flex min-h-[72px] min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium ${active ? 'text-[#7545cf]' : 'text-[#6d6378]'}`}
             >
               <span
                 className={`flex h-8 w-12 items-center justify-center rounded-xl ${active ? 'bg-[#f0e7ff]' : ''}`}
