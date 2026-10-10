@@ -101,7 +101,7 @@ export class AdminService {
   private async course(tx: Prisma.TransactionClient, id: string) {
     const course = await tx.course.findFirst({
       where: { id, ...NIGHTKLASS_COURSE },
-      include: { owner: { select: { id: true, email: true } } },
+      include: { owner: { select: { id: true, name: true, email: true } } },
     })
     if (!course?.owner) throw new NotFoundException('Nightklass course not found')
     return course
@@ -424,8 +424,10 @@ export class AdminService {
     })
   }
   async updateCourse(id: string, dto: UpdateCourseDto, actorId: string) {
-    if (dto.title !== undefined && (!dto.title || dto.title.trim().length < 2)) throw new BadRequestException('Provide a course title')
-    if (dto.subject !== undefined && (!dto.subject || dto.subject.trim().length < 2)) throw new BadRequestException('Provide a course subject')
+    if (dto.title !== undefined && (!dto.title || dto.title.trim().length < 2))
+      throw new BadRequestException('Provide a course title')
+    if (dto.subject !== undefined && (!dto.subject || dto.subject.trim().length < 2))
+      throw new BadRequestException('Provide a course subject')
     return this.transaction(actorId, async (tx) => {
       const course = await this.course(tx, id)
       const result = await new CoursesService(tx as PrismaService).update(
@@ -450,7 +452,8 @@ export class AdminService {
     })
   }
   async updateTopic(id: string, dto: UpdateTopicDto, actorId: string) {
-    if (dto.name !== undefined && (!dto.name || !dto.name.trim())) throw new BadRequestException('Provide a topic name')
+    if (dto.name !== undefined && (!dto.name || !dto.name.trim()))
+      throw new BadRequestException('Provide a topic name')
     return this.transaction(actorId, async (tx) => {
       const topic = await tx.topic.findFirst({ where: { id, course: NIGHTKLASS_COURSE } })
       if (!topic) throw new NotFoundException('Nightklass topic not found')

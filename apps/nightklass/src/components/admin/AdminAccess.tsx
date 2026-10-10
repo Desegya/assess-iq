@@ -5,14 +5,13 @@ import { Badge, DataState } from './AdminUI'
 import { date, useAdminData } from './admin-api'
 import { useAdminIdentity } from './AdminShell'
 export function AdminAccess() {
-  const state =
-    useAdminData<
-      {
-        role: string
-        createdAt: string
-        user: { id: string; name: string; email: string; status: string }
-      }[]
-    >('access')
+  const state = useAdminData<
+    {
+      role: string
+      createdAt: string
+      user: { id: string; name: string; email: string; status: string }
+    }[]
+  >('access')
   const identity = useAdminIdentity()
   return (
     <>
@@ -37,7 +36,12 @@ export function AdminAccess() {
       </div>
       <DataState {...state} />
       {state.data && (
-        <div className="admin-table mt-6">
+        <div
+          className="admin-table mt-6"
+          tabIndex={0}
+          role="region"
+          aria-label="Authorized administrators"
+        >
           <table>
             <caption className="sr-only">
               Authorized Nightklass administrators, up to 100 accounts

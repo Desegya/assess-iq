@@ -22,14 +22,26 @@ export class AdminQueryDto {
 }
 export class AdminStatusDto {
   @IsIn(['ACTIVE', 'SUSPENDED', 'INACTIVE']) status!: 'ACTIVE' | 'SUSPENDED' | 'INACTIVE'
-  @IsString() @MinLength(5) @MaxLength(500) reason!: string
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(5)
+  @MaxLength(500)
+  reason!: string
 }
 export class AdminAccessDto {
   @IsIn(['ADMIN', 'OWNER', 'NONE']) role!: 'ADMIN' | 'OWNER' | 'NONE'
-  @IsString() @MinLength(5) @MaxLength(500) reason!: string
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(5)
+  @MaxLength(500)
+  reason!: string
 }
 export class AdminReasonDto {
-  @IsString() @MinLength(5) @MaxLength(500) reason!: string
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(5)
+  @MaxLength(500)
+  reason!: string
 }
 export class AdminReportDto extends AdminReasonDto {
   @IsIn(['OPEN', 'RESOLVED', 'DISMISSED']) status!: 'OPEN' | 'RESOLVED' | 'DISMISSED'
@@ -67,7 +79,12 @@ export class AdminQuestionDto {
   @IsString() @MinLength(1) @MaxLength(10000) correctAnswer!: string
   @IsString() @MaxLength(10000) explanation!: string
   @IsIn(['EASY', 'MEDIUM', 'HARD']) difficulty!: 'EASY' | 'MEDIUM' | 'HARD'
-  @IsIn(['DRAFT', 'APPROVED', 'ARCHIVED']) status!: 'DRAFT' | 'APPROVED' | 'ARCHIVED'
+  @IsIn(['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'ARCHIVED']) status!:
+    | 'DRAFT'
+    | 'PENDING_REVIEW'
+    | 'APPROVED'
+    | 'REJECTED'
+    | 'ARCHIVED'
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(6)
@@ -75,5 +92,9 @@ export class AdminQuestionDto {
   @Type(() => QuestionOptionDto)
   options?: QuestionOptionDto[]
   @IsOptional() @IsInt() @Min(1) @Max(100) marks?: number
-  @IsString() @MinLength(5) @MaxLength(500) reason!: string
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(5)
+  @MaxLength(500)
+  reason!: string
 }

@@ -279,7 +279,7 @@ export function AdminList({ section }: { section: string }) {
       )}
       <DataState {...state} />
       {state.data && (
-        <div className="admin-table mt-6">
+        <div className="admin-table mt-6" tabIndex={0} role="region" aria-label={config.title}>
           {state.data.items.length ? (
             <table>
               <caption className="sr-only">{config.title}</caption>

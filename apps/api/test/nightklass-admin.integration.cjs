@@ -251,6 +251,7 @@ test('course and topic changes persist and remain available to the learner', asy
   })
   assert.equal(created.status, 201)
   assert.equal((await call(`/courses/${created.body.id}`, { token: learnerToken })).status, 200)
+  assert.equal((await admin(`courses/${created.body.id}`)).body.owner.name, 'Learner')
   assert.equal(
     (
       await admin(`courses/${created.body.id}`, {
@@ -309,6 +310,9 @@ test('lesson corrections preserve originals and conflict on stale edits', async 
   assert.equal(corrected.body.content.objectives[0], 'Understand averages')
   assert.equal((await admin(`lessons/${lesson.id}/correct`, { method: 'POST', body })).status, 409)
   assert.equal((await prisma.topicLesson.findUnique({ where: { id: lesson.id } })).version, 1)
+  const learnerView = await call(`/learning/topics/${topic.id}/lesson`, { token: learnerToken })
+  assert.equal(learnerView.status, 200)
+  assert.equal(learnerView.body.lesson.version, 2)
 })
 test('question formats validate and graded question records cannot be edited', async () => {
   const body = {
@@ -438,11 +442,69 @@ test('institution contracts remain unchanged and personal users cannot read othe
 })
 
 test('all privileged mutations reject ordinary learners and unknown input fields', async () => {
-  for(const [path,method] of [[`users/${learner.id}/status`,'PATCH'],[`users/${learner.id}/admin-access`,'PATCH'],[`users/${learner.id}/courses`,'POST'],[`courses/${course.id}`,'PATCH'],[`courses/${course.id}/topics`,'POST'],[`topics/${topic.id}`,'PATCH'],[`topics/${topic.id}/archive`,'POST'],[`topics/${topic.id}/restore`,'POST'],[`lessons/${lesson.id}/correct`,'POST'],['questions','POST'],[`reports/${report.id}`,'PATCH']]) {
-    assert.equal((await admin(path,{token:learnerToken,method,body:{}})).status,403,path)
+  for (const [path, method] of [
+    [`users/${learner.id}/status`, 'PATCH'],
+    [`users/${learner.id}/admin-access`, 'PATCH'],
+    [`users/${learner.id}/courses`, 'POST'],
+    [`courses/${course.id}`, 'PATCH'],
+    [`courses/${course.id}/topics`, 'POST'],
+    [`topics/${topic.id}`, 'PATCH'],
+    [`topics/${topic.id}/archive`, 'POST'],
+    [`topics/${topic.id}/restore`, 'POST'],
+    [`lessons/${lesson.id}/correct`, 'POST'],
+    ['questions', 'POST'],
+    [`reports/${report.id}`, 'PATCH'],
+  ]) {
+    assert.equal((await admin(path, { token: learnerToken, method, body: {} })).status, 403, path)
   }
-  assert.equal((await admin(`courses/${course.id}`,{method:'PATCH',body:{ownerId:owner.id}})).status,400)
-  assert.equal((await admin(`users/${learner.id}/admin-access`,{method:'PATCH',body:{role:'SUPER_ADMIN',reason:'Invalid role attempt'}})).status,400)
-  const registration=await call('/auth/register-student',{method:'POST',body:{name:'Unauthorized registration',email:`invalid-${suffix}@example.test`,password,role:'SUPER_ADMIN',adminRole:'OWNER'}})
-  assert.equal(registration.status,400)
+  assert.equal(
+    (await admin(`courses/${course.id}`, { method: 'PATCH', body: { ownerId: owner.id } })).status,
+    400,
+  )
+  assert.equal(
+    (
+      await admin(`users/${learner.id}/admin-access`, {
+        method: 'PATCH',
+        body: { role: 'SUPER_ADMIN', reason: 'Invalid role attempt' },
+      })
+    ).status,
+    400,
+  )
+  const registration = await call('/auth/register-student', {
+    method: 'POST',
+    body: {
+      name: 'Unauthorized registration',
+      email: `invalid-${suffix}@example.test`,
+      password,
+      role: 'SUPER_ADMIN',
+      adminRole: 'OWNER',
+    },
+  })
+  assert.equal(registration.status, 400)
+})
+
+test('public login rate limits are enforced and bootstrap cannot overwrite established access', async () => {
+  const results = []
+  for (let i = 0; i < 4; i++)
+    results.push(
+      (
+        await call('/auth/login', {
+          method: 'POST',
+          body: { email: owner.email, password: 'invalid-test-password' },
+        })
+      ).status,
+    )
+  assert(results.includes(429))
+  const { spawnSync } = require('node:child_process')
+  const { resolve } = require('node:path')
+  const bootstrap = spawnSync(
+    process.execPath,
+    [
+      resolve(__dirname, '../../../packages/db/scripts/bootstrap-nightklass-admin.cjs'),
+      owner.email,
+    ],
+    { env: process.env, encoding: 'utf8' },
+  )
+  assert.equal(bootstrap.status, 1)
+  assert(bootstrap.stderr.includes('already provisioned'))
 })

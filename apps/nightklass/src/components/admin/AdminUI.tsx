@@ -1,5 +1,5 @@
 'use client'
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { StudyArtwork } from '@/components/product/StudyArtwork'
 import { Icon } from '@/components/product/Icon'
 import { adminRequest } from './admin-api'
@@ -107,6 +107,7 @@ export function ActionDialog({
   method?: string
   onSuccess: () => void
 }) {
+  const titleId = useId()
   const dialog = useRef<HTMLDialogElement>(null)
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
@@ -126,7 +127,7 @@ export function ActionDialog({
       </button>
       <dialog
         ref={dialog}
-        aria-labelledby={`dialog-${endpoint.replaceAll('/', '-')}`}
+        aria-labelledby={titleId}
         className="nk-admin-dialog w-[calc(100%-32px)] max-w-lg rounded-2xl border border-[#eae6ef] bg-white p-6 text-[#241f2e]"
         onCancel={(event) => {
           if (saving) event.preventDefault()
@@ -148,7 +149,7 @@ export function ActionDialog({
             }
           }}
         >
-          <h2 id={`dialog-${endpoint.replaceAll('/', '-')}`} className="text-xl font-semibold">
+          <h2 id={titleId} className="text-xl font-semibold">
             {title}
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-[#716778]">{description}</p>

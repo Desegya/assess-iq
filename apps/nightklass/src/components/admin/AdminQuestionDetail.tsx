@@ -31,6 +31,7 @@ export function AdminQuestionDetail({ id }: { id: string }) {
   const [answer, setAnswer] = useState('A')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   useEffect(() => {
     if (question.data) {
       setType(question.data.questionType)
@@ -53,6 +54,11 @@ export function AdminQuestionDetail({ id }: { id: string }) {
         description="Support the existing MCQ, true/false, short-answer, and theory formats. Questions with graded attempts cannot be edited."
         icon="target"
       />
+      {notice && (
+        <p role="status" className="mt-5 text-sm text-violet-800">
+          {notice}
+        </p>
+      )}
       {!isNew && <DataState {...question} />}
       {(isNew || question.data) && (
         <form
@@ -83,7 +89,10 @@ export function AdminQuestionDetail({ id }: { id: string }) {
                 },
               )
               if (isNew) router.replace(`/admin/questions/${result.id}`)
-              else question.reload()
+              else {
+                setNotice('Question saved.')
+                question.reload()
+              }
             } catch (err) {
               setError(err instanceof Error ? err.message : 'Unable to save question')
             } finally {
@@ -316,7 +325,9 @@ export function AdminQuestionDetail({ id }: { id: string }) {
                 defaultValue={question.data?.status ?? 'DRAFT'}
               >
                 <option value="DRAFT">Draft</option>
+                <option value="PENDING_REVIEW">Pending review</option>
                 <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
                 <option value="ARCHIVED">Archived</option>
               </select>
             </label>
