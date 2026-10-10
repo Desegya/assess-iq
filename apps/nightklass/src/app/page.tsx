@@ -116,20 +116,6 @@ function HowItWorksIcon({ kind, className }: { kind: typeof HOW_IT_WORKS[number]
   )
 }
 
-const FEATURES: { text: string; soon?: boolean }[] = [
-  { text: 'No syllabus yet? Generate a topic outline and edit it anytime, or photograph the one you have.' },
-  { text: 'Upload lecture notes, slides, PDFs, Word documents and textbooks.' },
-  { text: 'Detailed lessons for every topic, built from your notes (with citations) or with AI.' },
-  { text: 'Turn your course into a day-by-day study plan around your exam date.' },
-  { text: 'Take quizzes from basic to advanced, and see exactly what you got wrong.' },
-  { text: 'Flashcards that resurface right before you forget.' },
-  { text: 'Track completion, weak areas and mastery per topic.' },
-  { text: 'Ask AI anything about your course, even before you upload notes.' },
-  { text: 'Course suggestions based on your department and level.' },
-  { text: 'Essay, structured and calculation questions, marked with feedback.' },
-  { text: 'Recommended videos and supplementary resources for every topic.' },
-]
-
 const FAQS = [
   {
     q: 'Do I need a syllabus to get started?',
@@ -163,14 +149,6 @@ function FaqIllustration() {
   )
 }
 
-function SoonTag() {
-  return (
-    <span className="inline-block align-middle ml-1.5 text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">
-      Coming soon
-    </span>
-  )
-}
-
 function LandingContent() {
   const [openFaq, setOpenFaq] = useState<number | null>(0)
 
@@ -184,7 +162,6 @@ function LandingContent() {
           </Link>
           <nav aria-label="Main navigation" className="col-span-2 row-start-2 hidden items-center justify-center gap-8 text-sm text-[#707070] sm:flex lg:col-span-1 lg:col-start-2 lg:row-start-1">
             <a href="#how-it-works" className="inline-flex min-h-11 items-center transition-colors hover:text-[#7040ff]">How it works</a>
-            <a href="#features" className="inline-flex min-h-11 items-center transition-colors hover:text-[#7040ff]">Features</a>
             <a href="#faqs" className="inline-flex min-h-11 items-center transition-colors hover:text-[#7040ff]">FAQs</a>
           </nav>
           <div className="col-start-2 row-start-1 hidden items-center justify-end gap-6 sm:flex lg:col-start-3 lg:gap-8">
@@ -204,7 +181,6 @@ function LandingContent() {
               if ((event.target as HTMLElement).closest('a')) event.currentTarget.closest('details')?.removeAttribute('open')
             }}>
               <a href="#how-it-works" className="flex min-h-11 items-center rounded-lg px-3 text-sm text-[#707070] hover:bg-[#f6f1ff]">How it works</a>
-              <a href="#features" className="flex min-h-11 items-center rounded-lg px-3 text-sm text-[#707070] hover:bg-[#f6f1ff]">Features</a>
               <a href="#faqs" className="flex min-h-11 items-center rounded-lg px-3 text-sm text-[#707070] hover:bg-[#f6f1ff]">FAQs</a>
               <Link href="/login" className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-black hover:bg-[#f6f1ff]">Sign in</Link>
               <Link href="/register" className="mt-2 flex min-h-11 items-center justify-center rounded-2xl bg-[#a477ff] px-4 text-sm font-semibold text-white hover:bg-[#9060ef]">Start Studying Free</Link>
@@ -329,26 +305,6 @@ function LandingContent() {
         </div>
       </section>
 
-      <section id="features" className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
-        <div className="text-center mb-10">
-          <h2 className="font-heading text-2xl sm:text-3xl font-bold text-slate-900">
-            More than flashcards. A study system.
-          </h2>
-          <p className="text-slate-500 mt-3">Everything you need to actually finish the syllabus.</p>
-        </div>
-        <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-3">
-          {FEATURES.map(f => (
-            <li key={f.text} className="flex items-start gap-3 text-sm text-slate-700">
-              <span className={`mt-0.5 font-bold ${f.soon ? 'text-slate-300' : 'text-blue-600'}`}>✓</span>
-              <span className={f.soon ? 'text-slate-500' : ''}>
-                {f.text}
-                {f.soon && <SoonTag />}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
       <section id="faqs" aria-labelledby="faq-heading" className={`${geist.className} scroll-mt-6 bg-white text-black`}>
         <div className="mx-auto max-w-[1272px] px-5 py-16 sm:px-8 sm:py-20 lg:px-0 lg:py-[86px]">
           <p className="text-xs font-medium uppercase text-[#a477ff] sm:text-sm">FAQ</p>
@@ -412,7 +368,6 @@ function LandingContent() {
             <nav aria-label="Footer explore navigation">
               <p className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-[#9060ef]">Explore</p>
               <a href="#how-it-works" className="flex min-h-11 w-fit items-center text-sm text-[#707070] transition-colors hover:text-[#7040ff]">How it works</a>
-              <a href="#features" className="flex min-h-11 w-fit items-center text-sm text-[#707070] transition-colors hover:text-[#7040ff]">Features</a>
               <a href="#faqs" className="flex min-h-11 w-fit items-center text-sm text-[#707070] transition-colors hover:text-[#7040ff]">FAQs</a>
             </nav>
             <nav aria-label="Footer account navigation">

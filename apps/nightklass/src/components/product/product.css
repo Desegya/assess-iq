@@ -75,6 +75,29 @@
   background: #f6f4f8;
   color: #847a91;
 }
+/* Keep native select behavior, with a consistently inset product chevron. */
+.nk-product select:not([multiple]):not([size]),
+.nk-product select[size='1']:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 44px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236d6378' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 20px 20px;
+  cursor: pointer;
+}
+.nk-product select:disabled {
+  cursor: not-allowed;
+}
+@media (forced-colors: active) {
+  .nk-product select:not([multiple]):not([size]),
+  .nk-product select[size='1']:not([multiple]) {
+    appearance: auto;
+    -webkit-appearance: auto;
+    background-image: none;
+  }
+}
 .nk-product input[type='checkbox'],
 .nk-product input[type='radio'] {
   accent-color: var(--nk-purple);
