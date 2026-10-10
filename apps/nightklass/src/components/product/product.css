@@ -58,7 +58,7 @@
 .nk-product input[type='file'] { max-width: 100%; min-height: 44px; color: #71667f; }
 .nk-product input[type='file']::file-selector-button { background: #f3edff; color: #7545cf; padding: 12px 16px; border: 1px solid #e5d8fb; border-radius: 12px; margin-right: 12px; cursor: pointer; }
 .nk-product .badge { font-weight: 500; }
-.nk-product .text-slate-400 { color: #797080; }
+.nk-product .text-slate-400 { color: #6d6378; }
 .nk-product .text-slate-500 { color: #716778; }
 .nk-product .text-slate-900 { color: #241f2e; }
 .nk-product .bg-slate-50 { background-color: #faf8fd; }
@@ -84,3 +84,11 @@
 @media (prefers-reduced-motion: reduce) {
   .nk-product *, .nk-product *::before, .nk-product *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Course accents and semantic statuses keep their meaning at readable contrast. */
+.nk-product .text-cyan-600 { color: #0e7490; }
+.nk-product .text-orange-600 { color: #c2410c; }
+.nk-product .text-lime-600 { color: #4d7c0f; }
+.nk-product .text-amber-600 { color: #92400e; }
+.nk-product .text-emerald-600 { color: #047857; }
+.nk-product .text-red-500 { color: #b91c1c; }

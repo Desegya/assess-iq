@@ -70,8 +70,12 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
   }, [id])
 
   async function handleComplete(sessionId: string) {
-    await api.post(`/study/sessions/${sessionId}/complete`, {}).catch(() => undefined)
-    load()
+    try {
+      await api.post(`/study/sessions/${sessionId}/complete`, {})
+      load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save this session. Try again.')
+    }
   }
 
   async function handleAdapt() {

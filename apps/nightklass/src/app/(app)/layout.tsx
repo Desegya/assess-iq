@@ -91,7 +91,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         <nav aria-label="Main navigation" className="flex-1 space-y-6 overflow-y-auto px-4 pb-6">
           {NAV_SECTIONS.map(section => (
             <div key={section.label}>
-              <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[.14em] text-[#8c8197]">{section.label}</p>
+              <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[.14em] text-[#716778]">{section.label}</p>
               <div className="space-y-1">
                 {section.items.map(item => {
                   const active = isActive(item.href)
@@ -118,7 +118,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-w-0 flex-1 lg:ml-[248px]">
         <header className="sticky top-0 z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-[#eae6ef] bg-white/95 px-4 backdrop-blur-sm sm:px-8">
           <Link href="/dashboard" className="lg:hidden" aria-label="NightKlass home"><Brand /></Link>
-          <p className="hidden text-xs font-medium uppercase tracking-[.12em] text-[#8c8197] lg:block">Your personal study coach</p>
+          <p className="hidden text-xs font-medium uppercase tracking-[.12em] text-[#716778] lg:block">Your personal study coach</p>
           <div className="flex items-center gap-1 sm:gap-3">
             <Link href="/gpa" aria-label="GPA calculator" aria-current={isActive('/gpa') ? 'page' : undefined} className="flex h-11 items-center gap-2 rounded-xl px-2 text-xs font-medium text-[#716778] hover:bg-[#f3edff]"><ProductIcon name="chart" className="h-4 w-4" /><span className="hidden sm:inline">GPA & grades</span></Link>
             <Link href="/onboarding" aria-label="Academic profile" className="flex h-11 w-11 items-center justify-center"><Avatar name={user?.name ?? '?'} size={32} /></Link>

@@ -225,14 +225,19 @@ export default function GpaPage() {
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
+              <label className="col-span-2 space-y-1.5 text-xs font-medium text-slate-600">
+                <span className="block">Course title</span>
               <input
                 required
                 value={form.courseTitle}
                 onChange={e => setForm(f => ({ ...f, courseTitle: e.target.value }))}
                 placeholder="Course title"
                 aria-label="Course title"
-                className="input-base col-span-2"
+                className="input-base"
               />
+              </label>
+              <label className="space-y-1.5 text-xs font-medium text-slate-600">
+                <span className="block">Credit units</span>
               <input
                 required
                 type="number"
@@ -243,6 +248,9 @@ export default function GpaPage() {
                 aria-label="Credit units"
                 className="input-base w-full"
               />
+              </label>
+              <label className="space-y-1.5 text-xs font-medium text-slate-600">
+                <span className="block">Grade</span>
               <select value={form.grade} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} aria-label="Grade" className="input-base w-full">
                 {GRADES[scale].map(g => (
                   <option key={g} value={g}>
@@ -250,6 +258,7 @@ export default function GpaPage() {
                   </option>
                 ))}
               </select>
+              </label>
             </div>
             <button type="submit" disabled={saving} className="btn-primary w-full">
               <Icon name="plus" />{saving ? 'Adding…' : 'Add course'}

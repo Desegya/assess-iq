@@ -175,7 +175,12 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
   }
 
   async function showVersion(lessonId: string) {
-    setLesson(await api.get<Lesson>(`/learning/lessons/${lessonId}`))
+    setError(null)
+    try {
+      setLesson(await api.get<Lesson>(`/learning/lessons/${lessonId}`))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load this lesson version. Try again.')
+    }
   }
 
   if (!data && !error) return <div className="max-w-3xl space-y-4"><SkeletonCard /><SkeletonCard /></div>

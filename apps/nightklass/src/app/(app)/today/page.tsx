@@ -50,10 +50,13 @@ export default function TodayPage() {
   }, [])
 
   async function handleComplete(sessionId: string) {
-    await api
-      .post(`/study/sessions/${sessionId}/complete`, { confidenceRating: confidence[sessionId] ?? undefined })
-      .catch(() => undefined)
-    load()
+    setError(null)
+    try {
+      await api.post(`/study/sessions/${sessionId}/complete`, { confidenceRating: confidence[sessionId] ?? undefined })
+      load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save this session. Try again.')
+    }
   }
 
   return (
