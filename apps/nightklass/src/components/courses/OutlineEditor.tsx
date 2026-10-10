@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Icon } from '@/components/product/Icon'
 import Link from 'next/link'
 import { useApi } from '@/hooks/use-api'
 import { SOURCE_BADGE, type Topic } from './outline-types'
@@ -151,7 +152,7 @@ export function OutlineEditor({
             aria-label="Topic name"
             className="input-base !py-1 flex-1 min-w-0"
           />
-          <button type="submit" disabled={!!busy} className="text-xs font-semibold text-blue-600">Save</button>
+          <button type="submit" disabled={!!busy} className="text-xs font-semibold text-violet-600">Save</button>
           <button type="button" onClick={() => setRenaming(null)} className="text-xs text-slate-400">Cancel</button>
         </form>
       )
@@ -161,7 +162,7 @@ export function OutlineEditor({
         type="button"
         disabled={!editing}
         onClick={() => setRenaming({ id: topic.id, name: topic.name })}
-        className={`${className} text-left enabled:hover:text-blue-600 disabled:cursor-default`}
+        className={`${className} text-left enabled:hover:text-violet-600 disabled:cursor-default`}
         title={editing ? 'Rename' : undefined}
       >
         {topic.name}
@@ -169,7 +170,7 @@ export function OutlineEditor({
     )
   }
 
-  const editBtn = 'text-xs font-semibold text-slate-500 hover:text-blue-600 disabled:opacity-30'
+  const editBtn = 'compact-action gap-1 text-xs font-semibold text-slate-500 hover:text-violet-600 disabled:opacity-30'
 
   return (
     <div>
@@ -181,7 +182,7 @@ export function OutlineEditor({
         )}
         {expandable.length > 0 && (
           <button onClick={() => expand()} disabled={!!busy} className="btn-secondary !py-1.5 !px-3 text-xs">
-            {busy === 'expand-all' ? 'Expanding…' : '✨ Expand with AI'}
+            {busy === 'expand-all' ? 'Expanding…' : <><Icon name="spark" className="h-4 w-4" />Expand with AI</>}
           </button>
         )}
         {hasAiExpansion && (
@@ -192,8 +193,8 @@ export function OutlineEditor({
         )}
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-3">{error}</div>}
-      {notice && <div className="bg-blue-50 border border-blue-100 text-blue-800 text-sm rounded-xl px-4 py-3 mb-3">{notice}</div>}
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-3">{error}</div>}
+      {notice && <div className="bg-violet-50 border border-violet-100 text-violet-800 text-sm rounded-xl px-4 py-3 mb-3">{notice}</div>}
 
       <ol className="space-y-2">
         {topLevel.map((topic, i) => {
@@ -210,24 +211,24 @@ export function OutlineEditor({
                   {topic.description && <p className="text-xs text-slate-400 mt-0.5 ml-5">{topic.description}</p>}
                 </div>
                 {!editing ? (
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <Link href={`/topics/${topic.id}/learn`} className="text-xs text-blue-600 font-semibold">Learn</Link>
-                    <Link href={`/topics/${topic.id}/quiz`} className="text-xs text-blue-600 font-semibold">Quiz</Link>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Link href={`/topics/${topic.id}/learn`} className="text-xs text-violet-600 font-semibold">Learn</Link>
+                    <Link href={`/topics/${topic.id}/quiz`} className="text-xs text-violet-600 font-semibold">Quiz</Link>
                     <button
                       onClick={() => onFlashcards(topic.id)}
                       disabled={flashcardsBusyFor === topic.id}
-                      className="text-xs text-blue-600 font-semibold disabled:opacity-60"
+                      className="text-xs text-violet-600 font-semibold disabled:opacity-60"
                     >
                       {flashcardsBusyFor === topic.id ? 'Generating…' : 'Flashcards'}
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2.5 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-2.5">
                     <button onClick={() => move(topLevel, i, -1)} disabled={i === 0 || !!busy} className={editBtn} aria-label="Move up">↑</button>
                     <button onClick={() => move(topLevel, i, 1)} disabled={i === topLevel.length - 1 || !!busy} className={editBtn} aria-label="Move down">↓</button>
                     <button onClick={() => { setAddingSubTo(topic.id); setSubName('') }} disabled={!!busy} className={editBtn}>+ Subtopic</button>
                     <button onClick={() => expand(topic.id)} disabled={!!busy} className={editBtn}>
-                      {busy === `expand-${topic.id}` ? 'Expanding…' : '✨ Expand'}
+                      {busy === `expand-${topic.id}` ? 'Expanding…' : <><Icon name="spark" className="h-4 w-4" />Expand</>}
                     </button>
                     <button onClick={() => remove(topic)} disabled={!!busy} className="text-xs font-semibold text-red-500 disabled:opacity-30">Remove</button>
                   </div>
@@ -243,7 +244,7 @@ export function OutlineEditor({
                         {!(editing && renaming?.id === sub.id) && sub.source !== topic.source && <SourceBadge topic={sub} />}
                       </div>
                       {editing && (
-                        <div className="flex items-center gap-2.5 flex-shrink-0">
+                        <div className="flex flex-wrap items-center gap-2.5">
                           <button onClick={() => move(children, j, -1)} disabled={j === 0 || !!busy} className={editBtn} aria-label="Move up">↑</button>
                           <button onClick={() => move(children, j, 1)} disabled={j === children.length - 1 || !!busy} className={editBtn} aria-label="Move down">↓</button>
                           <button onClick={() => remove(sub)} disabled={!!busy} className="text-xs font-semibold text-red-500 disabled:opacity-30">Remove</button>
@@ -255,7 +256,7 @@ export function OutlineEditor({
               )}
 
               {editing && addingSubTo === topic.id && (
-                <form onSubmit={e => addSubtopic(e, topic.id)} className="flex items-center gap-2 mt-2 ml-5">
+                <form onSubmit={e => addSubtopic(e, topic.id)} className="flex flex-wrap items-center gap-2 mt-2 sm:ml-5">
                   <input
                     autoFocus
                     value={subName}
@@ -264,7 +265,7 @@ export function OutlineEditor({
                     aria-label="Subtopic name"
                     className="input-base !py-1 flex-1"
                   />
-                  <button type="submit" disabled={!!busy} className="text-xs font-semibold text-blue-600">Add</button>
+                  <button type="submit" disabled={!!busy} className="text-xs font-semibold text-violet-600">Add</button>
                   <button type="button" onClick={() => setAddingSubTo(null)} className="text-xs text-slate-400">Cancel</button>
                 </form>
               )}
@@ -279,7 +280,7 @@ export function OutlineEditor({
           onChange={e => setNewTopic(e.target.value)}
           placeholder="Add a topic yourself"
           aria-label="New topic name"
-          className="input-base flex-1"
+          className="input-base min-w-0 flex-1"
         />
         <button type="submit" disabled={!!busy || !newTopic.trim()} className="btn-secondary">
           {busy === 'add' ? 'Adding…' : '+ Add'}
@@ -288,10 +289,10 @@ export function OutlineEditor({
 
       {topLevel.length > 0 && (
         <div className="flex gap-4 mt-4 text-xs">
-          <button onClick={() => void toggleArchived()} className="text-slate-500 font-semibold hover:text-blue-600">
+          <button onClick={() => void toggleArchived()} className="text-slate-500 font-semibold hover:text-violet-600">
             {archived ? 'Hide archived topics' : 'Archived topics'}
           </button>
-          <button onClick={() => void toggleHistory()} className="text-slate-500 font-semibold hover:text-blue-600">
+          <button onClick={() => void toggleHistory()} className="text-slate-500 font-semibold hover:text-violet-600">
             {revisions ? 'Hide history' : 'Outline history'}
           </button>
         </div>
@@ -309,7 +310,7 @@ export function OutlineEditor({
                   <button
                     onClick={() => void act(`restore-${t.id}`, () => api.post(`/topics/${t.id}/restore`, {}), `Restored "${t.name}"`)}
                     disabled={!!busy}
-                    className="text-xs font-semibold text-blue-600"
+                    className="text-xs font-semibold text-violet-600"
                   >
                     Restore
                   </button>

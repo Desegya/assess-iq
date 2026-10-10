@@ -89,7 +89,7 @@ function Md({ children }: { children: string }) {
               {label}
             </a>
           ) : (
-            <a href={href} className="text-blue-600 underline" target="_blank" rel="noreferrer">
+            <a href={href} className="text-violet-600 underline" target="_blank" rel="noreferrer">
               {label}
             </a>
           ),
@@ -190,7 +190,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
             onClick={() => setMode(m)}
             title={disabled ? 'Upload notes for this course first' : undefined}
             className={`text-xs font-semibold rounded-xl px-3 py-2 transition-colors disabled:opacity-40 ${
-              mode === m ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              mode === m ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             {MODE_LABEL[m]}
@@ -207,7 +207,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
     <div className="max-w-3xl space-y-5">
       <div>
         {data && (
-          <Link href={`/courses/${data.topic.courseId}`} className="text-sm text-blue-600 font-semibold">
+          <Link href={`/courses/${data.topic.courseId}`} className="text-sm text-violet-600 font-semibold">
             ← Back to {data.topic.courseTitle}
           </Link>
         )}
@@ -217,8 +217,8 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
         )}
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
-      {notice && <div className="bg-blue-50 border border-blue-100 text-blue-800 text-sm rounded-xl px-4 py-3">{notice}</div>}
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+      {notice && <div className="bg-violet-50 border border-violet-100 text-violet-800 text-sm rounded-xl px-4 py-3">{notice}</div>}
 
       {data && !lesson && (
         <section className="card p-6">
@@ -439,11 +439,11 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
           {resources.videos.length > 0 ? (
             <div className="grid sm:grid-cols-2 gap-3 mt-3">
               {resources.videos.map(v => (
-                <a key={v.id} href={v.url} target="_blank" rel="noreferrer" className="group rounded-xl border border-slate-200 overflow-hidden hover:border-blue-300">
+                <a key={v.id} href={v.url} target="_blank" rel="noreferrer" className="group rounded-xl border border-slate-200 overflow-hidden hover:border-violet-300">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={v.thumbnail} alt="" className="w-full aspect-video object-cover" loading="lazy" />
                   <div className="p-3">
-                    <p className="text-sm font-semibold text-slate-800 line-clamp-2 group-hover:text-blue-600">{v.title}</p>
+                    <p className="text-sm font-semibold text-slate-800 line-clamp-2 group-hover:text-violet-600">{v.title}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{v.channel}</p>
                   </div>
                 </a>

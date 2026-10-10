@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Icon } from '@/components/product/Icon'
 import { useApi } from '@/hooks/use-api'
 import type { ProposalSet, TopicProposal } from './outline-types'
 
@@ -89,10 +90,11 @@ export function OutlineInput({
   const tab = (m: Mode, label: string) => (
     <button
       type="button"
+      aria-pressed={mode === m}
       onClick={() => setMode(mode === m ? null : m)}
       disabled={!!busy}
       className={`text-sm font-semibold rounded-xl px-3.5 py-2 transition-colors ${
-        mode === m ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+        mode === m ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
       }`}
     >
       {label}
@@ -108,14 +110,14 @@ export function OutlineInput({
       </p>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={handleGenerate} disabled={!!busy} className="btn-primary !py-2 !px-3.5 text-sm">
-          ✨ Generate with AI
+          <Icon name="spark" className="h-4 w-4" />Generate with AI
         </button>
         {tab('upload', 'Upload file')}
         {tab('paste', 'Paste text')}
         {tab('photo', 'Take a photo')}
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mt-3">{error}</div>}
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mt-3">{error}</div>}
       {busy && <p className="text-sm text-slate-400 mt-3">{busy}</p>}
 
       {!busy && mode === 'upload' && (

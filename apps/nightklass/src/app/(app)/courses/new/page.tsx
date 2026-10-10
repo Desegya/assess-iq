@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Icon } from '@/components/product/Icon'
+import { PageHeader } from '@/components/product/PageHeader'
 import { useApi } from '@/hooks/use-api'
 import { LEVELS, profileSummary, type AcademicProfile } from '@/lib/profile'
 
@@ -172,23 +174,22 @@ export default function NewCoursePage() {
 
   if (!path) {
     return (
-      <div className="max-w-2xl">
-        <h1 className="font-heading text-2xl font-bold text-slate-900">New course</h1>
-        <p className="text-slate-500 text-sm mt-1 mb-6">How would you like to add it?</p>
-        <div className="space-y-3">
-          {PATHS.map((p, i) => (
+      <div className="mx-auto max-w-3xl">
+        <PageHeader title="Start with what you have." description="A course title, your programme, or an outline. Choose a starting point and we’ll help with the rest." eyebrow="Build your semester" icon="book" />
+        <div className="grid gap-4 md:grid-cols-3">
+          {PATHS.map((p) => (
             <button
               key={p.id}
               type="button"
               onClick={() => setPath(p.id)}
-              className="card w-full p-5 text-left flex items-start gap-4 hover:-translate-y-0.5 hover:border-blue-300"
+              className="group w-full rounded-[20px] border border-[#eae6ef] bg-white p-6 text-left flex flex-col items-start gap-5 transition-colors hover:bg-[#faf7ff] hover:border-[#bca0e6]"
             >
-              <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 font-heading font-bold text-sm flex items-center justify-center flex-shrink-0">
-                {i + 1}
+              <span className="w-12 h-12 rounded-2xl bg-violet-50 text-violet-700 flex items-center justify-center flex-shrink-0">
+                <Icon name={p.id === 'programme' ? 'user' : p.id === 'outline' ? 'upload' : 'book'} />
               </span>
               <span className="min-w-0">
                 <span className="block font-heading font-bold text-slate-900">{p.title}</span>
-                <span className="block text-sm text-slate-500 mt-1">{p.desc}</span>
+                <span className="block text-sm leading-relaxed text-slate-500 mt-2">{p.desc}</span>
               </span>
             </button>
           ))}
@@ -202,8 +203,8 @@ export default function NewCoursePage() {
 
   if (path === 'programme') {
     return (
-      <div className="max-w-2xl">
-        <button type="button" onClick={() => setPath(null)} className="text-sm text-blue-600 font-semibold">
+      <div className="mx-auto max-w-3xl">
+        <button type="button" onClick={() => setPath(null)} className="text-sm text-violet-600 font-semibold">
           ← Other ways to add a course
         </button>
         <h1 className="font-heading text-2xl font-bold text-slate-900 mt-2">Choose from my programme</h1>
@@ -221,13 +222,13 @@ export default function NewCoursePage() {
 
         {hasProfile && (
           <>
-            <p className="text-sm font-semibold text-blue-600 mt-1">{profileSummary(profile!)}</p>
+            <p className="text-sm font-semibold text-violet-600 mt-1">{profileSummary(profile!)}</p>
             <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 mt-4">
               AI suggestions based on courses commonly taken in your programme, not your school&apos;s official list. Course
               codes may differ at your school. Untick anything you&apos;re not taking.
             </p>
 
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mt-4">{error}</div>}
+            {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mt-4">{error}</div>}
 
             {suggesting && <p className="text-sm text-slate-400 mt-6">Finding courses for your programme…</p>}
 
@@ -243,7 +244,7 @@ export default function NewCoursePage() {
                       <input type="checkbox" checked={selected.has(i)} onChange={() => toggleSuggestion(i)} disabled={loading} />
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm font-semibold text-slate-800">
-                          {c.courseCode && <span className="text-blue-600 mr-1.5">{c.courseCode}</span>}
+                          {c.courseCode && <span className="text-violet-600 mr-1.5">{c.courseCode}</span>}
                           {c.title}
                         </span>
                       </span>
@@ -264,7 +265,7 @@ export default function NewCoursePage() {
                 Add a course that&apos;s not listed
               </button>
               {suggestions && (
-                <button type="button" onClick={() => void loadSuggestions()} disabled={loading || suggesting} className="text-sm text-blue-600 font-semibold">
+                <button type="button" onClick={() => void loadSuggestions()} disabled={loading || suggesting} className="text-sm text-violet-600 font-semibold">
                   Suggest again
                 </button>
               )}
@@ -279,15 +280,15 @@ export default function NewCoursePage() {
   }
 
   return (
-    <div className="max-w-lg">
-      <button type="button" onClick={() => setPath(null)} className="text-sm text-blue-600 font-semibold">
+    <div className="mx-auto max-w-2xl">
+      <button type="button" onClick={() => setPath(null)} className="text-sm text-violet-600 font-semibold">
         ← Other ways to add a course
       </button>
       <h1 className="font-heading text-2xl font-bold text-slate-900 mt-2 mb-6">
         {path === 'outline' ? 'Upload a course outline' : 'Add a course'}
       </h1>
-      <form onSubmit={handleSubmit} className="card p-6 space-y-4">
-        {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+      <form onSubmit={handleSubmit} className="card p-6 sm:p-8 space-y-5">
+        {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
 
         <div>
           <label htmlFor="course" className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -370,7 +371,7 @@ export default function NewCoursePage() {
         )}
 
         {path === 'manual' && (
-          <label className="flex items-start gap-3 bg-blue-50/60 border border-blue-100 rounded-xl px-4 py-3 cursor-pointer">
+          <label className="flex items-start gap-3 bg-violet-50/60 border border-violet-100 rounded-xl px-4 py-3 cursor-pointer">
             <input
               type="checkbox"
               checked={generateOutline}

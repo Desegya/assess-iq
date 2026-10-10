@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Icon } from '@/components/product/Icon'
 import { useApi } from '@/hooks/use-api'
 import { getSubjectColor } from '@/lib/subject-color'
 import { SkeletonCard } from '@/components/ui/Skeleton'
@@ -55,7 +56,7 @@ interface Readiness {
 
 const READINESS_STATUS = {
   strong: { label: 'Strong', className: 'bg-emerald-50 text-emerald-700' },
-  ok: { label: 'OK', className: 'bg-blue-50 text-blue-700' },
+  ok: { label: 'OK', className: 'bg-violet-50 text-violet-700' },
   weak: { label: 'Weak', className: 'bg-red-50 text-red-700' },
   'not-quizzed': { label: 'Not quizzed', className: 'bg-slate-100 text-slate-600' },
   'not-started': { label: 'Not started', className: 'bg-slate-100 text-slate-400' },
@@ -245,13 +246,14 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     setDays(prev => prev.map((d, idx) => (idx === i ? { ...d, [field]: value } : d)))
   }
 
-  if (error) return <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
+  if (error) return <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
   if (!course) return <div className="space-y-8"><SkeletonCard /><SkeletonCard /></div>
 
   const color = getSubjectColor(course.id)
 
   return (
     <div className="space-y-8">
+      <Link href="/courses" className="inline-flex min-h-11 items-center gap-2 text-xs font-medium text-violet-700"><Icon name="back" className="h-4 w-4" />My courses</Link>
       {editing ? (
         <EditCourseForm
           course={course}
@@ -276,39 +278,43 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
               </div>
             )}
             {hasPlan && (
-              <Link href={`/courses/${id}/plan`} className="inline-block mt-3 text-sm text-blue-600 font-semibold">
+              <Link href={`/courses/${id}/plan`} className="inline-block mt-3 text-sm text-violet-600 font-semibold">
                 View current study plan →
               </Link>
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button onClick={() => setEditing(true)} className="btn-secondary">
-              Edit course
+              <Icon name="edit" className="h-4 w-4" />Edit course
             </button>
             <Link href={`/courses/${id}/chat`} className="btn-secondary">
-              💬 Ask AI
+              <Icon name="chat" className="h-4 w-4" />Ask AI
             </Link>
           </div>
         </div>
       )}
 
+      <nav aria-label="Course sections" className="flex flex-wrap gap-2 border-b border-[#eae6ef] pb-4 text-xs font-medium text-slate-500">
+        {[['outline', 'Course outline'], ['materials', 'Study materials'], ['setup', 'Study setup']].map(([anchor, label]) => <a key={anchor} href={`#${anchor}`} className="inline-flex min-h-11 items-center rounded-xl bg-white px-4 hover:bg-violet-50 hover:text-violet-700">{label}</a>)}
+      </nav>
+      <div className="grid items-start gap-5 xl:grid-cols-2">
       {course.topics.some(t => !t.parentTopicId) && (
-        <section className={`card p-6 ${color.bgSoft} ${color.border}`}>
+        <section className="rounded-[20px] border border-[#e7dafb] bg-[#f7f2ff] p-6">
           <h2 className="font-heading font-bold text-slate-900 mb-1">Quick practice</h2>
           <p className="text-slate-500 text-sm mb-4">
             No need to wait for a full plan. Start the first lesson, or test yourself right now.
           </p>
           {flashcardError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">
+            <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">
               {flashcardError}
             </div>
           )}
           <div className="flex items-center gap-3 flex-wrap">
             <Link href={`/topics/${course.topics.find(t => !t.parentTopicId)!.id}/learn`} className="btn-primary">
-              Start learning
+              <Icon name="book" />Start learning
             </Link>
             <Link href={`/topics/${course.topics.find(t => !t.parentTopicId)!.id}/quiz`} className="btn-secondary">
-              Try a quick quiz
+              <Icon name="target" />Try a quick quiz
             </Link>
             <button
               onClick={() => handleGenerateFlashcards(course.topics.find(t => !t.parentTopicId)!.id)}
@@ -361,9 +367,11 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
         </section>
       )}
 
+      </div>
+
       {/* Course outline: two layers — the student's original plus Nightklass enrichment */}
-      <section className="card p-6">
-        <h2 className="font-heading font-bold text-slate-900 mb-1">Course outline</h2>
+      <section id="outline" className="card scroll-mt-24 p-6">
+        <h2 className="font-heading font-bold text-slate-900 mb-1 flex items-center gap-2"><Icon name="book" className="h-5 w-5 text-violet-700" />Course outline</h2>
         <p className="text-slate-400 text-sm mb-4">
           Your topics, in study order. Edit them anytime. Removing a topic you&apos;ve studied archives it, so your progress is kept.
         </p>
@@ -384,7 +392,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
 
         {arrivalBusy && <p className="text-sm text-slate-400 mb-4">{arrivalBusy}</p>}
         {arrivalError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{arrivalError}</div>
+          <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{arrivalError}</div>
         )}
 
         {proposalSet ? (
@@ -409,7 +417,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
                   flashcardsBusyFor={generatingFlashcardsFor}
                 />
                 {flashcardError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mt-3">{flashcardError}</div>
+                  <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mt-3">{flashcardError}</div>
                 )}
               </div>
             )}
@@ -422,14 +430,15 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
         )}
       </section>
 
+      <div className="grid items-start gap-5 xl:grid-cols-2">
       {/* Lecture notes & slides — grounding material for notes, chat and quizzes */}
-      <section className="card p-6">
-        <h2 className="font-heading font-bold text-slate-900 mb-1">Lecture notes &amp; slides</h2>
+      <section id="materials" className="card scroll-mt-24 p-6">
+        <h2 className="font-heading font-bold text-slate-900 mb-1 flex items-center gap-2"><Icon name="upload" className="h-5 w-5 text-violet-700" />Lecture notes &amp; slides</h2>
         <p className="text-slate-400 text-sm mb-4">
           Upload notes, slides, handouts or a textbook (PDF, Word, PowerPoint or text). Nightklass uses them for your study
           notes, quizzes and answers, so they match what your lecturer teaches.
         </p>
-        {notesError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{notesError}</div>}
+        {notesError && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{notesError}</div>}
         <div className="flex items-center gap-3 flex-wrap">
           <input
             type="file"
@@ -471,7 +480,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
                       <button
                         onClick={() => void handleAddNewTopics([t])}
                         disabled={addingNewTopics}
-                        className="text-xs font-semibold text-blue-600 flex-shrink-0"
+                        className="text-xs font-semibold text-violet-600 flex-shrink-0"
                       >
                         + Add
                       </button>
@@ -494,34 +503,36 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
       </section>
 
       {/* Study setup */}
-      <section className="card p-6">
-        <h2 className="font-heading font-bold text-slate-900 mb-1">Study setup</h2>
+      <section id="setup" className="card scroll-mt-24 p-6">
+        <h2 className="font-heading font-bold text-slate-900 mb-1 flex items-center gap-2"><Icon name="calendar" className="h-5 w-5 text-violet-700" />Study setup</h2>
         <p className="text-slate-400 text-sm mb-4">Set when you can study and your exam date, then generate a plan.</p>
 
         <form onSubmit={handleGeneratePlan} className="space-y-4">
-          {planError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{planError}</div>}
+          {planError && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{planError}</div>}
 
           <div className="space-y-2">
             {DAYS.map((label, i) => (
-              <div key={label} className="flex items-center gap-3">
-                <label className="flex items-center gap-2 w-20">
+              <div key={label} className="grid grid-cols-[54px_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                <label className="flex items-center gap-2 min-w-0">
                   <input type="checkbox" checked={days[i]!.enabled} onChange={() => toggleDay(i)} />
                   <span className="text-sm text-slate-700">{label}</span>
                 </label>
                 <input
                   type="time"
+                  aria-label={`${label} study start time`}
                   value={days[i]!.startTime}
                   onChange={e => updateDay(i, 'startTime', e.target.value)}
                   disabled={!days[i]!.enabled}
-                  className="input-base py-1.5 w-32"
+                  className="input-base !px-2 py-1.5 w-full"
                 />
                 <span className="text-slate-400 text-sm">to</span>
                 <input
                   type="time"
+                  aria-label={`${label} study end time`}
                   value={days[i]!.endTime}
                   onChange={e => updateDay(i, 'endTime', e.target.value)}
                   disabled={!days[i]!.enabled}
-                  className="input-base py-1.5 w-32"
+                  className="input-base !px-2 py-1.5 w-full"
                 />
               </div>
             ))}
@@ -540,9 +551,10 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
                 <button
                   key={value}
                   type="button"
+                  aria-pressed={planLength === value}
                   onClick={() => setPlanLength(value)}
                   className={`text-xs font-semibold rounded-xl px-3 py-2 transition-colors ${
-                    planLength === value ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    planLength === value ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   {label}
@@ -582,6 +594,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
           </button>
         </form>
       </section>
+      </div>
     </div>
   )
 }

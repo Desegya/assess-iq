@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PageHeader } from '@/components/product/PageHeader'
+import { Icon } from '@/components/product/Icon'
 import { useApi } from '@/hooks/use-api'
 import { getSubjectColor } from '@/lib/subject-color'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -56,10 +58,9 @@ export default function TodayPage() {
 
   return (
     <div>
-      <h1 className="font-heading text-2xl font-bold text-slate-900 mb-1">Today</h1>
-      <p className="text-slate-500 text-sm mb-6">Your scheduled study sessions for today.</p>
+      <PageHeader title="Today" description="A little focus, one session at a time. Here’s your study plan for today." eyebrow="Your daily plan" icon="calendar" />
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
       {sessions === null && !error && (
         <div className="space-y-4">
           <div className="card p-6 space-y-3">
@@ -80,7 +81,7 @@ export default function TodayPage() {
       <div className="space-y-4">
         {sessions?.map(s => (
           <div key={s.id} className="card card-accent p-6" style={{ ['--accent-color' as string]: getSubjectColor(s.course.id).hex }}>
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className={`text-xs font-semibold ${getSubjectColor(s.course.id).text}`}>{s.course.title}</p>
                 <h2 className="font-heading font-bold text-slate-900 mt-0.5">{s.topic?.name ?? 'Revision'}</h2>
@@ -103,7 +104,8 @@ export default function TodayPage() {
                 <select
                   value={confidence[s.id] ?? ''}
                   onChange={e => setConfidence(c => ({ ...c, [s.id]: Number(e.target.value) }))}
-                  className="input-base py-2 flex-1 min-w-[220px]"
+                  aria-label="How well do you understand this topic?"
+                  className="input-base py-2 w-full sm:flex-1 sm:min-w-[220px]"
                 >
                   <option value="">How well do you understand it?</option>
                   {CONFIDENCE_LABELS.map((label, i) => (
@@ -113,15 +115,15 @@ export default function TodayPage() {
                   ))}
                 </select>
                 <button onClick={() => handleComplete(s.id)} className="btn-primary">
-                  Mark complete
+                  <Icon name="check" />Mark complete
                 </button>
                 {s.topic && (
                   <>
                     <Link href={`/topics/${s.topic.id}/learn`} className="btn-secondary">
-                      {s.kind === 'LEARN' ? 'Open lesson' : 'Revise lesson'}
+                      <Icon name="book" />{s.kind === 'LEARN' ? 'Open lesson' : 'Revise lesson'}
                     </Link>
                     <Link href={`/topics/${s.topic.id}/quiz`} className="btn-secondary">
-                      Take a quiz
+                      <Icon name="target" />Take a quiz
                     </Link>
                   </>
                 )}

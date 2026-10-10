@@ -68,7 +68,7 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="max-w-2xl flex flex-col h-[calc(100vh-160px)]">
       <div className="mb-4">
-        <Link href={`/courses/${id}`} className="text-sm text-blue-600 font-semibold">
+        <Link href={`/courses/${id}`} className="text-sm text-violet-600 font-semibold">
           ← Back to {course?.title ?? 'course'}
         </Link>
         <h1 className="font-heading text-2xl font-bold text-slate-900 mt-2">Ask AI</h1>
@@ -86,7 +86,7 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
                 <button
                   key={p}
                   onClick={() => setInput(p)}
-                  className="text-xs font-medium bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-full px-3.5 py-2 transition-colors"
+                  className="text-xs font-medium bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-full px-3.5 py-2 transition-colors"
                 >
                   {p}
                 </button>
@@ -98,7 +98,7 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-800'
+                m.role === 'user' ? 'bg-violet-600 text-white' : 'bg-white border border-slate-200 text-slate-800'
               }`}
             >
               {m.role === 'assistant' && m.source === 'fallback' && (
@@ -115,7 +115,7 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
         <div ref={bottomRef} />
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-3">{error}</div>}
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-3">{error}</div>}
 
       <form onSubmit={handleSend} className="flex items-center gap-2">
         <input

@@ -135,7 +135,7 @@ export default function GpaPage() {
               key={s}
               onClick={() => setScale(s)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                scale === s ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
+                scale === s ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-500'
               }`}
             >
               {s === 'FIVE' ? '5.0 scale' : '4.0 scale'}
@@ -144,7 +144,7 @@ export default function GpaPage() {
         </div>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
 
       {entries === null && !error && (
         <div className="space-y-3">
@@ -161,7 +161,7 @@ export default function GpaPage() {
                 percent={(cgpa / maxScale) * 100}
                 size={80}
                 strokeWidth={7}
-                color="#2563eb"
+                color="#7545cf"
                 label={<span className="font-heading text-lg font-bold text-slate-900">{cgpa.toFixed(2)}</span>}
               />
               <div>
@@ -169,7 +169,7 @@ export default function GpaPage() {
                 <p className="font-heading text-xl font-bold text-slate-900 mt-0.5">
                   {cgpa.toFixed(2)} <span className="text-slate-400 text-sm font-normal">/ {maxScale.toFixed(1)}</span>
                 </p>
-                {scale === 'FIVE' && <p className="text-xs text-blue-600 font-semibold mt-1">{classify(cgpa)}</p>}
+                {scale === 'FIVE' && <p className="text-xs text-violet-600 font-semibold mt-1">{classify(cgpa)}</p>}
                 {otherScaleCount > 0 && (
                   <p className="text-xs text-slate-400 mt-1">
                     +{otherScaleCount} entr{otherScaleCount === 1 ? 'y' : 'ies'} on the {scale === 'FIVE' ? '4.0' : '5.0'} scale, not counted here
@@ -187,7 +187,7 @@ export default function GpaPage() {
             <div key={label} className="card p-5">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-bold text-slate-800">{label}</p>
-                <p className="text-xs font-semibold text-blue-600">GPA: {gpaOf(list).toFixed(2)}</p>
+                <p className="text-xs font-semibold text-violet-600">GPA: {gpaOf(list).toFixed(2)}</p>
               </div>
               <ul className="space-y-1.5">
                 {list.map(e => (

@@ -6,7 +6,7 @@ interface ProgressRingProps {
   label?: React.ReactNode
 }
 
-export function ProgressRing({ percent, size = 56, strokeWidth = 5, color = '#2563eb', label }: ProgressRingProps) {
+export function ProgressRing({ percent, size = 56, strokeWidth = 5, color = '#7545cf', label }: ProgressRingProps) {
   const clamped = Math.max(0, Math.min(100, percent))
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
@@ -14,7 +14,7 @@ export function ProgressRing({ percent, size = 56, strokeWidth = 5, color = '#25
 
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
+      <svg aria-hidden="true" width={size} height={size} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={strokeWidth} className="text-slate-100" />
         <circle
           cx={size / 2}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Icon } from '@/components/product/Icon'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth, type AuthUser } from '@/contexts/auth-context'
 
@@ -18,6 +19,7 @@ export function LoginForm() {
   const searchParams = useSearchParams()
   const { login } = useAuth()
 
+  const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -51,15 +53,16 @@ export function LoginForm() {
   }
 
   return (
-    <div className="card p-8">
-      <div className="mb-6">
+    <div>
+      <div className="mb-8">
+        <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[.12em] text-violet-700"><Icon name="spark" className="h-4 w-4" />Your study space</p>
         <h1 className="font-heading text-2xl font-bold text-slate-900">Welcome back</h1>
         <p className="text-slate-500 text-sm mt-1.5">Sign in to continue your study plan</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
+          <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
         )}
 
         <div>
@@ -85,7 +88,7 @@ export function LoginForm() {
           </label>
           <input
             id="password"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             autoComplete="current-password"
             required
             value={password}
@@ -96,6 +99,11 @@ export function LoginForm() {
           />
         </div>
 
+        <button type="button" onClick={() => setShowPassword(value => !value)} aria-pressed={showPassword} className="inline-flex min-h-11 items-center gap-2 text-xs font-medium text-slate-500 hover:text-violet-700">
+          <Icon name={showPassword ? 'eyeOff' : 'eye'} className="h-4 w-4" />
+          {showPassword ? 'Hide password' : 'Show password'}
+        </button>
+
         <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
@@ -103,7 +111,7 @@ export function LoginForm() {
 
       <p className="text-center text-sm text-slate-500 mt-6">
         New to Nightklass?{' '}
-        <a href="/register" className="text-blue-600 hover:text-blue-700 font-semibold transition-colors">
+        <a href="/register" className="text-violet-600 hover:text-violet-700 font-semibold transition-colors">
           Create an account
         </a>
       </p>

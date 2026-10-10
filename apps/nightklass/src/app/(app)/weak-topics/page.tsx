@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PageHeader } from '@/components/product/PageHeader'
+import { Icon } from '@/components/product/Icon'
 import { useApi } from '@/hooks/use-api'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -48,13 +50,9 @@ export default function WeakTopicsPage() {
 
   return (
     <div>
-      <h1 className="font-heading text-2xl font-bold text-slate-900 mb-1">Weak areas</h1>
-      <p className="text-slate-500 text-sm mb-6">
-        Topics where your quiz scores are below 60%. Revise the lesson, then quiz yourself again. Your plan adds revision
-        sessions for these automatically.
-      </p>
+      <PageHeader title="A little more practice" description="Topics where your quiz scores are below 60%. Revise the lesson, then quiz yourself again. Your plan adds revision sessions for these automatically." eyebrow="Revision" icon="target" />
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
 
       {items === null && !error && (
         <div className="space-y-3">
@@ -82,12 +80,12 @@ export default function WeakTopicsPage() {
                   <span className={`text-xs font-bold ${color.text}`}>{item.quizAverage ?? '—'}%</span>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                 <Link href={`/topics/${item.topic.id}/learn`} className="btn-primary !py-2 text-sm">
-                  Revise lesson
+                  <Icon name="book" />Revise lesson
                 </Link>
                 <Link href={`/topics/${item.topic.id}/quiz`} className="btn-secondary !py-2 text-sm">
-                  Quiz again
+                  <Icon name="target" />Quiz again
                 </Link>
                 {cardsDone[item.topic.id] !== undefined ? (
                   <Link href="/flashcards" className="text-xs font-semibold text-emerald-700">
@@ -97,7 +95,7 @@ export default function WeakTopicsPage() {
                   <button
                     onClick={() => void makeFlashcards(item.topic.id)}
                     disabled={cardsBusy === item.topic.id}
-                    className="text-xs font-semibold text-blue-600 disabled:opacity-60"
+                    className="text-xs font-semibold text-violet-600 disabled:opacity-60"
                   >
                     {cardsBusy === item.topic.id ? 'Making…' : 'Make flashcards'}
                   </button>

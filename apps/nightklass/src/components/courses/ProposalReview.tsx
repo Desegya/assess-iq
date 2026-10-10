@@ -68,18 +68,18 @@ export function ProposalReview({
           <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">{NOTE[set.source]}</p>
         )
       )}
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
 
       <ol className="space-y-2">
         {proposals.map((p, i) => (
           <li key={i} className="bg-slate-50 rounded-xl px-3 py-2.5">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-slate-400 w-5 text-right flex-shrink-0">{i + 1}.</span>
               <input
                 value={p.name}
                 onChange={e => update(i, { name: e.target.value })}
                 aria-label={`Topic ${i + 1} name`}
-                className="input-base flex-1 !py-1.5"
+                className="input-base min-w-0 flex-1 !py-1.5"
               />
               <button
                 onClick={() => setProposals(prev => prev.filter((_, idx) => idx !== i))}
@@ -96,7 +96,7 @@ export function ProposalReview({
                     <button
                       onClick={() => removeSubtopic(i, j)}
                       aria-label={`Remove subtopic ${s}`}
-                      className="w-4 h-4 rounded-full text-slate-400 hover:bg-slate-100 hover:text-red-500 leading-none"
+                      className="w-8 h-8 rounded-full text-slate-400 hover:bg-slate-100 hover:text-red-500 leading-none"
                     >
                       ×
                     </button>

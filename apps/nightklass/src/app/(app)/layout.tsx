@@ -4,14 +4,16 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { AuthGuard } from '@/components/auth/AuthGuard'
-import { Logo } from '@/components/ui/Logo'
+import { Brand } from '@/components/product/Brand'
+import { ProductTheme } from '@/components/product/ProductTheme'
+import { Icon as ProductIcon } from '@/components/product/Icon'
 import { Avatar } from '@/components/ui/Avatar'
 import { useAuth } from '@/contexts/auth-context'
 import { useApi } from '@/hooks/use-api'
 
 function Icon({ d, className = 'w-5 h-5' }: { d: string; className?: string }) {
   return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={d} />
     </svg>
   )
@@ -82,105 +84,56 @@ function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-brand-bg sm:flex">
-      {/* Desktop sidebar */}
-      <aside className="hidden sm:flex flex-col w-64 flex-shrink-0 fixed inset-y-0 left-0 bg-brand-dark">
-        <div className="px-5 py-6">
-          <Link href="/dashboard">
-            <Logo size="sm" theme="white" />
-          </Link>
-        </div>
-
-        <nav className="flex-1 px-3 space-y-5 overflow-y-auto">
+    <div className="min-h-dvh bg-[#fcfbfe] lg:flex">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-white focus:p-4">Skip to content</a>
+      <aside className="fixed inset-y-0 left-0 hidden w-[248px] flex-col border-r border-[#eae6ef] bg-white lg:flex">
+        <Link href="/dashboard" className="mx-6 mb-8 mt-8 inline-flex min-h-11 items-center" aria-label="NightKlass home"><Brand /></Link>
+        <nav aria-label="Main navigation" className="flex-1 space-y-6 overflow-y-auto px-4 pb-6">
           {NAV_SECTIONS.map(section => (
             <div key={section.label}>
-              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">{section.label}</p>
+              <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[.14em] text-[#8c8197]">{section.label}</p>
               <div className="space-y-1">
                 {section.items.map(item => {
                   const active = isActive(item.href)
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                        active
-                          ? 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-[0_4px_14px_rgba(37,99,235,0.35)]'
-                          : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <Icon d={item.icon} />
-                      <span className="flex-1">{item.label}</span>
-                      {item.href === '/flashcards' && dueCount > 0 && (
-                        <span
-                          className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full text-[11px] font-bold ${
-                            active ? 'bg-white/25 text-white' : 'bg-orange-500 text-white'
-                          }`}
-                        >
-                          {dueCount}
-                        </span>
-                      )}
-                    </Link>
-                  )
+                  return <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors ${active ? 'bg-[#f0e7ff] text-[#7545cf]' : 'text-[#716778] hover:bg-[#faf7ff] hover:text-[#7545cf]'}`}>
+                    <Icon d={item.icon} /><span className="flex-1">{item.label}</span>
+                    {item.href === '/flashcards' && dueCount > 0 && <span className="rounded-lg bg-[#7545cf] px-1.5 py-0.5 text-[11px] text-white">{dueCount}</span>}
+                  </Link>
                 })}
               </div>
             </div>
           ))}
         </nav>
-
-        <div className="p-3 border-t border-white/10">
-          <div className="flex items-center gap-3 px-2 py-2">
-            <Avatar name={user?.name ?? '?'} size={34} />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
-              <button onClick={() => void logout()} className="text-xs text-slate-400 hover:text-white transition-colors">
-                Log out
-              </button>
-            </div>
-          </div>
+        <div className="mx-4 mb-5 rounded-2xl border border-[#eee5fa] bg-[#faf7ff] p-4">
+          <p className="product-display !text-[26px]">One topic at a time.</p>
+          <p className="mt-1 text-xs leading-relaxed text-[#797080]">Small study sessions add up.</p>
+          <Link href="/today" className="mt-3 inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-violet-700">See today’s plan <ProductIcon name="arrow" className="h-4 w-4" /></Link>
+        </div>
+        <div className="flex items-center gap-3 border-t border-[#eae6ef] p-5">
+          <Avatar name={user?.name ?? '?'} size={36} />
+          <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{user?.name}</p><p className="text-xs text-[#797080]">Your study space</p></div>
+          <button onClick={() => void logout()} aria-label="Log out" className="flex h-11 w-11 items-center justify-center rounded-xl text-[#797080] hover:bg-[#f3edff]"><ProductIcon name="logout" /></button>
         </div>
       </aside>
-
-      {/* Mobile top bar */}
-      <header className="sm:hidden bg-brand-dark px-4 py-3 flex items-center justify-between sticky top-0 z-20">
-        <Link href="/dashboard">
-          <Logo size="sm" theme="white" />
-        </Link>
-        <div className="flex items-center gap-3">
-          <Link href="/gpa" className={`text-xs font-semibold ${isActive('/gpa') ? 'text-white' : 'text-slate-400'}`}>
-            GPA
-          </Link>
-          <Link href="/onboarding" aria-label="Profile">
-            <Avatar name={user?.name ?? '?'} size={30} />
-          </Link>
-          <button onClick={() => void logout()} className="text-xs text-slate-400">
-            Log out
-          </button>
-        </div>
-      </header>
-
-      <div className="flex-1 sm:ml-64 min-w-0">
-        <main className="max-w-5xl mx-auto px-5 sm:px-8 py-6 sm:py-10 pb-24 sm:pb-10">{children}</main>
+      <div className="min-w-0 flex-1 lg:ml-[248px]">
+        <header className="sticky top-0 z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-[#eae6ef] bg-white/95 px-4 backdrop-blur-sm sm:px-8">
+          <Link href="/dashboard" className="lg:hidden" aria-label="NightKlass home"><Brand /></Link>
+          <p className="hidden text-xs font-medium uppercase tracking-[.12em] text-[#8c8197] lg:block">Your personal study coach</p>
+          <div className="flex items-center gap-1 sm:gap-3">
+            <Link href="/gpa" aria-label="GPA calculator" aria-current={isActive('/gpa') ? 'page' : undefined} className="flex h-11 items-center gap-2 rounded-xl px-2 text-xs font-medium text-[#716778] hover:bg-[#f3edff]"><ProductIcon name="chart" className="h-4 w-4" /><span className="hidden sm:inline">GPA & grades</span></Link>
+            <Link href="/onboarding" aria-label="Academic profile" className="flex h-11 w-11 items-center justify-center"><Avatar name={user?.name ?? '?'} size={32} /></Link>
+            <button onClick={() => void logout()} aria-label="Log out" className="flex h-11 w-11 items-center justify-center rounded-xl text-[#797080] hover:bg-[#f3edff] lg:hidden"><ProductIcon name="logout" /></button>
+          </div>
+        </header>
+        <main id="main-content" tabIndex={-1} className="mx-auto max-w-[1200px] px-4 pb-[calc(112px+env(safe-area-inset-bottom))] pt-7 sm:px-8 sm:pt-10 lg:px-10 lg:pb-12">{children}</main>
       </div>
-
-      {/* Mobile bottom tab bar */}
-      <nav className="sm:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex items-center justify-around py-2 z-20">
+      <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-20 flex items-center border-t border-[#eae6ef] bg-white px-1 pb-[env(safe-area-inset-bottom)] lg:hidden">
         {MOBILE_NAV.map(item => {
           const active = isActive(item.href)
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`relative flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl text-[11px] font-semibold ${
-                active ? 'text-blue-600' : 'text-slate-400'
-              }`}
-            >
-              <Icon d={item.icon} className="w-5 h-5" />
-              {item.label}
-              {item.href === '/flashcards' && dueCount > 0 && (
-                <span className="absolute -top-0.5 right-1 w-2 h-2 rounded-full bg-orange-500" />
-              )}
-            </Link>
-          )
+          return <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={`relative flex min-h-[72px] min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium ${active ? 'text-[#7545cf]' : 'text-[#797080]'}`}>
+            <span className={`flex h-8 w-12 items-center justify-center rounded-xl ${active ? 'bg-[#f0e7ff]' : ''}`}><Icon d={item.icon} /></span>{item.label}
+            {item.href === '/flashcards' && dueCount > 0 && <span aria-label={`${dueCount} cards due`} className="absolute right-[30%] top-3 h-2 w-2 rounded-full bg-[#7545cf]" />}
+          </Link>
         })}
       </nav>
     </div>
@@ -189,8 +142,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AuthGuard>
-      <AppShell>{children}</AppShell>
-    </AuthGuard>
+    <ProductTheme>
+      <AuthGuard>
+        <AppShell>{children}</AppShell>
+      </AuthGuard>
+    </ProductTheme>
   )
 }

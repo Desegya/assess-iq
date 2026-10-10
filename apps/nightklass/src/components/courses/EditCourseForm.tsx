@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Icon } from '@/components/product/Icon'
 import { useRouter } from 'next/navigation'
 import { useApi } from '@/hooks/use-api'
 import { LEVELS } from '@/lib/profile'
@@ -84,7 +85,7 @@ export function EditCourseForm({
   return (
     <form onSubmit={handleSave} className="card p-6 space-y-4">
       <h2 className="font-heading font-bold text-slate-900">Edit course</h2>
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
 
       <div className="grid sm:grid-cols-[140px_1fr] gap-3">
         <div>
@@ -134,7 +135,7 @@ export function EditCourseForm({
           Cancel
         </button>
         <button type="button" onClick={() => void handleDelete()} disabled={saving || deleting} className="ml-auto text-sm font-semibold text-red-500 hover:text-red-700">
-          {deleting ? 'Deleting…' : 'Delete course'}
+          <Icon name="close" className="mr-1 inline h-4 w-4" />{deleting ? 'Deleting…' : 'Delete course'}
         </button>
       </div>
     </form>

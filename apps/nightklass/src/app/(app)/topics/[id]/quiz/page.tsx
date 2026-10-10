@@ -161,7 +161,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
         Scored to track your mastery and weak areas. Just for you, never shared with your school.
       </p>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-6">{error}</div>}
+      {error && <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-6">{error}</div>}
 
       {!questions && (
         <div className="card p-6 space-y-5">
@@ -174,7 +174,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                   type="button"
                   onClick={() => setDifficulty(d.value)}
                   className={`rounded-xl px-3 py-2.5 text-left border-2 transition-colors ${
-                    difficulty === d.value ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:border-slate-200'
+                    difficulty === d.value ? 'border-violet-500 bg-violet-50' : 'border-slate-100 hover:border-slate-200'
                   }`}
                 >
                   <span className="block text-sm font-semibold text-slate-800">{d.label}</span>
@@ -183,7 +183,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
               ))}
             </div>
             {recommended && (
-              <p className="text-xs text-blue-600 mt-2">
+              <p className="text-xs text-violet-600 mt-2">
                 Recommended from your last quiz: {DIFFICULTIES.find(d => d.value === recommended)!.label}
               </p>
             )}
@@ -198,7 +198,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                   type="button"
                   onClick={() => toggleFormat(f.id)}
                   className={`text-xs font-semibold rounded-xl px-3 py-2 transition-colors ${
-                    formats.has(f.id) ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    formats.has(f.id) ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   {f.label}
@@ -228,7 +228,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
               <span
                 key={q.id}
                 className={`h-2 rounded-full transition-all ${
-                  answers[q.id]?.trim() ? 'w-6 bg-blue-500' : i === answeredCount ? 'w-6 bg-blue-200' : 'w-2 bg-slate-200'
+                  answers[q.id]?.trim() ? 'w-6 bg-violet-500' : i === answeredCount ? 'w-6 bg-violet-200' : 'w-2 bg-slate-200'
                 }`}
               />
             ))}
@@ -263,7 +263,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                     <label
                       key={opt.key}
                       className={`flex items-center gap-2 text-sm text-slate-700 rounded-xl px-3 py-2 border-2 cursor-pointer transition-colors ${
-                        answers[q.id] === opt.key ? 'border-blue-400 bg-blue-50' : 'border-transparent hover:bg-slate-50'
+                        answers[q.id] === opt.key ? 'border-violet-400 bg-violet-50' : 'border-transparent hover:bg-slate-50'
                       }`}
                     >
                       <input
@@ -319,7 +319,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
               <p className="text-xs text-amber-700 mt-2">We couldn&apos;t mark the written answers right now. Compare yours with the model answers below.</p>
             )}
             {result.planMessage && (
-              <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mt-4">📅 {result.planMessage}</p>
+              <p className="text-xs text-violet-700 bg-violet-50 rounded-lg px-3 py-2 mt-4">📅 {result.planMessage}</p>
             )}
             <div className="flex flex-wrap justify-center gap-2 mt-5">
               {result.isWeak && (
@@ -384,7 +384,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                       </div>
                     )}
                     <details>
-                      <summary className="text-xs font-semibold text-blue-600 cursor-pointer">
+                      <summary className="text-xs font-semibold text-violet-600 cursor-pointer">
                         {q.questionType === 'THEORY' ? 'Marking scheme & model answer' : 'Model answer'}
                       </summary>
                       <p className="whitespace-pre-wrap text-xs text-slate-600 mt-2">{r?.correctAnswer}</p>

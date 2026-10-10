@@ -20,7 +20,7 @@ const RATING_BUTTONS: { rating: Rating; label: string; className: string }[] = [
   { rating: 'again', label: 'Again', className: 'bg-red-50 text-red-700 hover:bg-red-100' },
   { rating: 'hard', label: 'Hard', className: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
   { rating: 'good', label: 'Good', className: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
-  { rating: 'easy', label: 'Easy', className: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
+  { rating: 'easy', label: 'Easy', className: 'bg-violet-50 text-violet-700 hover:bg-violet-100' },
 ]
 
 export default function FlashcardsPage() {
@@ -58,7 +58,7 @@ export default function FlashcardsPage() {
     }
   }
 
-  if (error) return <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
+  if (error) return <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
   if (cards === null)
     return (
       <div className="max-w-lg space-y-3">
@@ -91,7 +91,7 @@ export default function FlashcardsPage() {
       </div>
 
       {(card.course || card.topic) && (
-        <p className="text-xs text-blue-600 font-semibold mb-2">
+        <p className="text-xs text-violet-600 font-semibold mb-2">
           {card.course?.title}
           {card.topic ? ` · ${card.topic.name}` : ''}
         </p>
@@ -102,7 +102,7 @@ export default function FlashcardsPage() {
           <div className="flip-face card w-full h-full p-10 flex items-center justify-center text-center absolute inset-0">
             <p className="text-lg font-medium text-slate-900">{card.front}</p>
           </div>
-          <div className="flip-face flip-face-back card w-full h-full p-10 flex items-center justify-center text-center bg-gradient-to-br from-blue-50 to-cyan-50">
+          <div className="flip-face flip-face-back card w-full h-full p-10 flex items-center justify-center text-center bg-gradient-to-br from-violet-50 to-cyan-50">
             <p className="text-lg font-medium text-slate-900">{card.back}</p>
           </div>
         </div>

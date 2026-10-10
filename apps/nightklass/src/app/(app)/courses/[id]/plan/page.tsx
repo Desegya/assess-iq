@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use as usePromise } from 'react'
 import Link from 'next/link'
+import { Icon } from '@/components/product/Icon'
 import { useApi } from '@/hooks/use-api'
 import { Skeleton } from '@/components/ui/Skeleton'
 
@@ -33,7 +34,7 @@ interface StudyPlan {
 }
 
 const KIND_BADGE: Record<Kind, { label: string; className: string }> = {
-  LEARN: { label: 'Learn', className: 'bg-blue-50 text-blue-700' },
+  LEARN: { label: 'Learn', className: 'bg-violet-50 text-violet-700' },
   REVIEW: { label: 'Review', className: 'bg-amber-50 text-amber-700' },
   REVISION: { label: 'Final revision', className: 'bg-violet-50 text-violet-700' },
 }
@@ -104,8 +105,8 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
   if (error) {
     return (
       <div>
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
-        <Link href={`/courses/${id}`} className="text-blue-600 text-sm font-semibold">
+        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{error}</div>
+        <Link href={`/courses/${id}`} className="text-violet-600 text-sm font-semibold">
           ← Back to course
         </Link>
       </div>
@@ -139,7 +140,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
   return (
     <div className="space-y-6">
       <div>
-        <Link href={`/courses/${id}`} className="text-sm text-blue-600 font-semibold">
+        <Link href={`/courses/${id}`} className="text-sm text-violet-600 font-semibold">
           ← Back to course
         </Link>
         <div className="flex items-start justify-between gap-4 flex-wrap mt-2">
@@ -158,9 +159,13 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
         </div>
       </div>
 
+      <div className="rounded-2xl border border-[#e6d8fb] bg-[#f7f2ff] p-5">
+        <div className="mb-3 flex items-center justify-between gap-3"><p className="flex items-center gap-2 text-sm font-medium"><Icon name="calendar" className="h-4 w-4 text-violet-700" />Your progress</p><span className="text-xs text-violet-700">{done} of {total} sessions complete</span></div>
+        <div role="progressbar" aria-label="Study plan completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={total > 0 ? Math.round(done / total * 100) : 0} className="h-2 overflow-hidden rounded-full bg-[#e9dff7]"><div className="h-full rounded-full bg-[#9060cf]" style={{ width: `${total > 0 ? Math.min(100, done / total * 100) : 0}%` }} /></div>
+      </div>
       {examInput === null ? (
-        <div className={`rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap ${plan.planType === 'EXAM_DATE' ? 'bg-slate-50' : 'bg-blue-50 border border-blue-100'}`}>
-          <p className={`text-sm ${plan.planType === 'EXAM_DATE' ? 'text-slate-600' : 'text-blue-800'}`}>
+        <div className={`rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap ${plan.planType === 'EXAM_DATE' ? 'bg-slate-50' : 'bg-violet-50 border border-violet-100'}`}>
+          <p className={`text-sm ${plan.planType === 'EXAM_DATE' ? 'text-slate-600' : 'text-violet-800'}`}>
             {plan.planType === 'EXAM_DATE'
               ? 'Exam date moved? Update it and the rest of your plan shifts with it.'
               : 'No exam date yet. Add it when it’s announced and we’ll rework the plan to end at your exam, with revision before it.'}
@@ -170,8 +175,8 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
           </button>
         </div>
       ) : (
-        <form onSubmit={handleSetExamDate} className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 flex items-center gap-3 flex-wrap">
-          <label htmlFor="examDate" className="text-sm text-blue-800">Exam date</label>
+        <form onSubmit={handleSetExamDate} className="rounded-xl bg-violet-50 border border-violet-100 px-4 py-3 flex items-center gap-3 flex-wrap">
+          <label htmlFor="examDate" className="text-sm text-violet-800">Exam date</label>
           <input
             id="examDate"
             type="date"
@@ -206,7 +211,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
 
       {history.length > 0 && (
         <div>
-          <button onClick={() => setShowHistory(v => !v)} className="text-xs font-semibold text-slate-500 hover:text-blue-600">
+          <button onClick={() => setShowHistory(v => !v)} className="text-xs font-semibold text-slate-500 hover:text-violet-600">
             {showHistory ? 'Hide' : 'What changed'} ({history.length})
           </button>
           {showHistory && (
@@ -223,7 +228,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
       )}
 
       {hiddenPast > 0 && (
-        <button onClick={() => setShowPast(v => !v)} className="text-xs font-semibold text-slate-500 hover:text-blue-600">
+        <button onClick={() => setShowPast(v => !v)} className="text-xs font-semibold text-slate-500 hover:text-violet-600">
           {showPast ? 'Hide past sessions' : `Show ${hiddenPast} past session${hiddenPast === 1 ? '' : 's'}`}
         </button>
       )}
@@ -237,7 +242,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
           byDate.set(key, [...(byDate.get(key) ?? []), s])
         }
         return (
-          <section key={week} className="card p-5">
+          <section key={week} className="relative rounded-[20px] border border-[#eae6ef] bg-white p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
               <h2 className="font-heading font-bold text-slate-900">Week {week}</h2>
               <span className="text-xs font-semibold text-slate-500">
@@ -254,7 +259,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
             <div className="space-y-4">
               {[...byDate.entries()].map(([date, daySessions]) => (
                 <div key={date}>
-                  <p className={`text-xs font-semibold mb-1.5 ${date === today ? 'text-blue-600' : 'text-slate-500'}`}>
+                  <p className={`text-xs font-semibold mb-1.5 ${date === today ? 'text-violet-600' : 'text-slate-500'}`}>
                     {date === today ? 'Today · ' : ''}
                     {new Date(date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
                   </p>
@@ -276,15 +281,15 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
                             <>
                               {s.topic && (
                                 <>
-                                  <Link href={`/topics/${s.topic.id}/learn`} className="text-xs text-blue-600 font-semibold">
+                                  <Link href={`/topics/${s.topic.id}/learn`} className="compact-action text-xs text-violet-700 font-semibold">
                                     {s.kind === 'LEARN' ? 'Learn' : 'Revise'}
                                   </Link>
-                                  <Link href={`/topics/${s.topic.id}/quiz`} className="text-xs text-blue-600 font-semibold">
+                                  <Link href={`/topics/${s.topic.id}/quiz`} className="compact-action text-xs text-violet-700 font-semibold">
                                     Quiz
                                   </Link>
                                 </>
                               )}
-                              <button onClick={() => handleComplete(s.id)} className="text-xs text-slate-500 font-semibold hover:text-emerald-700">
+                              <button onClick={() => handleComplete(s.id)} className="compact-action text-xs text-slate-500 font-semibold hover:text-emerald-700">
                                 Done
                               </button>
                             </>
