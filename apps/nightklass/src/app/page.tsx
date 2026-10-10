@@ -1,48 +1,121 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Geist, Instrument_Serif } from 'next/font/google'
 import { useAuth } from '@/contexts/auth-context'
 import { Logo } from '@/components/ui/Logo'
-import { getSubjectColor } from '@/lib/subject-color'
-import { StudyScene } from '@/components/ui/NightIllustration'
 
 const geist = Geist({ subsets: ['latin'], display: 'swap' })
 
 const instrumentSerif = Instrument_Serif({ subsets: ['latin'], weight: '400', display: 'swap' })
 
-const ENTRY_POINTS: { title: string; desc: string; soon?: boolean }[] = [
+const COURSE_STEPS = [
   {
-    title: 'Just a course title',
-    desc: 'Type "Biostatistics" or "BIO 223" and Nightklass drafts a topic outline you can edit anytime.',
+    kind: 'course',
+    title: 'Start with any course',
+    description: 'Add just your course title and Nightklass creates a structured outline you can build on.',
   },
   {
-    title: 'Your syllabus',
-    desc: 'Upload the course outline your lecturer gave you and confirm the topics we pull out of it.',
+    kind: 'upload',
+    title: 'Upload your study materials',
+    description: 'Upload your syllabus, notes, slides or handouts so Nightklass can build lessons from them.',
   },
   {
-    title: 'Notes & handouts',
-    desc: 'Upload lecture notes, PDFs, Word documents or textbooks and we build the course from them.',
+    kind: 'path',
+    title: 'Get a clear study path',
+    description: 'Nightklass turns your course into topics, lessons, quizzes, and revision so you always know what to study next.',
   },
-  {
-    title: 'Department & level',
-    desc: 'Tell us your programme and level and we suggest courses you’re likely taking this semester.',
-  },
-]
+] as const
 
-const JOURNEY = [
-  { title: 'Start anywhere', desc: 'Course title, syllabus or uploaded materials.' },
-  { title: 'Build the course', desc: 'Generate or edit a topic outline.' },
-  { title: 'Learn', desc: 'Detailed lessons from your uploads or AI.' },
-  { title: 'Plan', desc: 'A schedule built around your exam date.' },
-  { title: 'Test', desc: 'Quizzes from basic to advanced.' },
-  { title: 'Improve', desc: 'Spot weak areas and revise them.' },
-  { title: 'Retain', desc: 'Flashcards with spaced review.' },
-  { title: 'Track', desc: 'Completion, streaks and mastery.' },
-]
+// Replaced by the full-frame Figma exports when they are supplied.
+function CourseStepPreview({ kind }: { kind: typeof COURSE_STEPS[number]['kind'] }) {
+  return (
+    <div aria-hidden="true" className="relative aspect-square overflow-hidden bg-[#f2f2f2]">
+      <div className="absolute -right-[18%] -top-[25%] h-[75%] w-[55%] rotate-[35deg] rounded-[70px] border-[14px] border-white/70 shadow-[inset_0_0_12px_#ccc,0_0_12px_#ddd]" />
+      <div className="absolute -right-[20%] top-[10%] h-[30%] w-[70%] -rotate-[35deg] rounded-full border-[12px] border-white/60 shadow-[inset_0_0_8px_#ccc]" />
+      {kind === 'upload' ? (
+        <div className="absolute bottom-[-9%] left-[12%] right-[10%] top-[9%] bg-white shadow-sm">
+          <div className="border-b border-[#eee] py-[5%] text-center text-[clamp(10px,1vw,14px)] font-semibold">▣ Upload files</div>
+          <div className="mx-[5%] mt-[5%] rounded-xl border border-dashed border-[#e8e8e8] bg-[#fafafa] px-[5%] pb-[8%] pt-[4%] text-center">
+            <svg className="mx-auto mb-[5%] w-[14%]" viewBox="0 0 32 28" fill="#ccc"><path d="M2 4a3 3 0 0 1 3-3h8l4 4h10a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3Z" /></svg>
+            <p className="text-[clamp(9px,0.9vw,12px)]">Drag and drop file(s) or <span className="text-[#0098ff]">choose file(s)</span></p>
+            <p className="mt-1 text-[clamp(8px,0.8vw,11px)] text-[#aaa]">Max 25MB each, Only Pdf, PNG, JPEG</p>
+          </div>
+          <div className="relative px-[7%] pt-[5%]">
+            {['Arrays & Linked Lists', 'Sorting Algorithms', 'Introduction to Data Structure'].map((file, index) => (
+              <div key={file} className={`mb-[6%] text-[clamp(9px,0.9vw,12px)] ${index > 0 ? 'blur-[1px]' : ''}`}>
+                <p className="truncate">📄 {file}</p><p className="mt-1 text-[10px] text-[#999]">{index === 0 ? '✓ Completed' : 'Uploading'}</p>
+                <div className="mt-2 h-1 rounded-full bg-[#eee]"><div className="h-full w-2/3 rounded-full bg-[#8fd9ff]" /></div>
+              </div>
+            ))}
+          </div>
+          <div className="pointer-events-none absolute bottom-0 left-[-7%] right-[-4%] h-[37%] rounded-t-[48px] border border-white bg-white/35 backdrop-blur-[2px]" />
+        </div>
+      ) : (
+        <div className="absolute bottom-0 left-[11%] right-[11%] top-[12%] overflow-hidden bg-white">
+          <div className="absolute inset-x-0 top-0 grid grid-cols-6 gap-4 p-1 text-center text-xl text-[#eee4ff]">
+            {Array.from({ length: 36 }, (_, i) => <span key={i}>{['▣', '▤', '▰', '◆'][i % 4]}</span>)}
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-white/80 to-white" />
+          {kind === 'course' ? (
+            <div className="absolute inset-x-[10%] top-[43%] text-center">
+              <p className="rounded-2xl bg-[#f2f2f2] px-2 py-3 text-[clamp(10px,1vw,14px)] font-medium"><span className="mr-2 text-[#ff413d]">▣</span> CSC 201 - Data Structure</p>
+              <div className="mx-auto mt-5 w-[84%] rounded-2xl bg-[#a477ff] px-2 py-3 text-[clamp(11px,1vw,14px)] font-semibold text-white">Add Course <span className="ml-2">⊕</span></div>
+            </div>
+          ) : (
+            <div className="absolute inset-x-[7%] top-[13%]">
+              <div className="mx-auto mb-[11%] flex h-8 w-8 items-center justify-center rounded-full bg-[#a477ff] text-xl text-white">✓</div>
+              {[
+                { title: 'Topic', detail: '12 key concept', icon: '▰', color: 'bg-purple-50 text-purple-500' },
+                { title: 'Lessons', detail: '32 lessons', icon: '▤', color: 'bg-blue-50 text-blue-500' },
+                { title: 'Quizzes', detail: '8 practice quizzes', icon: '?', color: 'bg-emerald-50 text-emerald-500' },
+                { title: 'Revision', detail: '12 key concept', icon: '⟳', color: 'bg-amber-50 text-amber-500' },
+              ].map(item => (
+                <div key={item.title} className="mb-3 flex items-center gap-2 rounded-xl border border-[#f4f4f4] bg-white p-1.5">
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-2xl ${item.color}`}>{item.icon}</span>
+                  <div><p className="text-[clamp(10px,1vw,14px)] font-medium">{item.title}</p><p className="text-[clamp(8px,0.8vw,11px)] text-[#555]">{item.detail}</p></div><span className="ml-auto pr-1">›</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const HOW_IT_WORKS = [
+  { icon: 'book', title: 'Start with what you have', description: 'Add just your course title, syllabus, notes, or study materials. You don’t need everything ready before you begin.' },
+  { icon: 'path', title: 'Know what to study next', description: 'Nightklass turns your course into a simple study plan, so you always know what to focus on each day.' },
+  { icon: 'lessons', title: 'Learn and test yourself', description: 'Read lessons, ask questions, and take quizzes as you study, so you’re not just reading — you’re actually learning.' },
+  { icon: 'checklist', title: 'Improve before your exam', description: 'Nightklass finds your weak areas and shows you what to revise next, helping you prepare with more confidence.' },
+] as const
+
+function HowItWorksIcon({ kind, className }: { kind: typeof HOW_IT_WORKS[number]['icon']; className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      {kind === 'book' && <>
+        <path d="M12 4h23a5 5 0 0 1 5 5v32H12a6 6 0 0 1-6-6V10a6 6 0 0 1 6-6Z" fill="currentColor" />
+        <path d="M13 35h21M19 16h9" stroke="white" strokeWidth="4" strokeLinecap="round" />
+      </>}
+      {kind === 'path' && <>
+        <circle cx="10" cy="10" r="6" fill="currentColor" /><circle cx="37" cy="38" r="6" fill="currentColor" />
+        <path d="M21 10h9a8 8 0 0 1 0 16H16a6 6 0 0 0 0 12h9" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+      </>}
+      {kind === 'lessons' && <>
+        <rect x="5" y="6" width="14" height="15" rx="4" fill="currentColor" /><rect x="5" y="27" width="14" height="15" rx="4" fill="currentColor" />
+        <path d="M26 9h15M26 17h8M26 30h15M26 38h8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+      </>}
+      {kind === 'checklist' && <>
+        <path d="m5 10 3 3 6-7m-9 19 3 3 6-7m-9 19 3 3 6-7" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M23 10h18M23 25h18M23 40h18" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+      </>}
+    </svg>
+  )
+}
 
 const FEATURES: { text: string; soon?: boolean }[] = [
   { text: 'No syllabus yet? Generate a topic outline and edit it anytime, or photograph the one you have.' },
@@ -60,30 +133,36 @@ const FEATURES: { text: string; soon?: boolean }[] = [
 
 const FAQS = [
   {
-    q: 'What if I don’t have a syllabus or notes?',
-    a: 'That’s fine. Add a course with just its title and Nightklass suggests the topics it usually covers, writes study notes and builds quizzes. Upload your own material later to make everything match your lecturer.',
+    q: 'Do I need a syllabus to get started?',
+    a: 'No. You can start with just your course title and add your syllabus or notes later.',
   },
   {
-    q: 'Do I need my school to sign up first?',
-    a: 'No. Nightklass works whether or not your institution has adopted it. You create your own account and it’s entirely yours.',
+    q: 'Can I upload my lecturer’s notes and slides?',
+    a: 'Yes. Upload your notes, slides, syllabus or handouts, and Nightklass can use them to build your course outline, lessons and quizzes.',
   },
   {
-    q: 'Will my quizzes be graded?',
-    a: 'Yes. Nightklass scores every quiz so it can track your mastery and find weak areas. Scores are for you only and are never shared with your school.',
+    q: 'How does Nightklass create my study plan?',
+    a: 'Nightklass uses your course topics, available study time and chosen duration or exam date to organise daily sessions. Your plan adjusts as you study and take quizzes.',
   },
   {
-    q: 'Is my uploaded material private?',
-    a: 'Yes. Your notes and documents are only used to build your topics, notes and quizzes, and to answer your questions.',
-  },
-  {
-    q: 'Can I use it for more than one course at a time?',
-    a: 'Yes. Add every course you’re taking and plan each one around its exam date.',
-  },
-  {
-    q: 'Is it really free?',
-    a: 'Yes, to start. No card, no lecturer sign-up, no institutional licence required.',
+    q: 'Can Nightklass test me and help me revise?',
+    a: 'Yes. Take quizzes, review feedback and practise with flashcards. Nightklass tracks your weak areas and helps you focus your revision where you need it most.',
   },
 ]
+
+function FaqIllustration() {
+  return (
+    <div className="relative aspect-[597/548] w-full overflow-hidden bg-[#faf9f7]">
+      <Image
+        src="/landing/faq-illustration.png"
+        alt="Illustration of a hand using a pencil to review study questions"
+        fill
+        sizes="(min-width: 1280px) 597px, (min-width: 768px) 48vw, 100vw"
+        className="object-contain"
+      />
+    </div>
+  )
+}
 
 function SoonTag() {
   return (
@@ -94,6 +173,8 @@ function SoonTag() {
 }
 
 function LandingContent() {
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
+
   return (
     <div className="min-h-screen bg-brand-bg">
       <header className={`${geist.className} bg-white`}>
@@ -197,53 +278,52 @@ function LandingContent() {
         </div>
       </section>
 
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
-        <div className="grid md:grid-cols-[1fr_1.4fr] gap-10 items-center">
-          <div>
-            <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-3">Start anywhere</p>
-            <h2 className="font-heading text-2xl sm:text-3xl font-bold text-slate-900 leading-snug">
-              You bring the course. Nightklass plans, teaches, tests and tracks the rest.
-            </h2>
-            <p className="text-slate-500 mt-4 leading-relaxed">
-              You don’t need a syllabus, notes or a textbook to get going. Start with whatever you have, and Nightklass
-              gets more personal as you add more.
+      <section aria-labelledby="course-intro-heading" className={`${geist.className} bg-white text-black`}>
+        <div className="mx-auto max-w-[1272px] border-x border-[#f1f1f1]">
+          <div className="relative border-b border-[#f3ebff] px-5 pb-14 pt-20 text-center sm:px-8 sm:pb-16 sm:pt-32 lg:pb-20 lg:pt-[250px]">
+            <p className="mx-auto inline-flex max-w-full items-center justify-center gap-2 rounded-2xl border border-[#f0eaff] bg-gradient-to-r from-[#f1ebff] to-white px-3 py-3 text-xs leading-relaxed sm:text-sm">
+              <span aria-hidden="true" className={`${instrumentSerif.className} text-xl font-semibold`}>?</span>
+              <span>I have a course. <span className="text-[#707070]">How do I start studying?</span></span>
             </p>
-            <div className="hidden md:flex mt-6">
-              <StudyScene className="w-full max-w-[220px] h-auto" />
-            </div>
+            <h2 id="course-intro-heading" className={`${instrumentSerif.className} mx-auto mt-3 max-w-[1000px] text-[clamp(38px,4.5vw,60px)] font-normal leading-[1.12] tracking-[-1px]`}>
+              Add your course. We’ll handle the rest.
+            </h2>
+            <p className="mx-auto mt-6 max-w-[760px] text-sm leading-relaxed text-[#777]">
+              You don’t need to have everything ready. Just tell Nightklass what you’re studying and start from there.
+            </p>
+            <span aria-hidden="true" className="absolute -bottom-1 -left-1 h-2 w-2 rounded-full bg-[#faf5ff]" />
+            <span aria-hidden="true" className="absolute -bottom-1 -right-1 h-2 w-2 rounded-full bg-[#faf5ff]" />
           </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {ENTRY_POINTS.map(e => {
-              const color = getSubjectColor(e.title)
-              return (
-                <div key={e.title} className="card p-5">
-                  <div className={`w-2 h-8 rounded-full ${color.bgSoft} mb-3`} aria-hidden="true" />
-                  <h3 className="font-heading font-bold text-slate-900">
-                    {e.title}
-                    {e.soon && <SoonTag />}
-                  </h3>
-                  <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{e.desc}</p>
-                </div>
-              )
-            })}
+          <div className="grid grid-cols-1 gap-x-5 gap-y-10 px-5 pb-20 pt-10 sm:grid-cols-2 sm:px-8 sm:pb-28 sm:pt-14 lg:grid-cols-3 lg:px-0 lg:pb-40 lg:pt-[60px]">
+            {COURSE_STEPS.map((step, index) => (
+              <article key={step.kind} className={`mx-auto w-full max-w-[440px] ${index === 2 ? 'sm:col-span-2 sm:w-[calc((100%_-_20px)/2)] lg:col-span-1 lg:w-full lg:max-w-none' : 'lg:max-w-none'}`}>
+                <CourseStepPreview kind={step.kind} />
+                <h3 className="mt-4 text-lg font-medium leading-snug tracking-[-0.3px] sm:text-xl">{step.title}</h3>
+                <p className="mt-2 text-sm leading-[1.65] text-[#767676]">{step.description}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
-      <section id="how-it-works" className="bg-white border-y border-slate-200 scroll-mt-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
-          <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-3 text-center">How Nightklass works</p>
-          <h2 className="font-heading text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-12">
-            From course title to exam-ready
+      <section id="how-it-works" aria-labelledby="how-it-works-heading" className={`${geist.className} scroll-mt-6 bg-white text-black`}>
+        <div className="mx-auto max-w-[1240px] px-5 pb-16 pt-10 sm:px-8 sm:pb-20 lg:px-[18px] lg:pb-16 lg:pt-11">
+          <p className="text-xs font-medium uppercase text-[#a477ff] sm:text-sm">How it works</p>
+          <h2 id="how-it-works-heading" className={`${instrumentSerif.className} mt-4 max-w-[720px] text-[clamp(38px,4.5vw,60px)] font-normal leading-[1.18] tracking-[-1px]`}>
+            I want something simple that<br className="hidden lg:block" /> students understand
           </h2>
-          <ol className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-10">
-            {JOURNEY.map((s, i) => (
-              <li key={s.title} className="text-center">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 text-white font-heading font-bold flex items-center justify-center mx-auto mb-3">
-                  {i + 1}
+          <p className="mt-6 max-w-[780px] text-sm leading-relaxed text-[#777]">
+            You don’t need to have everything ready. Just tell Nightklass what you’re studying and start from there.
+          </p>
+          <ol className="mt-12 grid grid-cols-1 gap-x-8 gap-y-10 sm:mt-16 sm:grid-cols-2 lg:mt-[100px] lg:grid-cols-4 lg:gap-x-10">
+            {HOW_IT_WORKS.map(step => (
+              <li key={step.icon} className="min-w-0">
+                <div className="relative isolate h-24 overflow-hidden sm:h-32 lg:h-40">
+                  <HowItWorksIcon kind={step.icon} className="absolute left-0 top-6 h-11 w-11 text-[#141a23]" />
+                  <HowItWorksIcon kind={step.icon} className="absolute -right-2 -top-5 -z-10 h-36 w-36 rotate-[15deg] text-[#fafafa] sm:h-44 sm:w-44 lg:h-[180px] lg:w-[180px]" />
                 </div>
-                <h3 className="font-semibold text-slate-900 text-sm">{s.title}</h3>
-                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{s.desc}</p>
+                <h3 className="mt-3 text-lg font-semibold leading-snug tracking-[-0.3px] lg:mt-4 lg:text-xl">{step.title}</h3>
+                <p className="mt-3 max-w-[360px] text-sm leading-[1.6] text-[#767676]">{step.description}</p>
               </li>
             ))}
           </ol>
@@ -270,30 +350,49 @@ function LandingContent() {
         </ul>
       </section>
 
-      <section id="faqs" className="max-w-4xl mx-auto px-4 sm:px-6 py-16">
-        <h2 className="font-heading text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-10">
-          Questions people actually ask
-        </h2>
-        <div className="grid sm:grid-cols-2 gap-x-8 gap-y-6">
-          {FAQS.map(f => (
-            <div key={f.q}>
-              <h3 className="font-semibold text-slate-900 text-sm">{f.q}</h3>
-              <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{f.a}</p>
+      <section id="faqs" aria-labelledby="faq-heading" className={`${geist.className} scroll-mt-6 bg-white text-black`}>
+        <div className="mx-auto max-w-[1272px] px-5 py-16 sm:px-8 sm:py-20 lg:px-0 lg:py-[86px]">
+          <p className="text-xs font-medium uppercase text-[#a477ff] sm:text-sm">FAQ</p>
+          <h2 id="faq-heading" className={`${instrumentSerif.className} mt-4 text-[clamp(38px,4.5vw,60px)] font-normal leading-[1.12] tracking-[-1px]`}>
+            Questions? We’ve got answers.
+          </h2>
+          <p className="mt-6 text-sm leading-relaxed text-[#777]">Everything you need to know before you start studying with Nightklass.</p>
+          <div className="mt-10 grid items-start gap-10 md:mt-16 md:grid-cols-2 lg:gap-9">
+            <div>
+              {FAQS.map((faq, index) => {
+                const isOpen = openFaq === index
+                return (
+                  <div key={faq.q} className="border-b border-[#f0f0f0]">
+                    <h3>
+                      <button type="button" id={`faq-question-${index}`} aria-expanded={isOpen} aria-controls={`faq-answer-${index}`} onClick={() => setOpenFaq(isOpen ? null : index)} className="flex min-h-[76px] w-full items-center justify-between gap-5 py-5 text-left text-base font-medium leading-relaxed transition-colors hover:text-[#9060ef] lg:min-h-[80px] lg:text-lg">
+                        {faq.q}
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className="shrink-0"><path d="M2 10h16" />{!isOpen && <path d="M10 2v16" />}</svg>
+                      </button>
+                    </h3>
+                    <div id={`faq-answer-${index}`} role="region" aria-labelledby={`faq-question-${index}`} hidden={!isOpen} className="max-w-[510px] pb-8 pr-6 text-sm leading-[1.6] text-[#767676]">
+                      {faq.a}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          ))}
+            <div className="mx-auto w-full max-w-[597px]"><FaqIllustration /></div>
+          </div>
         </div>
       </section>
 
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-dark via-blue-950 to-blue-900 px-6 sm:px-10 py-14 sm:py-16 text-center">
-          <div className="absolute -top-10 -right-10 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
-          <div className="absolute -bottom-16 -left-10 w-64 h-64 bg-lime-400/10 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
-          <h2 className="relative font-heading text-2xl sm:text-3xl font-bold text-white">
-            Turn your course into a plan that gets you exam-ready.
+      <section
+        aria-labelledby="signup-heading"
+        className={`${geist.className} px-5 py-20 text-center sm:px-8 sm:py-24 lg:py-[124px]`}
+        style={{ background: 'radial-gradient(ellipse at 50% -35%, #8051ff 0%, transparent 75%), radial-gradient(ellipse at 5% 100%, #ecd4f5 0%, transparent 65%), radial-gradient(ellipse at 100% 100%, #eacff6 0%, transparent 65%), linear-gradient(180deg, #a57afa 0%, #d9bdf8 100%)' }}
+      >
+        <div className="mx-auto max-w-[800px]">
+          <h2 id="signup-heading" className={`${instrumentSerif.className} text-[clamp(38px,4.5vw,60px)] font-normal leading-[1.13] tracking-[-0.8px] text-white`}>
+            Turn your course into a plan<br className="hidden sm:block" /> that gets you exam-ready.
           </h2>
-          <p className="relative text-blue-100/80 mt-3">Free to start. No syllabus, school or lecturer sign-up needed.</p>
-          <div className="relative mt-6">
-            <Link href="/register" className="btn-primary !py-3 !px-8 inline-flex">
+          <p className="mx-auto mt-6 max-w-[480px] text-sm leading-relaxed text-white/80">Free to start. No syllabus, school or lecturer sign-up needed.</p>
+          <div className="mt-8 sm:mt-10">
+            <Link href="/register" className="inline-flex min-h-[46px] items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-[#a477ff] transition-colors hover:bg-[#f6f1ff]">
               Start Studying Free
             </Link>
           </div>
