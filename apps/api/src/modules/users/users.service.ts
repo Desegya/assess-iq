@@ -153,7 +153,7 @@ export class UsersService {
 
   async findOne(id: string, user: AuthUser) {
     const found = await this.prisma.user.findFirst({
-      where: { id, organizationId: user.organizationId ?? undefined },
+      where: user.organizationId ? { id, organizationId: user.organizationId } : { id: user.id === id ? id : "__not_accessible__", organizationId: null },
       select: { id: true, name: true, email: true, role: true, status: true, createdAt: true },
     })
     if (!found) throw new NotFoundException('User not found')

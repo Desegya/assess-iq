@@ -1,0 +1,10 @@
+import { Suspense } from 'react'
+import { notFound } from 'next/navigation'
+import { AdminList } from '@/components/admin/AdminList'
+import { AdminAccess } from '@/components/admin/AdminAccess'
+export default async function AdminSection({ params }: { params: Promise<{ section: string }> }) {
+  const { section } = await params
+  if (section === 'access') return <AdminAccess />
+  if (!['users','courses','lessons','questions','materials','activity','reports','audit'].includes(section)) notFound()
+  return <Suspense fallback={<p>Loading filters…</p>}><AdminList section={section} /></Suspense>
+}

@@ -1,0 +1,12 @@
+.nk-admin table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+.nk-admin th { padding: 14px 20px; color: #716778; background: #faf8fd; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+.nk-admin td { padding: 18px 20px; border-top: 1px solid #eae6ef; vertical-align: top; }
+.nk-admin tbody tr:hover { background: #fcfbfe; }
+.nk-admin .admin-table { overflow-x: auto; border: 1px solid #eae6ef; border-radius: 18px; background: white; }
+.nk-admin .admin-table table { min-width: 600px; }
+.nk-admin button:disabled { opacity: .5; cursor: not-allowed; }
+.nk-admin-dialog::backdrop { background: #241f2e66; }
+.nk-admin-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.nk-admin label { color: #51475f; }
+.nk-admin .admin-form label { display: block; font-size: 14px; font-weight: 500; }
+.nk-admin .admin-form input, .nk-admin .admin-form select, .nk-admin .admin-form textarea { width: 100%; margin-top: 8px; }

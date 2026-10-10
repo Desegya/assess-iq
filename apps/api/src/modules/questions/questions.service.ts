@@ -165,7 +165,7 @@ export class QuestionsService {
 
   async findOne(id: string, user: AuthUser) {
     const q = await this.prisma.question.findFirst({
-      where: { id, organizationId: user.organizationId ?? undefined },
+      where: user.organizationId ? { id, organizationId: user.organizationId } : { id, organizationId: null, createdById: user.id },
     })
     if (!q) throw new NotFoundException('Question not found')
     return q

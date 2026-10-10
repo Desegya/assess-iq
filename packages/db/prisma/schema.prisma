@@ -271,9 +271,12 @@ model User {
   studySessions  StudySession[] @relation("StudySessionStudent")
   topicMasteries TopicMastery[] @relation("TopicMasteryStudent")
   gpaEntries     GpaEntry[]    @relation("GpaEntryStudent")
+  nightklassAdmin NightklassAdmin?
+  adminAuditLogs NightklassAdminAudit[]
 
   @@index([organizationId])
   @@index([email])
+  @@index([role, organizationId, createdAt])
   @@map("users")
 }
 
@@ -442,10 +445,15 @@ model ContentReport {
   userId    String
   reason    String      @db.Text
   createdAt DateTime    @default(now())
+  status    String      @default("OPEN")
+  resolution String?    @db.Text
+  resolvedAt DateTime?
+  resolvedById String?
 
   lesson    TopicLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
   @@index([lessonId])
+  @@index([status, createdAt])
   @@map("content_reports")
 }
 
@@ -770,6 +778,7 @@ model StudySession {
   @@index([studyPlanId])
   @@index([studentId])
   @@index([scheduledDate])
+  @@index([studentId, completedAt])
   @@index([status])
   @@map("study_sessions")
 }
@@ -811,6 +820,7 @@ model SelfQuizAttempt {
 
   @@index([studentId, topicId])
   @@index([courseId])
+  @@index([createdAt])
   @@map("self_quiz_attempts")
 }
 
@@ -833,4 +843,33 @@ model GpaEntry {
 
   @@index([studentId])
   @@map("gpa_entries")
+}
+
+// Separate from shared institutional roles: no KwikEval role grants access.
+enum NightklassAdminRole {
+  ADMIN
+  OWNER
+}
+
+model NightklassAdmin {
+  userId String @id
+  role NightklassAdminRole @default(ADMIN)
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@map("nightklass_admins")
+}
+
+model NightklassAdminAudit {
+  id String @id @default(cuid())
+  actorId String
+  action String
+  resourceType String
+  resourceId String
+  metadata Json @default("{}")
+  createdAt DateTime @default(now())
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([createdAt])
+  @@index([resourceType, resourceId])
+  @@index([actorId])
+  @@map("nightklass_admin_audits")
 }

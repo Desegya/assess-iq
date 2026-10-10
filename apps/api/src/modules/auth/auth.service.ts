@@ -7,6 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt'
 import { ConfigService } from '@nestjs/config'
 import * as bcrypt from 'bcryptjs'
+import { randomUUID } from 'node:crypto'
 import { PrismaService } from '../prisma/prisma.service'
 import { LoginDto } from './dto/login.dto'
 import { RegisterOrgDto } from './dto/register-org.dto'
@@ -139,6 +140,10 @@ export class AuthService {
       throw new UnauthorizedException('Session expired. Please log in again.')
     }
 
+    if (stored.user.organizationId === null && ['SUSPENDED', 'INACTIVE'].includes(stored.user.status)) {
+      throw new UnauthorizedException('Account is unavailable')
+    }
+
     // Revoke old token — rotation prevents replay attacks
     await this.prisma.refreshToken.update({
       where: { id: stored.id },
@@ -262,7 +267,7 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload, { expiresIn: jwtExpiresIn })
 
     const rawRefreshToken = this.jwtService.sign(
-      { sub: authUser.id, type: 'refresh' },
+      { sub: authUser.id, type: 'refresh', jti: randomUUID() },
       {
         secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
         expiresIn: refreshExpiresIn,
