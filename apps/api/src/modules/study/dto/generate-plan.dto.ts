@@ -2,6 +2,7 @@ import { IsDateString, IsInt, IsOptional, IsString, Max, Min } from 'class-valid
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 
 export class GeneratePlanDto {
+  @IsOptional() @IsString() goalId?: string
   @ApiProperty({ description: 'Course to plan for' })
   @IsString()
   courseId!: string

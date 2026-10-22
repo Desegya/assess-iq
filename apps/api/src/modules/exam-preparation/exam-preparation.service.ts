@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { PrismaService } from '../prisma/prisma.service'
 import { SaveExamGoalDto } from './exam-goal.dto'
@@ -25,13 +25,21 @@ export class ExamPreparationService {
 
   async save(dto: SaveExamGoalDto, user: AuthUser) {
     this.assertLearner(user)
+    if (
+      dto.series &&
+      ((dto.exam === 'JAMB' && dto.series !== 'GENERAL') ||
+        (dto.exam === 'WAEC' && dto.series === 'GENERAL'))
+    ) throw new BadRequestException('Choose a valid series for this exam')
     const subjects = normalizeSubjects(dto.exam, dto.subjects)
     try {
       return await this.prisma.$transaction(async tx => {
         const goal = await tx.examGoal.upsert({
           where: { studentId_exam_year: { studentId: user.id, exam: dto.exam, year: dto.year } },
-          create: { studentId: user.id, exam: dto.exam, year: dto.year },
-          update: {},
+          create: {
+            studentId: user.id, exam: dto.exam, year: dto.year,
+            series: dto.series ?? (dto.exam === 'JAMB' ? 'GENERAL' : 'SCHOOL'),
+          },
+          update: { series: dto.series },
         })
         // Subject courses survive changing goals and are reused across WAEC/JAMB.
         const links = []

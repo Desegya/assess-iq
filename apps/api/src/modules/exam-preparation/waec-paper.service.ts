@@ -86,6 +86,7 @@ export class WaecPaperService {
     const papers = await this.prisma.waecPaperTemplate.findMany({
       where: {
         year: goal.year,
+        series: goal.series,
         subjectKey: { in: goal.subjects.map((s) => s.subjectKey) },
         status: 'APPROVED',
       },
@@ -144,6 +145,7 @@ export class WaecPaperService {
       where: {
         id: dto.paperId,
         year: goal.year,
+        series: goal.series,
         subjectKey: { in: goal.subjects.map((s) => s.subjectKey) },
         status: 'APPROVED',
       },

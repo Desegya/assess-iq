@@ -1,7 +1,8 @@
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsEnum, IsInt, IsString, Max, MaxLength, Min, MinLength } from 'class-validator'
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEnum, IsInt, IsIn, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator'
 import { ExamFamily } from '@assessiq/types'
 
 export class SaveExamGoalDto {
+  @IsOptional() @IsIn(['GENERAL','SCHOOL','PRIVATE_FIRST','PRIVATE_SECOND']) series?: string
   @IsEnum(ExamFamily)
   exam!: ExamFamily
 

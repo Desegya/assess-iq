@@ -904,6 +904,7 @@ enum ExamFamily {
 }
 
 model ExamGoal {
+  series String @default("GENERAL")
   id        String @id @default(cuid())
   studentId String
   exam      ExamFamily
@@ -1133,4 +1134,29 @@ model ExamGenerationJob {
   @@unique([actorId, requestKey])
   @@index([status, nextAt])
   @@map("exam_generation_jobs")
+}
+
+
+model ExamCalendar {
+  id String @id @default(cuid())
+  exam ExamFamily
+  year Int
+  series String
+  version Int
+  title String
+  startDate String
+  endDate String?
+  sourceNote String
+  status QuestionStatus @default(DRAFT)
+  revision Int @default(1)
+  entries Json
+  fileKey String?
+  fileName String?
+  extractedText String? @db.Text
+  reviewedById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([exam,year,series,version])
+  @@index([exam,year,series,status])
+  @@map("exam_calendars")
 }

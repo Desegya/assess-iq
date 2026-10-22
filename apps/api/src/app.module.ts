@@ -1,3 +1,4 @@
+import { ExamCalendarModule } from './modules/exam-calendar/exam-calendar.module'
 import { ExamPreparationModule } from './modules/exam-preparation/exam-preparation.module'
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
@@ -40,6 +41,7 @@ import { PrismaModule } from './modules/prisma/prisma.module'
     AuthModule,
     UsersModule,
     ExamPreparationModule,
+    ExamCalendarModule,
     OrganizationsModule,
     CoursesModule,
     TopicsModule,

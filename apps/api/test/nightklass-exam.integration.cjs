@@ -359,3 +359,81 @@ test('mock review handles a small concurrent-read burst without changing saved r
   assert.ok(responses.every(r=>JSON.stringify(r.body.result)===JSON.stringify(responses[0].body.result)))
   console.log(`Local concurrency smoke: five mock-review reads completed in ${Math.round(performance.now()-started)} ms; not a production capacity benchmark.`)
 })
+
+let calendarDraft
+const calendarVersion = async (exam,year,series) => ((await prisma.examCalendar.aggregate({where:{exam,year,series},_max:{version:true}}))._max.version??0)+1
+test('exam date drafts are private, owner scoped and reject invalid windows',async()=>{
+  assert.equal((await call('/admin/nightklass/exam-content/calendars',learnerToken)).status,403)
+  const fields={exam:'WAEC',year:2027,series:'SCHOOL',version:await calendarVersion('WAEC',2027,'SCHOOL'),title:`WAEC school timetable ${suffix}`,startDate:'2027-05-01',endDate:'2027-06-30',sourceNote:'Isolated verified calendar fixture; not real examination dates.',entries:[],expectedRevision:0}
+  assert.equal((await admin('calendars',{...fields,startDate:'2027-02-29'})).status,400)
+  const response=await admin('calendars',fields)
+  assert.equal(response.status,201);calendarDraft=response.body
+  const unpublished=await call(`/exam-preparation/goals/${waecGoal.id}/calendar`,learnerToken)
+  assert.notEqual(unpublished.body.calendar?.id,calendarDraft.id)
+  assert.equal((await call(`/exam-preparation/goals/${waecGoal.id}/calendar`,otherToken)).status,404)
+})
+test('WAEC CSV upload imports draft rows and publication filters papers to selected subjects',async()=>{
+  const csv='subject,paperCode,title,date,startTime,endTime,notes\nGovernment,GOV2,Government essay,2027-05-20,09:00,11:00,Verified fixture\nPhysics,PHY1,Physics objective,2027-05-21,09:00,10:00,Not selected\nGovernment,GOV1,Government objective,2027-05-22,,,Time to be confirmed'
+  const data=new FormData();data.set('file',new Blob([csv],{type:'text/csv'}),'waec-timetable.csv');data.set('expectedRevision',String(calendarDraft.revision))
+  const upload=await fetch(base+`/admin/nightklass/exam-content/calendars/${calendarDraft.id}/upload`,{method:'POST',headers:{Authorization:`Bearer ${ownerToken}`},body:data})
+  assert.equal(upload.status,201);calendarDraft=await upload.json()
+  assert.equal(calendarDraft.importedRows,3)
+  assert.equal(calendarDraft.status,'DRAFT')
+  assert.equal((await admin(`calendars/${calendarDraft.id}/state`,{status:'APPROVED',expectedRevision:1})).status,409)
+  assert.equal((await admin(`calendars/${calendarDraft.id}/state`,{status:'APPROVED',expectedRevision:calendarDraft.revision})).status,201)
+  const published=await call(`/exam-preparation/goals/${waecGoal.id}/calendar`,learnerToken)
+  assert.equal(published.body.calendar.id,calendarDraft.id)
+  assert.equal(published.body.papers.length,2)
+  assert.ok(published.body.papers.every(p=>p.subject==='Government'))
+  assert.equal(published.body.deadlines[0].date,'2027-05-20')
+  assert.equal(published.body.deadlines[0].source,'PAPER_DATE')
+  assert.match(published.body.calendar.fileUrl,/exam-timetables\/.+\.csv/)
+  assert.match(published.body.note,/Africa\/Lagos/)
+  assert.equal((await admin('calendars',{id:calendarDraft.id,exam:'WAEC',year:2027,series:'SCHOOL',version:calendarDraft.version,title:calendarDraft.title,startDate:'2027-05-02',endDate:'2027-06-30',sourceNote:calendarDraft.sourceNote,entries:[],expectedRevision:calendarDraft.revision+1})).status,409)
+})
+test('published JAMB start dates are general windows and can supply a study-plan deadline',async()=>{
+  const calendar=await admin('calendars',{exam:'JAMB',year:2027,series:'GENERAL',version:await calendarVersion('JAMB',2027,'GENERAL'),title:`JAMB window ${suffix}`,startDate:'2027-08-01',endDate:'2027-08-15',sourceNote:'Isolated examination-window fixture, not an assigned candidate sitting.',entries:[],expectedRevision:0})
+  assert.equal(calendar.status,201)
+  assert.equal((await admin(`calendars/${calendar.body.id}/state`,{status:'APPROVED',expectedRevision:1})).status,201)
+  const published=await call(`/exam-preparation/goals/${goal.id}/calendar`,learnerToken)
+  assert.equal(published.body.calendar.startDate,'2027-08-01')
+  assert.match(published.body.note,/personal sitting/)
+  const course=goal.subjects.find(s=>s.subjectKey==='government')
+  const availability=await call('/study/availability',learnerToken,{slots:[{dayOfWeek:1,startTime:'18:00',endTime:'19:00'},{dayOfWeek:3,startTime:'18:00',endTime:'19:00'}]})
+  assert.equal(availability.status,201)
+  const plan=await call('/study/plans/generate',learnerToken,{goalId:goal.id,courseId:course.courseId})
+  assert.equal(plan.status,201)
+  assert.equal(plan.body.examDate.slice(0,10),'2027-08-01')
+  const explicit=await call('/study/plans/generate',learnerToken,{goalId:goal.id,courseId:course.courseId,weeks:5})
+  assert.equal(explicit.status,201)
+  assert.equal(explicit.body.planType,'DURATION')
+})
+test('WAEC series selection isolates calendars and mock paper availability',async()=>{
+  const changed=await call('/exam-preparation/goals',learnerToken,{exam:'WAEC',year:2027,series:'PRIVATE_SECOND',subjects:['Government']},'PUT')
+  assert.equal(changed.status,200)
+  const result=await call(`/exam-preparation/goals/${waecGoal.id}/calendar`,learnerToken)
+  assert.notEqual(result.body.calendar?.series,'SCHOOL')
+  const papers=await call(`/exam-preparation/goals/${waecGoal.id}/waec-papers`,learnerToken)
+  assert.ok(papers.body.every(p=>p.series==='PRIVATE_SECOND'))
+  assert.equal((await call('/exam-preparation/waec-papers/start',learnerToken,{goalId:waecGoal.id,paperId:waecPaper.id,requestKey:randomUUID()})).status,404)
+  assert.equal((await call('/exam-preparation/goals',learnerToken,{exam:'JAMB',year:2027,series:'SCHOOL',subjects:['English','Government','Economics','Literature in English']},'PUT')).status,400)
+})
+
+test('WAEC PDF uploads retain the original timetable for admin review', async()=>{
+  const created=await admin('calendars',{exam:'WAEC',year:2027,series:'PRIVATE_FIRST',version:await calendarVersion('WAEC',2027,'PRIVATE_FIRST'),title:`PDF timetable ${suffix}`,startDate:'2027-01-01',sourceNote:'Isolated original PDF fixture for upload verification.',entries:[],expectedRevision:0})
+  assert.equal(created.status,201)
+  const stream='BT /F1 12 Tf 50 750 Td (WAEC timetable fixture) Tj ET'
+  const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`]
+  let pdf='%PDF-1.4\n';const offsets=[0]
+  objects.forEach((object,i)=>{offsets.push(Buffer.byteLength(pdf));pdf+=`${i+1} 0 obj\n${object}\nendobj\n`})
+  const xref=Buffer.byteLength(pdf)
+  pdf+=`xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n ').join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`
+  const data=new FormData();data.set('file',new Blob([pdf],{type:'application/pdf'}),'original-waec.pdf');data.set('expectedRevision','1')
+  const response=await fetch(base+`/admin/nightklass/exam-content/calendars/${created.body.id}/upload`,{method:'POST',headers:{Authorization:`Bearer ${ownerToken}`},body:data})
+  assert.equal(response.status,201)
+  const uploaded=await response.json()
+  assert.equal(uploaded.fileName,'original-waec.pdf');assert.equal(uploaded.status,'DRAFT');assert.equal(uploaded.importedRows,0)
+  const source=await admin(`calendars/${created.body.id}/file`,undefined,'GET')
+  assert.equal(source.status,200);assert.match(source.body.url,/exam-timetables\/.+\.pdf/)
+  assert.equal((await call(`/admin/nightklass/exam-content/calendars/${created.body.id}/file`,learnerToken)).status,403)
+})

@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common'
+import { ExamCalendarService } from '../exam-calendar/exam-calendar.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { CoursesService } from '../courses/courses.service'
 import { TopicsService } from '../topics/topics.service'
@@ -79,6 +80,7 @@ export class StudyService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly calendars: ExamCalendarService,
     private readonly coursesService: CoursesService,
     private readonly ai: AiService,
     private readonly topicsService: TopicsService,
@@ -172,6 +174,8 @@ export class StudyService {
     const course = await this.coursesService.findOne(dto.courseId, user) // access check (throws if inaccessible)
 
     const today = startOfDay(new Date())
+    if (!dto.examDate && !dto.weeks && dto.goalId)
+      dto.examDate = await this.calendars.studyDeadline(dto.goalId, dto.courseId, user)
     if (!dto.examDate && !dto.weeks) throw new BadRequestException('Choose an exam date or a plan length')
     const end = dto.weeks
       ? new Date(today.getTime() + dto.weeks * 7 * 24 * 60 * 60 * 1000)
