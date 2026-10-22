@@ -16,10 +16,10 @@ First foundation slice implemented:
 - Exam dashboard and subject navigation wired to existing upload, outline, lesson, quiz, chat, flashcard and planning pages.
 - AI course context updated to distinguish secondary subjects from university courses.
 - 62 API unit tests pass, including 12 new foundation cases; API build and frontend/API type checks pass.
-- Migration checked against Prisma's schema diff. Database application/integration and browser testing remain outstanding.
+- Migration checked against Prisma's schema diff and applied to local PostgreSQL (`localhost:5432/assessiq`). All 15 migrations are now applied, including the previously pending admin migration. Database integration and browser testing remain outstanding.
 - Frontend production build currently fails fetching existing Google Fonts because the environment cannot resolve fonts.googleapis.com.
 
-Still to implement: official syllabus/version management, teacher-managed shared materials and saved question-bank generation/review, exam specifications, full timed mocks, durable expiry/grading, WAEC paper structures, exam-specific analytics and combined-goal revision. Existing topic quizzes are not full exam simulations. No deployment or database migration has been performed by this implementation pass.
+Still to implement: official syllabus/version management, teacher-managed shared materials and saved question-bank generation/review, exam specifications, full timed mocks, durable expiry/grading, WAEC paper structures, exam-specific analytics and combined-goal revision. Existing topic quizzes are not full exam simulations. No deployment has been performed. The local development database migration was applied on 22 October 2026.
 
 ## 1. Outcome and product direction
 
