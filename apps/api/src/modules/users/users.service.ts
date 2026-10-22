@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common'
-import * as bcrypt from 'bcryptjs'
+import { hashPassword } from '../../common/passwords'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { CreateStudentDto } from './dto/create-student.dto'
@@ -44,7 +44,7 @@ export class UsersService {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } })
     if (existing) throw new ConflictException('An account with this email already exists')
 
-    const passwordHash = await bcrypt.hash(dto.password, 12)
+    const passwordHash = await hashPassword(dto.password)
 
     const student = await this.prisma.user.create({
       data: {
@@ -76,7 +76,7 @@ export class UsersService {
         results.push({ name: row.name, email: row.email, status: 'skipped', reason: 'Email already exists' })
         continue
       }
-      const passwordHash = await bcrypt.hash(row.password ?? DEFAULT_PASSWORD, 12)
+      const passwordHash = await hashPassword(row.password ?? DEFAULT_PASSWORD)
       await this.prisma.user.create({
         data: {
           name: row.name,

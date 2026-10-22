@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common'
-import * as bcrypt from 'bcryptjs'
+import { hashPassword, verifyPassword } from '../../common/passwords'
 import { randomBytes } from 'node:crypto'
 import { AuthUser } from '@assessiq/types'
 import { PrismaService } from '../prisma/prisma.service'
@@ -90,7 +90,7 @@ export class AccountDataService {
   async delete(user: AuthUser, password: string) {
     const account = await this.standalone(user)
     if (account.deletedAt) throw new UnauthorizedException('Account is unavailable')
-    if (!(await bcrypt.compare(password, account.passwordHash)))
+    if (!(await verifyPassword(password, account.passwordHash)))
       throw new UnauthorizedException('Password is incorrect')
     if (await this.prisma.nightklassAdmin.findUnique({ where: { userId: user.id } }))
       throw new ForbiddenException('Remove your Nightklass administrator access before deleting this account.')
@@ -124,7 +124,7 @@ export class AccountDataService {
           data: {
             name: 'Deleted learner',
             email: `deleted-${id}@deleted.nightklass.invalid`,
-            passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 4),
+            passwordHash: await hashPassword(randomBytes(32).toString('hex')),
             status: 'INACTIVE',
             deletedAt: new Date(),
             sessionVersion: { increment: 1 },

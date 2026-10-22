@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { ConfigService } from '@nestjs/config'
-import * as bcrypt from 'bcryptjs'
+import { hashPassword, needsRehash, verifyPassword } from '../../common/passwords'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { PrismaService } from '../prisma/prisma.service'
 import { LoginDto } from './dto/login.dto'
@@ -42,7 +42,9 @@ const ROTATION_GRACE_MS = 20_000
 const RESET_TOKEN_TTL_MS = 30 * 60_000
 const VERIFY_TOKEN_TTL_MS = 48 * 60 * 60_000
 // Compared against when the email is unknown, so response time does not reveal registration.
-const DUMMY_HASH = bcrypt.hashSync(randomUUID(), 12)
+// Resolved lazily so start-up does not pay for a hash; reused for every unknown email.
+let dummyHash: Promise<string> | null = null
+const dummyPasswordHash = () => (dummyHash ??= hashPassword(randomUUID()))
 
 @Injectable()
 export class AuthService {
@@ -71,7 +73,7 @@ export class AuthService {
       throw new ConflictException('An organisation with this name already exists')
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 12)
+    const passwordHash = await hashPassword(dto.password)
 
     const { user, organization } = await this.prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
@@ -122,7 +124,7 @@ export class AuthService {
     })
 
     if (!user || user.deletedAt) {
-      await bcrypt.compare(dto.password, DUMMY_HASH)
+      await verifyPassword(dto.password, await dummyPasswordHash())
       this.loginLimiter.recordFailure(dto.email)
       throw new UnauthorizedException('Invalid email or password')
     }
@@ -134,16 +136,18 @@ export class AuthService {
       throw new UnauthorizedException('Your account is inactive. Contact your administrator.')
     }
 
-    const passwordValid = await bcrypt.compare(dto.password, user.passwordHash)
+    const passwordValid = await verifyPassword(dto.password, user.passwordHash)
     if (!passwordValid) {
       this.loginLimiter.recordFailure(dto.email)
       throw new UnauthorizedException('Invalid email or password')
     }
     this.loginLimiter.reset(dto.email)
+    // Move older hashes to the current scheme while the plaintext is at hand.
+    const upgradedHash = needsRehash(user.passwordHash) ? await hashPassword(dto.password) : null
 
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+      data: { lastLoginAt: new Date(), ...(upgradedHash ? { passwordHash: upgradedHash } : {}) },
     })
 
     const tokens = await this.generateTokenPair({
@@ -255,7 +259,7 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } })
     if (existing) throw new ConflictException('An account with this email already exists')
 
-    const passwordHash = await bcrypt.hash(dto.password, 12)
+    const passwordHash = await hashPassword(dto.password)
 
     const user = await this.prisma.user.create({
       data: {
@@ -284,7 +288,7 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } })
     if (existing) throw new ConflictException('An account with this email already exists')
 
-    const passwordHash = await bcrypt.hash(dto.password, 12)
+    const passwordHash = await hashPassword(dto.password)
 
     const user = await this.prisma.user.create({
       data: {
@@ -352,7 +356,7 @@ export class AuthService {
 
   async resetPassword(token: string, password: string) {
     const tokenHash = hashToken(token)
-    const passwordHash = await bcrypt.hash(password, 12)
+    const passwordHash = await hashPassword(password)
     const userId = await this.prisma.$transaction(async (tx) => {
       // Consuming the token and changing the password are one atomic step, so a link works once.
       const consumed = await tx.emailToken.updateMany({
@@ -486,7 +490,8 @@ export class AuthService {
   }
 
   private sanitizeUser(user: { passwordHash: string; [key: string]: unknown }) {
-    const { passwordHash: _pw, ...safe } = user
+    // Credentials and session internals never leave the API.
+    const { passwordHash: _pw, sessionVersion: _sv, ...safe } = user
     return safe
   }
 }

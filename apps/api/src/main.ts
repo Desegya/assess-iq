@@ -8,7 +8,9 @@ import { assertProductionEnvironment } from './environment'
 
 async function bootstrap() {
   assertProductionEnvironment(process.env)
-  const app = await NestFactory.create<NestExpressApplication>(AppModule)
+  // Close idle keep-alive sockets on shutdown; otherwise busy clients keep the server
+  // open (measured: ~9 min under load) and the platform kills it mid-drain.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { forceCloseConnections: true })
 
   // SIGTERM (redeploys) runs onModuleDestroy, letting background workers stop
   // claiming work and release their leases instead of waiting for expiry.

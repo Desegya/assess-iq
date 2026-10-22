@@ -410,3 +410,13 @@ test('reviewed practice pauses for a subject while that subject is in a running 
   assert.equal((await call(`/exam-preparation/mocks/${started.body.id}/submit`, l.token, {})).status, 201)
   assert.equal((await practise()).status, 201)
 })
+
+test('legacy bcrypt passwords still work and are upgraded to PBKDF2 on sign-in', async () => {
+  const user = await account('legacy-hash')
+  assert.match(user.passwordHash, /^\$2[aby]\$/)
+  await login(user)
+  const upgraded = await prisma.user.findUnique({ where: { id: user.id } })
+  assert.match(upgraded.passwordHash, /^pbkdf2-sha256\$600000\$/)
+  await login(user)
+  assert.equal((await call('/auth/login', null, { email: user.email, password: 'wrong-password' })).status, 401)
+})

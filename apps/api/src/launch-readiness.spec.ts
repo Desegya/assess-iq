@@ -162,3 +162,23 @@ describe('local storage signing', () => {
     await expect(storage.uploadBuffer('a/../../x', Buffer.from(''), 'text/plain')).rejects.toThrow(/Invalid storage key/)
   })
 })
+
+describe('password hashing', () => {
+  it('hashes with PBKDF2 and verifies, rejecting wrong passwords', async () => {
+    const { hashPassword, verifyPassword, needsRehash } = await import('./common/passwords')
+    const stored = await hashPassword('correct horse battery staple')
+    expect(stored).toMatch(/^pbkdf2-sha256\$600000\$/)
+    expect(await verifyPassword('correct horse battery staple', stored)).toBe(true)
+    expect(await verifyPassword('wrong', stored)).toBe(false)
+    expect(needsRehash(stored)).toBe(false)
+  })
+  it('still verifies legacy bcrypt hashes and marks them for upgrade', async () => {
+    const { verifyPassword, needsRehash } = await import('./common/passwords')
+    const bcrypt = await import('bcryptjs')
+    const legacy = await bcrypt.hash('legacy-password', 4)
+    expect(await verifyPassword('legacy-password', legacy)).toBe(true)
+    expect(await verifyPassword('nope', legacy)).toBe(false)
+    expect(needsRehash(legacy)).toBe(true)
+    expect(await verifyPassword('x', 'garbage')).toBe(false)
+  })
+})
