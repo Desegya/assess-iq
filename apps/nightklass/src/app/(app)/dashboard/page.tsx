@@ -1,5 +1,6 @@
 'use client'
 
+import { ExamPreparationWorkspace } from '@/components/exams/ExamPreparationWorkspace'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useApi } from '@/hooks/use-api'
@@ -110,6 +111,8 @@ export default function DashboardPage() {
   const streak = progress?.currentStreak ?? 0
   const isNewUser = courses?.length === 0
   const hasProfile = !!profile?.profileCompletedAt
+
+  if (profile?.studyPathway === 'EXAM_PREPARATION') return <ExamPreparationWorkspace />
 
   return (
     <div className="space-y-6">

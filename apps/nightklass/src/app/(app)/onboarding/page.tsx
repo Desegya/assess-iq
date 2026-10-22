@@ -1,5 +1,6 @@
 'use client'
 
+import { ExamProfileForm } from '@/components/exams/ExamProfileForm'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { StudyArtwork } from '@/components/product/StudyArtwork'
@@ -30,6 +31,10 @@ export default function OnboardingPage() {
     academicSession: '',
     graduationYear: '',
   })
+  const [pathway, setPathway] = useState<'TERTIARY' | 'EXAM_PREPARATION'>('TERTIARY')
+  const [loadedProfile, setLoadedProfile] = useState<AcademicProfile | null>(null)
+  const [loadingProfile, setLoadingProfile] = useState(true)
+  const [profileError, setProfileError] = useState('')
   const [isEdit, setIsEdit] = useState(false)
   const [showMore, setShowMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,6 +45,8 @@ export default function OnboardingPage() {
     api
       .get<AcademicProfile>('/users/me/profile')
       .then((p) => {
+        setLoadedProfile(p)
+        setPathway(p.studyPathway ?? 'TERTIARY')
         if (!p.profileCompletedAt) return
         setIsEdit(true)
         setForm({
@@ -55,7 +62,8 @@ export default function OnboardingPage() {
         })
         if (p.institution || p.faculty || p.academicSession || p.graduationYear) setShowMore(true)
       })
-      .catch(() => undefined)
+      .catch(() => setProfileError('Could not load your profile. Refresh this page to try again.'))
+      .finally(() => setLoadingProfile(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -70,6 +78,7 @@ export default function OnboardingPage() {
     setSaving(true)
     try {
       await api.patch('/users/me/profile', {
+        studyPathway: 'TERTIARY',
         country: form.country.trim(),
         institutionType: form.institutionType,
         programme: form.programme.trim(),
@@ -96,10 +105,17 @@ export default function OnboardingPage() {
       </h1>
       <p className="text-slate-500 text-sm mt-1 mb-6">
         {isEdit
-          ? 'Update this when you change level or semester.'
-          : 'Tell us what you study so Nightklass can suggest your courses and set up your semester. Takes 30 seconds.'}
+          ? 'Update your academic stage and learning preferences.'
+          : 'Choose your learning path so Nightklass can help you get started.'}
       </p>
 
+      {loadingProfile ? <p role="status">Loading your profile…</p> : profileError ? <p role="alert">{profileError}</p> : <>
+      <fieldset className="mb-6 grid gap-3 sm:grid-cols-2" disabled={saving}>
+        <legend className="mb-2 text-sm font-medium">What are you studying for?</legend>
+        <button type="button" aria-pressed={pathway === 'TERTIARY'} onClick={() => setPathway('TERTIARY')} className={`rounded-xl border p-4 text-left ${pathway === 'TERTIARY' ? 'border-violet-500 bg-violet-50' : 'bg-white'}`}>University / tertiary study</button>
+        <button type="button" aria-pressed={pathway === 'EXAM_PREPARATION'} onClick={() => setPathway('EXAM_PREPARATION')} className={`rounded-xl border p-4 text-left ${pathway === 'EXAM_PREPARATION' ? 'border-violet-500 bg-violet-50' : 'bg-white'}`}>WAEC / JAMB preparation</button>
+      </fieldset>
+      {pathway === 'EXAM_PREPARATION' ? <ExamProfileForm profile={loadedProfile} /> : <>
       <div className="mb-6 flex items-center gap-4 rounded-2xl border border-[#e9def8] bg-[#f7f2ff] px-5 py-4">
         <StudyArtwork className="hidden !w-28 shrink-0 sm:block" />
         <div>
@@ -201,7 +217,7 @@ export default function OnboardingPage() {
               disabled={saving}
               className="input-base"
             >
-              {(Object.keys(INSTITUTION_TYPE_LABEL) as InstitutionType[]).map((t) => (
+              {(Object.keys(INSTITUTION_TYPE_LABEL) as InstitutionType[]).filter(t => t !== 'SECONDARY_SCHOOL').map((t) => (
                 <option key={t} value={t}>
                   {INSTITUTION_TYPE_LABEL[t]}
                 </option>
@@ -308,6 +324,8 @@ export default function OnboardingPage() {
           {saving ? 'Saving…' : isEdit ? 'Save profile' : 'Set up my semester →'}
         </button>
       </form>
+      </>}
+      </>}
     </div>
   )
 }

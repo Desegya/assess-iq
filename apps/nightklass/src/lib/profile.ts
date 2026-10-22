@@ -2,6 +2,8 @@ export type InstitutionType = 'UNIVERSITY' | 'POLYTECHNIC' | 'COLLEGE_OF_EDUCATI
 export type Semester = 'FIRST' | 'SECOND'
 
 export interface AcademicProfile {
+  studyPathway: 'TERTIARY' | 'EXAM_PREPARATION'
+  secondaryStage: 'SS1' | 'SS2' | 'SS3' | 'SCHOOL_LEAVER' | null
   name: string
   country: string | null
   institutionType: InstitutionType | null
@@ -29,6 +31,7 @@ export const LEVELS = [100, 200, 300, 400, 500, 600]
 
 // "Animal & Environmental Biology • 200 Level • First Semester"
 export function profileSummary(p: AcademicProfile): string {
+  if (p.studyPathway === 'EXAM_PREPARATION') return `${p.secondaryStage === 'SCHOOL_LEAVER' ? 'School leaver' : p.secondaryStage ?? 'Secondary student'} • Exam preparation`
   return [p.programme, p.currentLevel && `${p.currentLevel} Level`, p.currentSemester && SEMESTER_LABEL[p.currentSemester]]
     .filter(Boolean)
     .join(' • ')

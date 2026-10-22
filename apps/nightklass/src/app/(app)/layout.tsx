@@ -10,6 +10,7 @@ import { Icon as ProductIcon } from '@/components/product/Icon'
 import { Avatar } from '@/components/ui/Avatar'
 import { useAuth } from '@/contexts/auth-context'
 import { useApi } from '@/hooks/use-api'
+import type { AcademicProfile } from '@/lib/profile'
 
 function Icon({ d, className = 'w-5 h-5' }: { d: string; className?: string }) {
   return (
@@ -43,6 +44,7 @@ const NAV_SECTIONS = [
     items: [
       { href: '/dashboard', label: 'Home', icon: ICONS.home },
       { href: '/courses', label: 'My Courses', icon: ICONS.courses },
+      { href: '/exam-preparation', label: 'WAEC / JAMB', icon: ICONS.courses },
       { href: '/today', label: 'Today', icon: ICONS.today },
     ],
   },
@@ -77,6 +79,24 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth()
   const api = useApi()
   const [dueCount, setDueCount] = useState(0)
+  const [examLearner, setExamLearner] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    api.get<AcademicProfile>('/users/me/profile').then(profile => {
+      if (active) setExamLearner(profile.studyPathway === 'EXAM_PREPARATION')
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [api, pathname])
+
+  const navSections = NAV_SECTIONS.map(section => ({
+    ...section,
+    items: section.items.filter(item => !examLearner || (item.href !== '/gpa' && item.href !== '/courses')).map(item => ({
+      ...item, label: examLearner && item.href === '/exam-preparation' ? 'My Subjects' : item.label,
+    })),
+  }))
+  const mobileNav = MOBILE_NAV.map(item => examLearner && item.href === '/courses'
+    ? { ...item, href: '/exam-preparation', label: 'Subjects' } : item)
 
   useEffect(() => {
     api
@@ -107,7 +127,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
           <Brand />
         </Link>
         <nav aria-label="Main navigation" className="flex-1 space-y-6 overflow-y-auto px-4 pb-6">
-          {NAV_SECTIONS.map((section) => (
+          {navSections.map((section) => (
             <div key={section.label}>
               <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[.14em] text-[#716778]">
                 {section.label}
@@ -172,7 +192,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
             Your personal study coach
           </p>
           <div className="flex items-center gap-1 sm:gap-3">
-            <Link
+            {!examLearner && <Link
               href="/gpa"
               aria-label="GPA calculator"
               aria-current={isActive('/gpa') ? 'page' : undefined}
@@ -180,7 +200,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
             >
               <ProductIcon name="chart" className="h-4 w-4" />
               <span className="hidden sm:inline">GPA & grades</span>
-            </Link>
+            </Link>}
             <Link
               href="/onboarding"
               aria-label="Academic profile"
@@ -209,7 +229,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         aria-label="Mobile navigation"
         className="fixed inset-x-0 bottom-0 z-20 flex items-center border-t border-[#eae6ef] bg-white px-1 pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
-        {MOBILE_NAV.map((item) => {
+        {mobileNav.map((item) => {
           const active = isActive(item.href)
           return (
             <Link
