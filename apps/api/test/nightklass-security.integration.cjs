@@ -290,3 +290,63 @@ test('the emergency brake stops new attempts while in-progress attempts can fini
     assert.equal((await call(`/exam-preparation/mocks/${started.body.id}`, l.token)).body.status, 'GRADED')
   } finally { await setting('exam.newAttemptsPaused', null) }
 })
+
+async function personalData(user) {
+  const course = await prisma.course.create({ data: { ownerId: user.id, title: `Tertiary Biochemistry ${suffix}`, subject: 'Biochemistry' } })
+  const topic = await prisma.topic.create({ data: { courseId: course.id, name: 'Enzymes' } })
+  await prisma.flashcard.create({ data: { studentId: user.id, front: 'Enzyme', back: 'Biological catalyst' } })
+  await prisma.selfQuizAttempt.create({ data: { studentId: user.id, topicId: topic.id, courseId: course.id, difficulty: 'MEDIUM', scorePercent: 80, questionCount: 5, results: [] } })
+  const key = `personal/${user.id}/documents/${randomUUID()}/notes.txt`
+  await app.get(require('../dist/modules/storage/storage.service').StorageService).uploadBuffer(key, Buffer.from('private notes'), 'text/plain')
+  await prisma.document.create({ data: { uploadedById: user.id, courseId: course.id, fileName: 'notes.txt', fileType: 'TXT', fileUrl: key, fileSizeBytes: 13, status: 'READY' } })
+  return { course, key }
+}
+
+test('learners can export only their own data', async () => {
+  const user = await account('export'), other = await account('export-other')
+  await personalData(user); await personalData(other)
+  const token = (await login(user)).accessToken
+  const exported = await call('/users/me/export', token)
+  assert.equal(exported.status, 200)
+  assert.equal(exported.body.profile.id, user.id)
+  assert.equal(exported.body.profile.passwordHash, undefined)
+  assert.equal(exported.body.courses.length, 1)
+  assert.ok(exported.body.flashcards.every(f => f.studentId === user.id))
+  assert.ok(exported.body.documents.every(d => d.fileName === 'notes.txt'))
+})
+
+test('account deletion removes personal data, files and sessions but leaves others intact', async () => {
+  const { user, token } = await jambLearner('delete-me')
+  const other = await account('delete-bystander')
+  const mine = await personalData(user), theirs = await personalData(other)
+  const started = await call('/exam-preparation/mocks', token, { goalId: (await prisma.examGoal.findFirst({ where: { studentId: user.id } })).id, requestKey: randomUUID() })
+  assert.equal(started.status, 201)
+  const session = await login(user)
+  assert.equal((await call('/users/me', token, { password, confirmation: 'delete' }, 'DELETE')).status, 400)
+  assert.equal((await call('/users/me', token, { password: 'wrong-password', confirmation: 'DELETE MY ACCOUNT' }, 'DELETE')).status, 401)
+  const deleted = await call('/users/me', token, { password, confirmation: 'DELETE MY ACCOUNT' }, 'DELETE')
+  assert.equal(deleted.status, 200, JSON.stringify(deleted.body))
+  const row = await prisma.user.findUnique({ where: { id: user.id } })
+  assert.ok(row.deletedAt); assert.equal(row.name, 'Deleted learner'); assert.notEqual(row.email, user.email)
+  for (const [model, where] of [['course', { ownerId: user.id }], ['flashcard', { studentId: user.id }], ['selfQuizAttempt', { studentId: user.id }], ['document', { uploadedById: user.id }], ['examGoal', { studentId: user.id }], ['examMockAttempt', { studentId: user.id }], ['refreshToken', { userId: user.id }]])
+    assert.equal(await prisma[model].count({ where }), 0, model)
+  const storage = app.get(require('../dist/modules/storage/storage.service').StorageService)
+  const fs = require('node:fs'), path = require('node:path')
+  assert.equal(fs.existsSync(path.join(process.cwd(), 'uploads', mine.key)), false)
+  assert.equal(fs.existsSync(path.join(process.cwd(), 'uploads', theirs.key)), true)
+  assert.equal(await prisma.course.count({ where: { ownerId: other.id } }), 1)
+  // Every session ends and the old credentials no longer work.
+  assert.equal((await call('/auth/me', token)).status, 401)
+  assert.equal((await call('/auth/refresh', null, { refreshToken: session.refreshToken })).status, 401)
+  assert.equal((await call('/auth/login', null, { email: user.email, password })).status, 401)
+  await storage.delete(theirs.key)
+})
+
+test('institutional and administrator accounts cannot self-delete', async () => {
+  const org = await prisma.organization.create({ data: { name: `Org ${suffix}`, slug: `org-${suffix}`, joinCode: `J${suffix}`.slice(0, 9), type: 'UNIVERSITY', plan: 'FREE_TRIAL' } })
+  const member = await account('institutional', { organizationId: org.id })
+  const token = (await login(member)).accessToken
+  assert.equal((await call('/users/me/export', token)).status, 403)
+  assert.equal((await call('/users/me', token, { password, confirmation: 'DELETE MY ACCOUNT' }, 'DELETE')).status, 403)
+  assert.equal((await call('/users/me', ownerToken, { password, confirmation: 'DELETE MY ACCOUNT' }, 'DELETE')).status, 403)
+})
