@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { adminRequest, useAdminData } from './admin-api'
 interface Entry {
   subject: string
@@ -56,6 +56,7 @@ function clean(c: Calendar): Calendar {
   }
 }
 export function AdminExamCalendars() {
+  const publishOnSave = useRef(false)
   const data = useAdminData<Calendar[]>('exam-content/calendars')
   const [form, setForm] = useState<Calendar | null>(null),
     [busy, setBusy] = useState(false),
@@ -232,11 +233,13 @@ export function AdminExamCalendars() {
                   exam,
                   year,
                   series,
-                  version,
-                  title,
+                  // New calendars get the next version and a generated title on the server.
+                  ...(id ? { version } : {}),
+                  ...(title.trim() ? { title } : {}),
                   startDate,
                   endDate: endDate || undefined,
-                  sourceNote,
+                  ...(sourceNote.trim() ? { sourceNote } : {}),
+                  publish: publishOnSave.current,
                   entries: entries.map((e) => ({
                     ...e,
                     startTime: e.startTime || undefined,
@@ -247,8 +250,11 @@ export function AdminExamCalendars() {
               })
               setForm(clean(saved))
               setMessage(
-                'Calendar saved as a draft. Review dates and paper rows before publishing.',
+                publishOnSave.current
+                  ? 'Dates published. Learners with this exam goal now see them.'
+                  : 'Calendar saved as a draft. Review dates and paper rows before publishing.',
               )
+              publishOnSave.current = false
             })
           }}
         >
@@ -306,17 +312,6 @@ export function AdminExamCalendars() {
                 </select>
               </label>
             </div>
-            <label className="block text-sm">
-              Calendar title
-              <input
-                className="input-base mt-1"
-                required
-                minLength={5}
-                maxLength={150}
-                value={form.title}
-                onChange={(e) => field('title', e.target.value)}
-              />
-            </label>
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="text-sm">
                 Exam starts
@@ -337,29 +332,45 @@ export function AdminExamCalendars() {
                   onChange={(e) => field('endDate', e.target.value)}
                 />
               </label>
-              <label className="text-sm">
-                Calendar version
-                <input
-                  type="number"
-                  className="input-base mt-1"
-                  min={1}
-                  max={1000}
-                  value={form.version}
-                  onChange={(e) => field('version', Number(e.target.value))}
-                />
-              </label>
             </div>
-            <label className="block text-sm">
-              Source and date verification note
-              <input
-                className="input-base mt-1"
-                required
-                minLength={10}
-                maxLength={2000}
-                value={form.sourceNote}
-                onChange={(e) => field('sourceNote', e.target.value)}
-              />
-            </label>
+            <details className="rounded-xl border p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                More details (optional)
+              </summary>
+              <div className="mt-3 space-y-3">
+                <label className="block text-sm">
+                  Calendar title
+                  <input
+                    className="input-base mt-1"
+                    maxLength={150}
+                    placeholder="Generated automatically if left blank"
+                    value={form.title}
+                    onChange={(e) => field('title', e.target.value)}
+                  />
+                </label>
+                <label className="block text-sm">
+                  Calendar version
+                  <input
+                    type="number"
+                    className="input-base mt-1"
+                    min={1}
+                    max={1000}
+                    value={form.version}
+                    onChange={(e) => field('version', Number(e.target.value))}
+                  />
+                </label>
+                <label className="block text-sm">
+                  Source and date verification note
+                  <input
+                    className="input-base mt-1"
+                    maxLength={2000}
+                    placeholder="e.g. Checked against the official WAEC timetable published on …"
+                    value={form.sourceNote}
+                    onChange={(e) => field('sourceNote', e.target.value)}
+                  />
+                </label>
+              </div>
+            </details>
             {form.exam === 'WAEC' && (
               <>
                 <div className="space-y-3 rounded-xl border p-4">
@@ -507,7 +518,15 @@ export function AdminExamCalendars() {
               </>
             )}
             <div className="flex gap-3">
-              <button className="btn-primary">Save calendar draft</button>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  publishOnSave.current = true
+                }}
+              >
+                Save &amp; publish dates
+              </button>
+              <button className="btn-secondary">Save as draft</button>
               <button type="button" className="btn-secondary" onClick={() => setForm(null)}>
                 Close calendar editor
               </button>

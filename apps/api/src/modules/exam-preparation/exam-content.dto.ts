@@ -1,6 +1,7 @@
 import { Type, Transform } from 'class-transformer'
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsEnum,
   IsIn,
@@ -44,7 +45,19 @@ export class UploadExamMaterialDto extends ContentScopeDto {
   @IsString() @MinLength(2) @MaxLength(150) title!: string
   @IsString() @MinLength(5) @MaxLength(1000) sourceNote!: string
 }
-export class GenerateBankDto extends ContentScopeDto {
+/** Only exam and subject are required: without a topic the AI covers the syllabus broadly. */
+export class GenerateBankDto {
+  @IsEnum(ExamFamily) exam!: ExamFamily
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  subject!: string
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  topic?: string
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
@@ -96,4 +109,14 @@ export class BankPracticeDto {
   @IsString() @MinLength(2) @MaxLength(100) subjectKey!: string
   @IsOptional() @IsString() @MaxLength(150) topic?: string
   @IsInt() @Min(1) @Max(20) count = 10
+}
+
+export class BulkBankStateDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  ids!: string[]
+  @IsIn(['APPROVED', 'ARCHIVED']) status!: 'APPROVED' | 'ARCHIVED'
 }

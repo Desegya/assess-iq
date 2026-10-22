@@ -62,13 +62,28 @@ export class ExamCalendarService {
       throw err
     }
   }
-  save(dto: ExamCalendarDto, actorId: string) {
+  async save(dto: ExamCalendarDto, actorId: string) {
+    dto.entries ??= []
     validateCalendar(dto)
-    return this.mutate(actorId, 'exam.calendar.save', async (tx) => {
-      const { id, expectedRevision, ...fields } = dto
+    const saved = await this.mutate(actorId, 'exam.calendar.save', async (tx) => {
+      const { id, expectedRevision, publish: _publish, ...input } = dto
+      const latest = id
+        ? null
+        : await tx.examCalendar.findFirst({
+            where: { exam: dto.exam, year: dto.year, series: dto.series },
+            orderBy: { version: 'desc' },
+            select: { version: true },
+          })
+      // Only the dates are required; everything else gets a sensible default.
+      const fields = {
+        ...input,
+        version: input.version ?? (latest?.version ?? 0) + 1,
+        title: input.title?.trim() || defaultCalendarTitle(dto.exam, dto.year, dto.series),
+        sourceNote: input.sourceNote?.trim() || 'Dates entered by a Nightklass administrator.',
+      }
       const data = { ...fields, entries: fields.entries as unknown as Prisma.InputJsonValue }
       let result
-      if (!id && expectedRevision === 0) result = await tx.examCalendar.create({ data })
+      if (!id && (expectedRevision ?? 0) === 0) result = await tx.examCalendar.create({ data })
       else {
         if (!id) throw new BadRequestException('Select a calendar draft')
         const original = await tx.examCalendar.findUnique({ where: { id } })
@@ -77,7 +92,7 @@ export class ExamCalendarService {
           original.exam !== dto.exam ||
           original.year !== dto.year ||
           original.series !== dto.series ||
-          original.version !== dto.version
+          original.version !== fields.version
         )
           throw new BadRequestException('Create a new calendar version to change its scope')
         const updated = await tx.examCalendar.updateMany({
@@ -92,6 +107,9 @@ export class ExamCalendarService {
       }
       return { id: result.id, result }
     })
+    return dto.publish
+      ? this.state(saved.id, { status: 'APPROVED', expectedRevision: saved.revision }, actorId)
+      : saved
   }
   async upload(id: string, expectedRevision: number, file: Express.Multer.File, actorId: string) {
     const isCsv =
@@ -354,4 +372,14 @@ export class ExamCalendarService {
       )
     return deadline.date
   }
+}
+
+const SERIES_LABEL: Record<string, string> = {
+  GENERAL: 'UTME',
+  SCHOOL: 'school candidates (May/June)',
+  PRIVATE_FIRST: 'private candidates, first series',
+  PRIVATE_SECOND: 'private candidates, second series',
+}
+export function defaultCalendarTitle(exam: string, year: number, series: string) {
+  return `${exam} ${year} ${SERIES_LABEL[series] ?? series} dates`
 }

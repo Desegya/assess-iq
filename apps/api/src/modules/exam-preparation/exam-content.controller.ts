@@ -20,6 +20,7 @@ import {
   BankPracticeDto,
   BankQuestionDto,
   BankStateDto,
+  BulkBankStateDto,
   ContentFilterDto,
   CreateExamMaterialDto,
   EditBankQuestionDto,
@@ -96,6 +97,9 @@ export class ExamContentAdminController {
     @CurrentUser() u: AuthUser,
   ) {
     return this.content.editQuestion(id, dto, u.id)
+  }
+  @Post('questions/bulk-state') bulkState(@Body() dto: BulkBankStateDto, @CurrentUser() u: AuthUser) {
+    return this.content.bulkQuestionState(dto.ids, dto.status, u.id)
   }
   @Post('questions/:id/state') state(
     @Param('id') id: string,

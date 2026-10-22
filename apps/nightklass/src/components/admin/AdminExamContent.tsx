@@ -143,9 +143,8 @@ export function AdminExamContent() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">WAEC / JAMB content</h1>
       <p className="text-sm text-slate-600">
-        Upload teaching materials, generate and save original exam-style questions, then review
-        before publishing to learners. Your account needs a Nightklass admin grant; an institutional
-        teacher role alone does not grant access.
+        Pick a subject, generate questions, skim them and approve. Notes, syllabuses, dates and mock
+        settings are optional and live further down.
       </p>
       {(error || materials.error || questions.error) && (
         <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">
@@ -157,330 +156,182 @@ export function AdminExamContent() {
           {message}
         </p>
       )}
-      <AdminExamCalendars />
-      <AdminExamSyllabuses onChange={syllabusData.reload} />
-      <AdminMockTemplates />
-      <AdminWaecPapers />
-      <fieldset disabled={busy} className="card grid gap-4 p-5 sm:grid-cols-3">
-        <label className="text-sm">
-          Exam
-          <select
-            className="input-base mt-2"
-            value={exam}
-            onChange={(e) => {
-              setExam(e.target.value)
-              setPage(1)
-              setMaterialId('')
-              setObjectiveIds([])
-              setQuestionType('MCQ')
-            }}
-          >
-            <option>JAMB</option>
-            <option>WAEC</option>
-          </select>
-        </label>
-        <label className="text-sm">
-          Subject
-          <input
-            className="input-base mt-2"
-            maxLength={100}
-            value={subject}
-            onChange={(e) => {
-              setSubject(e.target.value)
-              setMaterialId('')
-              setObjectiveIds([])
-              setPage(1)
-            }}
-            placeholder="Any science, arts or commercial subject"
-          />
-        </label>
-        <label className="text-sm">
-          Topic / learning objective
-          <input
-            className="input-base mt-2"
-            maxLength={150}
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder="e.g. Separation of powers"
-          />
-        </label>
-      </fieldset>
-      {matchingObjectives.length > 0 && (
-        <fieldset className="card space-y-3 p-5" disabled={busy}>
-          <legend className="font-semibold">
-            Link generated or new questions to syllabus objectives
-          </legend>
-          {matchingObjectives.map((o) => (
-            <label className="flex gap-2 text-sm" key={o.id}>
-              <input
-                type="checkbox"
-                checked={objectiveIds.includes(o.id)}
-                onChange={() =>
-                  setObjectiveIds((old) =>
-                    old.includes(o.id) ? old.filter((id) => id !== o.id) : [...old, o.id],
-                  )
-                }
-              />
-              {o.code} · {o.title} · {o.year} v{o.version}
-            </label>
-          ))}
-        </fieldset>
-      )}
-      <form
-        className="card space-y-4 p-5"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void run(async () => {
-            if (file) {
-              if (file.size > 5 * 1024 * 1024) throw new Error('Maximum upload size is 5 MB')
-              const data = new FormData()
-              data.set('file', file)
-              data.set('exam', exam)
-              data.set('subject', subject)
-              data.set('topic', topic)
-              data.set('title', title)
-              data.set('sourceNote', sourceNote)
-              await adminRequest('exam-content/upload', { method: 'POST', body: data })
-            } else
-              await adminRequest('exam-content/materials', {
-                method: 'POST',
-                body: JSON.stringify({ exam, subject, topic, title, body, sourceNote }),
-              })
-            setBody('')
-            return 'Material saved as a draft. Publish when ready to share with learners.'
-          })
-        }}
-      >
-        <h2 className="text-lg font-semibold">Add teacher material</h2>
-        <fieldset disabled={busy} className="space-y-3">
-          <label className="block text-sm">
-            Title
+      <section className="card space-y-4 border-violet-200 p-5">
+        <h2 className="text-lg font-semibold">Generate questions with AI</h2>
+        <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-3">
+          <label className="text-sm">
+            Exam
+            <select
+              className="input-base mt-2"
+              value={exam}
+              onChange={(e) => {
+                setExam(e.target.value)
+                setPage(1)
+                setMaterialId('')
+                setObjectiveIds([])
+                setQuestionType('MCQ')
+              }}
+            >
+              <option>JAMB</option>
+              <option>WAEC</option>
+            </select>
+          </label>
+          <label className="text-sm">
+            Subject
             <input
-              required
-              minLength={2}
+              className="input-base mt-2"
+              maxLength={100}
+              value={subject}
+              onChange={(e) => {
+                setSubject(e.target.value)
+                setMaterialId('')
+                setObjectiveIds([])
+                setPage(1)
+              }}
+              placeholder="Any science, arts or commercial subject"
+            />
+          </label>
+          <label className="text-sm">
+            Topic (optional)
+            <input
+              className="input-base mt-2"
               maxLength={150}
-              className="input-base mt-1"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="Leave blank to cover the whole syllabus"
             />
           </label>
-          <label className="block text-sm">
-            Source and permission to share
-            <input
-              required
-              minLength={5}
-              maxLength={1000}
-              className="input-base mt-1"
-              value={sourceNote}
-              onChange={(e) => setSourceNote(e.target.value)}
-              placeholder="e.g. My original teaching notes, approved for Nightklass students"
-            />
-          </label>
-          <label className="block text-sm">
-            Upload PDF, DOCX, PPTX or TXT (up to 5 MB)
-            <input
-              className="mt-2 block w-full"
-              type="file"
-              accept=".pdf,.docx,.pptx,.txt"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
-          </label>
-          <label className="block text-sm">
-            Or paste notes
-            <textarea
-              className="input-base mt-1 min-h-36"
-              required={!file}
-              minLength={20}
-              maxLength={50000}
-              value={body}
-              disabled={!!file}
-              onChange={(e) => setBody(e.target.value)}
-            />
-          </label>
-          <button
-            className="btn-primary"
-            disabled={subject.trim().length < 2 || topic.trim().length < 2}
-          >
-            Save material
-          </button>
         </fieldset>
-      </form>
-      <section className="card space-y-3 p-5">
-        <h2 className="text-lg font-semibold">Materials ({materials.data?.total ?? 0})</h2>
-        {materials.loading && <p>Loading materials…</p>}
-        {materials.data?.items.map((m) => (
-          <div
-            key={m.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3"
-          >
-            <div>
-              <p className="font-medium">
-                {m.title} · {m.status}
-              </p>
-              <p className="text-sm text-slate-500">
-                {m.subject} / {m.topic} · {m.sourceNote}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                className="btn-secondary"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    setPreview(await adminRequest(`exam-content/materials/${m.id}`))
-                    return 'Material preview loaded below.'
-                  })
-                }
-              >
-                Preview
-              </button>
-              <button
-                className="btn-secondary"
-                disabled={busy || m.status === 'ARCHIVED'}
-                onClick={() => {
-                  setMaterialId(m.id)
-                  setTopic(m.topic)
-                  setMessage(`Selected ${m.title} for generation.`)
-                }}
-              >
-                Use for generation
-              </button>
-              <button
-                className="btn-secondary"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    await adminRequest(`exam-content/materials/${m.id}`, {
-                      method: 'PATCH',
-                      body: JSON.stringify({
-                        status: m.status === 'APPROVED' ? 'ARCHIVED' : 'APPROVED',
-                      }),
-                    })
-                    return 'Material visibility updated.'
-                  })
-                }
-              >
-                {m.status === 'APPROVED' ? 'Archive' : 'Publish'}
-              </button>
-            </div>
-          </div>
-        ))}
-      </section>
-      {preview && (
-        <section className="card space-y-3 p-5">
-          <h2 className="font-semibold">{preview.title}</h2>
-          <p className="max-h-96 overflow-auto whitespace-pre-wrap text-sm">{preview.body}</p>
-          <button className="btn-secondary" onClick={() => setPreview(null)}>
-            Close preview
-          </button>
-        </section>
-      )}
-      <form
-        className="card space-y-4 p-5"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void run(async () => {
-            await adminRequest('exam-content/generation-jobs', {
-              method: 'POST',
-              body: JSON.stringify({
-                exam,
-                subject,
-                topic,
-                count,
-                difficulty,
-                questionType,
-                objectiveIds,
-                requestKey: crypto.randomUUID(),
-                ...(materialId ? { materialId } : {}),
-              }),
+        {matchingObjectives.length > 0 && (
+          <fieldset className="card space-y-3 p-5" disabled={busy}>
+            <legend className="font-semibold">
+              Link generated or new questions to syllabus objectives
+            </legend>
+            {matchingObjectives.map((o) => (
+              <label className="flex gap-2 text-sm" key={o.id}>
+                <input
+                  type="checkbox"
+                  checked={objectiveIds.includes(o.id)}
+                  onChange={() =>
+                    setObjectiveIds((old) =>
+                      old.includes(o.id) ? old.filter((id) => id !== o.id) : [...old, o.id],
+                    )
+                  }
+                />
+                {o.code} · {o.title} · {o.year} v{o.version}
+              </label>
+            ))}
+          </fieldset>
+        )}
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void run(async () => {
+              // The server generates up to 10 questions per batch; larger requests become several batches.
+              const batches = Math.ceil(count / 10)
+              for (let i = 0; i < batches; i++)
+                await adminRequest('exam-content/generation-jobs', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    exam,
+                    subject,
+                    ...(topic.trim() ? { topic: topic.trim() } : {}),
+                    count: Math.min(10, count - i * 10),
+                    difficulty,
+                    questionType,
+                    objectiveIds,
+                    requestKey: crypto.randomUUID(),
+                    ...(materialId ? { materialId } : {}),
+                  }),
+                })
+              jobs.reload()
+              return `Generating ${count} questions${batches > 1 ? ` in ${batches} batches` : ''}. They appear below as drafts within a minute or two — you can leave this page.`
             })
-            jobs.reload()
-            return 'Generation batch queued. You can close this page; results and draft questions will be saved by the server.'
-          })
-        }}
-      >
-        <h2 className="text-lg font-semibold">Generate a saved question batch</h2>
-        <p className="text-sm text-slate-600">
-          {materialId
-            ? 'Using selected teacher material as context.'
-            : 'No material selected: generate from the subject and topic above.'}{' '}
-          These are original AI-generated practice questions, not official past questions.
-        </p>
-        <fieldset disabled={busy} className="flex flex-wrap gap-4">
-          <label className="text-sm">
-            Count
-            <input
-              type="number"
-              className="input-base mt-1"
-              min={1}
-              max={10}
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
-            />
-          </label>
-          <label className="text-sm">
-            Difficulty
-            <select
-              className="input-base mt-1"
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value)}
-            >
-              <option>EASY</option>
-              <option>MEDIUM</option>
-              <option>HARD</option>
-            </select>
-          </label>
-          <label className="text-sm">
-            Question type
-            <select
-              className="input-base mt-1"
-              value={questionType}
-              onChange={(e) => setQuestionType(e.target.value)}
-            >
-              {(exam === 'JAMB' ? ['MCQ'] : ['MCQ', 'TRUE_FALSE', 'SHORT_ANSWER', 'THEORY']).map(
-                (t) => (
-                  <option key={t}>{t}</option>
-                ),
-              )}
-            </select>
-          </label>
-          <button type="button" className="btn-secondary" onClick={() => setMaterialId('')}>
-            Use topic only
-          </button>
-          <button
-            className="btn-primary"
-            disabled={subject.trim().length < 2 || topic.trim().length < 2}
-          >
-            {busy ? 'Working…' : 'Queue generation batch'}
-          </button>
-        </fieldset>
-      </form>
-      <section className="card space-y-3 p-5">
-        <h2 className="text-lg font-semibold">Generation batches</h2>
-        {jobs.error && <p role="alert">{jobs.error}</p>}
-        {jobs.data?.map((job) => (
-          <div key={job.id} className="rounded-xl border p-3 text-sm">
-            <p>
-              {job.status} · {job.attempts} processing attempts
-            </p>
-            {job.result && (
-              <p>
-                {job.result.saved} drafts saved · {job.result.duplicates} duplicates skipped ·{' '}
-                {job.result.rejected} invalid items rejected
-              </p>
-            )}
-            {job.error && <p className="text-red-700">{job.error}</p>}
-          </div>
-        ))}
-        <button
-          className="btn-secondary"
-          onClick={() => {
-            jobs.reload()
-            questions.reload()
           }}
         >
-          Refresh batches and question bank
-        </button>
+          <p className="text-sm text-slate-600">
+            {materialId
+              ? 'Using your selected teaching notes as extra context.'
+              : 'Notes are optional — the AI writes from the subject (and topic, if given).'}{' '}
+            Questions are original practice items, not past papers, and stay as drafts until you
+            approve them.
+          </p>
+          <fieldset disabled={busy} className="flex flex-wrap gap-4">
+            <label className="text-sm">
+              How many
+              <input
+                type="number"
+                className="input-base mt-1"
+                min={1}
+                max={100}
+                value={count}
+                onChange={(e) => setCount(Number(e.target.value))}
+              />
+            </label>
+            <label className="text-sm">
+              Difficulty
+              <select
+                className="input-base mt-1"
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value)}
+              >
+                <option>EASY</option>
+                <option>MEDIUM</option>
+                <option>HARD</option>
+              </select>
+            </label>
+            <label className="text-sm">
+              Question type
+              <select
+                className="input-base mt-1"
+                value={questionType}
+                onChange={(e) => setQuestionType(e.target.value)}
+              >
+                {(exam === 'JAMB' ? ['MCQ'] : ['MCQ', 'TRUE_FALSE', 'SHORT_ANSWER', 'THEORY']).map(
+                  (t) => (
+                    <option key={t}>{t}</option>
+                  ),
+                )}
+              </select>
+            </label>
+            {materialId && (
+              <button type="button" className="btn-secondary" onClick={() => setMaterialId('')}>
+                Stop using notes
+              </button>
+            )}
+            <button className="btn-primary" disabled={subject.trim().length < 2 || count < 1}>
+              {busy ? 'Working…' : 'Generate questions'}
+            </button>
+          </fieldset>
+        </form>
+        <section className="space-y-3">
+          <h3 className="font-semibold">Recent generation batches</h3>
+          {jobs.error && <p role="alert">{jobs.error}</p>}
+          {jobs.data?.map((job) => (
+            <div key={job.id} className="rounded-xl border p-3 text-sm">
+              <p>
+                {job.status} · {job.attempts} processing attempts
+              </p>
+              {job.result && (
+                <p>
+                  {job.result.saved} drafts saved · {job.result.duplicates} duplicates skipped ·{' '}
+                  {job.result.rejected} invalid items rejected
+                </p>
+              )}
+              {job.error && <p className="text-red-700">{job.error}</p>}
+            </div>
+          ))}
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              jobs.reload()
+              questions.reload()
+            }}
+          >
+            Refresh batches and question bank
+          </button>
+        </section>
       </section>
       <section className="space-y-4">
         <div className="flex justify-between">
@@ -514,6 +365,36 @@ export function AdminExamContent() {
             Author a question
           </button>
         </div>
+        {(() => {
+          const drafts = questions.data?.items.filter((q) => q.status === 'DRAFT') ?? []
+          if (!drafts.length) return null
+          return (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm">
+              <span>
+                {drafts.length} draft{drafts.length === 1 ? '' : 's'} on this page. Skim them below,
+                fix any that are wrong, then publish the rest at once.
+              </span>
+              <button
+                className="btn-primary"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    const result = await adminRequest<{ changed: number }>(
+                      'exam-content/questions/bulk-state',
+                      {
+                        method: 'POST',
+                        body: JSON.stringify({ ids: drafts.map((q) => q.id), status: 'APPROVED' }),
+                      },
+                    )
+                    return `${result.changed} question${result.changed === 1 ? '' : 's'} published to learners.`
+                  })
+                }
+              >
+                Approve all {drafts.length} drafts
+              </button>
+            </div>
+          )
+        })()}
         {questions.loading && <p>Loading questions…</p>}
         {questions.data?.items.map((q) => (
           <article key={q.id} className="card space-y-3 p-5">
@@ -619,6 +500,183 @@ export function AdminExamContent() {
           </button>
         </div>
       </section>
+      <details className="card p-5">
+        <summary className="cursor-pointer font-semibold">
+          Teaching notes (optional — extra context for generation and shareable study material)
+        </summary>
+        <div className="mt-4 space-y-4">
+          <form
+            className="card space-y-4 p-5"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void run(async () => {
+                if (file) {
+                  if (file.size > 5 * 1024 * 1024) throw new Error('Maximum upload size is 5 MB')
+                  const data = new FormData()
+                  data.set('file', file)
+                  data.set('exam', exam)
+                  data.set('subject', subject)
+                  data.set('topic', topic)
+                  data.set('title', title)
+                  data.set('sourceNote', sourceNote)
+                  await adminRequest('exam-content/upload', { method: 'POST', body: data })
+                } else
+                  await adminRequest('exam-content/materials', {
+                    method: 'POST',
+                    body: JSON.stringify({ exam, subject, topic, title, body, sourceNote }),
+                  })
+                setBody('')
+                return 'Material saved as a draft. Publish when ready to share with learners.'
+              })
+            }}
+          >
+            <h3 className="font-semibold">Add notes</h3>
+            <fieldset disabled={busy} className="space-y-3">
+              <label className="block text-sm">
+                Title
+                <input
+                  required
+                  minLength={2}
+                  maxLength={150}
+                  className="input-base mt-1"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                Source and permission to share
+                <input
+                  required
+                  minLength={5}
+                  maxLength={1000}
+                  className="input-base mt-1"
+                  value={sourceNote}
+                  onChange={(e) => setSourceNote(e.target.value)}
+                  placeholder="e.g. My original teaching notes, approved for Nightklass students"
+                />
+              </label>
+              <label className="block text-sm">
+                Upload PDF, DOCX, PPTX or TXT (up to 5 MB)
+                <input
+                  className="mt-2 block w-full"
+                  type="file"
+                  accept=".pdf,.docx,.pptx,.txt"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              <label className="block text-sm">
+                Or paste notes
+                <textarea
+                  className="input-base mt-1 min-h-36"
+                  required={!file}
+                  minLength={20}
+                  maxLength={50000}
+                  value={body}
+                  disabled={!!file}
+                  onChange={(e) => setBody(e.target.value)}
+                />
+              </label>
+              <button
+                className="btn-primary"
+                disabled={subject.trim().length < 2 || topic.trim().length < 2}
+              >
+                Save notes
+              </button>
+            </fieldset>
+          </form>
+          <section className="card space-y-3 p-5">
+            <h2 className="text-lg font-semibold">Materials ({materials.data?.total ?? 0})</h2>
+            {materials.loading && <p>Loading materials…</p>}
+            {materials.data?.items.map((m) => (
+              <div
+                key={m.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3"
+              >
+                <div>
+                  <p className="font-medium">
+                    {m.title} · {m.status}
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    {m.subject} / {m.topic} · {m.sourceNote}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    className="btn-secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        setPreview(await adminRequest(`exam-content/materials/${m.id}`))
+                        return 'Material preview loaded below.'
+                      })
+                    }
+                  >
+                    Preview
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    disabled={busy || m.status === 'ARCHIVED'}
+                    onClick={() => {
+                      setMaterialId(m.id)
+                      setTopic(m.topic)
+                      setMessage(`Selected ${m.title} for generation.`)
+                    }}
+                  >
+                    Use for generation
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        await adminRequest(`exam-content/materials/${m.id}`, {
+                          method: 'PATCH',
+                          body: JSON.stringify({
+                            status: m.status === 'APPROVED' ? 'ARCHIVED' : 'APPROVED',
+                          }),
+                        })
+                        return 'Material visibility updated.'
+                      })
+                    }
+                  >
+                    {m.status === 'APPROVED' ? 'Archive' : 'Publish'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </section>
+          {preview && (
+            <section className="card space-y-3 p-5">
+              <h2 className="font-semibold">{preview.title}</h2>
+              <p className="max-h-96 overflow-auto whitespace-pre-wrap text-sm">{preview.body}</p>
+              <button className="btn-secondary" onClick={() => setPreview(null)}>
+                Close preview
+              </button>
+            </section>
+          )}
+        </div>
+      </details>
+      <details className="card p-5">
+        <summary className="cursor-pointer font-semibold">Exam dates and timetables</summary>
+        <div className="mt-4">
+          <AdminExamCalendars />
+        </div>
+      </details>
+      <details className="card p-5">
+        <summary className="cursor-pointer font-semibold">Syllabuses and objectives</summary>
+        <div className="mt-4">
+          <AdminExamSyllabuses onChange={syllabusData.reload} />
+        </div>
+      </details>
+      <details className="card p-5">
+        <summary className="cursor-pointer font-semibold">
+          JAMB mock settings and WAEC papers
+        </summary>
+        <div className="mt-4 space-y-6">
+          <AdminMockTemplates />
+          <AdminWaecPapers />
+        </div>
+      </details>
       {(editing || manual) && (
         <form
           className="card space-y-4 p-5"

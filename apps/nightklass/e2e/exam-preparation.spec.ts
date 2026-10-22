@@ -75,6 +75,7 @@ test('WAEC optional essay saves, submits and shows practice marking', async ({ p
 test('teacher publishes a curated syllabus and queues generation', async ({ page }, testInfo) => {
   await login(page, true)
   await page.goto('/admin/exam-content')
+  await page.getByText('Syllabuses and objectives', { exact: true }).click()
   await page.getByRole('button', { name: 'New syllabus', exact: true }).click()
   const title = `Browser ${testInfo.project.name} syllabus ${fixture.suffix}`
   const form = page
@@ -100,11 +101,12 @@ test('teacher publishes a curated syllabus and queues generation', async ({ page
     .filter({ hasText: `History ${testInfo.project.name} ${fixture.suffix}` })
   await syllabusCard.getByRole('button', { name: 'Publish syllabus', exact: true }).click()
   await expect(syllabusCard).toContainText('APPROVED')
-  const subjectScope = page.getByLabel('Subject', { exact: true }).last()
+  // Generation sits at the top and needs only a subject; the topic is optional.
+  const subjectScope = page.getByLabel('Subject', { exact: true }).first()
   await subjectScope.fill('Government')
-  await page.getByLabel('Topic / learning objective', { exact: true }).fill('Democratic government')
-  await page.getByRole('button', { name: 'Queue generation batch', exact: true }).click()
-  await expect(page.getByText('Generation batch queued.', { exact: false })).toBeVisible()
+  await page.getByLabel('Topic (optional)', { exact: true }).fill('Democratic government')
+  await page.getByRole('button', { name: 'Generate questions', exact: true }).click()
+  await expect(page.getByText('Generating 5 questions', { exact: false })).toBeVisible()
   const rejected = await page.request.post('/api/admin/exam-content/generation-jobs', {
     headers: { origin: 'https://untrusted.example' },
     data: {},
@@ -151,21 +153,21 @@ test('teacher publishes a WAEC timetable and learners see their subject papers',
         .filter((c: any) => c.exam === 'WAEC' && c.year === 2099 && c.series === 'SCHOOL')
         .map((c: any) => c.version),
     ) + 1
+  await page.getByText('Exam dates and timetables', { exact: true }).click()
   await page.getByRole('button', { name: 'New exam calendar', exact: true }).click()
   const form = page
     .locator('form')
-    .filter({ has: page.getByRole('button', { name: 'Save calendar draft', exact: true }) })
+    .filter({ has: page.getByRole('button', { name: 'Save as draft', exact: true }) })
   const title = `Timetable ${testInfo.project.name} ${fixture.suffix}`
   await form.getByRole('combobox', { name: 'Examination', exact: true }).selectOption('WAEC')
   await form.getByLabel('Exam year', { exact: true }).fill('2099')
-  await form.getByLabel('Calendar version', { exact: true }).fill(String(version))
+  // Version and title are optional (assigned automatically); the test names its calendar to find it later.
+  await form.getByText('More details (optional)', { exact: true }).click()
+  expect(version).toBeGreaterThan(0)
   await form.getByLabel('Calendar title', { exact: true }).fill(title)
   await form.getByLabel('Exam starts', { exact: true }).fill('2099-05-01')
   await form.getByLabel('Exam ends (optional)', { exact: true }).fill('2099-06-30')
-  await form
-    .getByLabel('Source and date verification note', { exact: true })
-    .fill('Teacher reviewed isolated fixture, not actual examination dates.')
-  await form.getByRole('button', { name: 'Save calendar draft', exact: true }).click()
+  await form.getByRole('button', { name: 'Save as draft', exact: true }).click()
   await expect(
     page.getByText('Calendar saved as a draft. Review dates and paper rows before publishing.', {
       exact: true,

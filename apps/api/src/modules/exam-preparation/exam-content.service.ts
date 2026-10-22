@@ -31,6 +31,8 @@ import {
   validateBankQuestion,
 } from './exam-content.rules'
 
+const MIXED_TOPICS = 'Mixed syllabus topics'
+
 @Injectable()
 export class ExamContentService {
   constructor(
@@ -290,7 +292,12 @@ export class ExamContentService {
   async generate(dto: GenerateBankDto, actorId: string, job?: { id: string; leaseUntil: Date }) {
     if (dto.exam === 'JAMB' && dto.questionType !== 'MCQ')
       throw new BadRequestException('JAMB questions must be multiple choice')
-    let body = `Nigerian senior secondary subject: ${dto.subject}. Exam-style practice for ${dto.exam}. Topic/objectives: ${dto.topic}. Generate original questions, not claimed past questions. Include a model answer and substantive explanation for each question. MCQ questions require four A–D options. Do not refer to absent passages or diagrams.`
+    const topic = dto.topic?.trim() || MIXED_TOPICS
+    let body = `Nigerian senior secondary subject: ${dto.subject}. Exam-style practice for ${dto.exam}. ${
+      dto.topic?.trim()
+        ? `Topic/objectives: ${dto.topic}.`
+        : `No topic was given: spread the questions across the main topics of the current ${dto.exam} ${dto.subject} syllabus.`
+    } Generate original questions, not claimed past questions. Include a model answer and substantive explanation for each question. MCQ questions require four A–D options. Do not refer to absent passages or diagrams.`
     if (dto.objectiveIds?.length) {
       const objectives = await this.prisma.examSyllabusObjective.findMany({
         where: {
@@ -324,7 +331,7 @@ export class ExamContentService {
       count: dto.count,
       types: [dto.questionType],
       difficulty: dto.difficulty,
-      topicHint: `${dto.exam} ${dto.subject}: ${dto.topic}`,
+      topicHint: `${dto.exam} ${dto.subject}: ${topic}`,
       userId: actorId,
       documentId: dto.materialId ?? 'exam-bank',
       groundedInMaterial: false,
@@ -336,7 +343,7 @@ export class ExamContentService {
       const candidate = plainToInstance(BankQuestionDto, {
         exam: dto.exam,
         subject: dto.subject,
-        topic: dto.topic,
+        topic,
         questionText: item.questionText,
         questionType: item.type,
         options: item.options,
@@ -452,6 +459,38 @@ export class ExamContentService {
           })
       }
       return { result: await tx.examBankQuestion.findUniqueOrThrow({ where: { id } }), id }
+    })
+  }
+  /**
+   * Publishes or archives many reviewed questions in one action. Each item passes
+   * the same checks as a single review; nothing is published unless every item is valid.
+   */
+  bulkQuestionState(ids: string[], status: 'APPROVED' | 'ARCHIVED', actorId: string) {
+    return this.mutate(actorId, `exam.questions.bulk-${status.toLowerCase()}`, async (tx) => {
+      const unique = [...new Set(ids)]
+      const questions = await tx.examBankQuestion.findMany({ where: { id: { in: unique } } })
+      if (questions.length !== unique.length) throw new NotFoundException('Some questions were not found')
+      let changed = 0
+      for (const question of questions) {
+        if (status === 'APPROVED') {
+          if (question.status !== 'DRAFT') continue
+          validateBankQuestion({
+            ...question,
+            options: question.options as unknown as BankQuestionDto['options'],
+          } as BankQuestionDto)
+          if (question.supersedesId)
+            await tx.examBankQuestion.update({
+              where: { id: question.supersedesId },
+              data: { status: 'ARCHIVED', revision: { increment: 1 } },
+            })
+        } else if (question.status === 'ARCHIVED') continue
+        await tx.examBankQuestion.update({
+          where: { id: question.id },
+          data: { status, reviewedById: actorId, revision: { increment: 1 } },
+        })
+        changed++
+      }
+      return { result: { changed, skipped: unique.length - changed }, id: unique.join(',').slice(0, 190) }
     })
   }
   questionState(id: string, dto: BankStateDto, actorId: string) {

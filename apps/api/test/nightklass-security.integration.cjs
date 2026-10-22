@@ -420,3 +420,37 @@ test('legacy bcrypt passwords still work and are upgraded to PBKDF2 on sign-in',
   await login(user)
   assert.equal((await call('/auth/login', null, { email: user.email, password: 'wrong-password' })).status, 401)
 })
+
+test('teachers can publish exam dates with only the dates, in one step', async () => {
+  const year = 2095
+  const res = await call('/admin/nightklass/exam-content/calendars', ownerToken, { exam: 'JAMB', year, series: 'GENERAL', startDate: `${year}-04-20`, endDate: `${year}-05-05`, publish: true })
+  assert.equal(res.status, 201, JSON.stringify(res.body))
+  assert.equal(res.body.status, 'APPROVED')
+  assert.match(res.body.title, new RegExp(`JAMB ${year}`))
+  assert.ok(res.body.version >= 1)
+  const again = await call('/admin/nightklass/exam-content/calendars', ownerToken, { exam: 'JAMB', year, series: 'GENERAL', startDate: `${year}-04-22`, publish: true })
+  assert.equal(again.status, 201); assert.equal(again.body.version, res.body.version + 1)
+  assert.equal((await prisma.examCalendar.findUnique({ where: { id: res.body.id } })).status, 'ARCHIVED')
+})
+
+test('AI generation needs only a subject, and drafts can be approved in bulk', async () => {
+  const { AiService } = require('../dist/modules/ai/ai.service')
+  const ai = app.get(AiService), original = ai.generateQuestionsWithMeta
+  let prompt = ''
+  ai.generateQuestionsWithMeta = async (body, opts) => { prompt = body; return { model: 'fixture', promptVersion: 'fixture', questions: Array.from({ length: opts.count }, (_, i) => ({ type: 'MCQ', questionText: `Bulk ${suffix} ${i}: which is a noble gas?`, options: [{ key: 'A', text: `Argon ${i}` }, { key: 'B', text: 'Oxygen' }, { key: 'C', text: 'Nitrogen' }, { key: 'D', text: 'Carbon' }], correctAnswer: 'A', explanation: 'Argon is a noble gas.' })) } }
+  try {
+    const subject = `Chemistry bulk ${suffix}`
+    const generated = await call('/admin/nightklass/exam-content/generate', ownerToken, { exam: 'WAEC', subject, count: 4 })
+    assert.equal(generated.status, 201, JSON.stringify(generated.body)); assert.equal(generated.body.saved, 4)
+    assert.match(prompt, /spread the questions across the main topics/)
+    const drafts = await prisma.examBankQuestion.findMany({ where: { subject, status: 'DRAFT' } })
+    assert.equal(drafts.length, 4); assert.ok(drafts.every(d => d.topic === 'Mixed syllabus topics'))
+    // One invalid item blocks the whole batch, so nothing half-publishes.
+    await prisma.examBankQuestion.update({ where: { id: drafts[0].id }, data: { correctAnswer: 'Z' } })
+    assert.equal((await call('/admin/nightklass/exam-content/questions/bulk-state', ownerToken, { ids: drafts.map(d => d.id), status: 'APPROVED' })).status, 400)
+    assert.equal(await prisma.examBankQuestion.count({ where: { subject, status: 'APPROVED' } }), 0)
+    const ok = await call('/admin/nightklass/exam-content/questions/bulk-state', ownerToken, { ids: drafts.slice(1).map(d => d.id), status: 'APPROVED' })
+    assert.equal(ok.status, 201); assert.equal(ok.body.changed, 3)
+    assert.equal(await prisma.examBankQuestion.count({ where: { subject, status: 'APPROVED' } }), 3)
+  } finally { ai.generateQuestionsWithMeta = original }
+})

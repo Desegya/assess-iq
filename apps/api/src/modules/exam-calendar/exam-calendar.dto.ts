@@ -2,6 +2,7 @@ import { Type } from 'class-transformer'
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -29,17 +30,21 @@ export class ExamCalendarDto {
   @IsEnum(ExamFamily) exam!: ExamFamily
   @IsInt() @Min(2026) @Max(2100) year!: number
   @IsIn(['GENERAL', 'SCHOOL', 'PRIVATE_FIRST', 'PRIVATE_SECOND']) series!: string
-  @IsInt() @Min(1) @Max(1000) version!: number
-  @IsString() @MinLength(5) @MaxLength(150) title!: string
+  // Optional: new calendars get the next version and a generated title.
+  @IsOptional() @IsInt() @Min(1) @Max(1000) version?: number
+  @IsOptional() @IsString() @MaxLength(150) title?: string
   @Matches(/^\d{4}-\d{2}-\d{2}$/) startDate!: string
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) endDate?: string
-  @IsString() @MinLength(10) @MaxLength(2000) sourceNote!: string
+  @IsOptional() @IsString() @MaxLength(2000) sourceNote?: string
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => TimetableEntryDto)
-  entries!: TimetableEntryDto[]
-  @IsInt() @Min(0) expectedRevision!: number
+  entries: TimetableEntryDto[] = []
+  @IsOptional() @IsInt() @Min(0) expectedRevision: number = 0
+  /** Save and publish in one step (replaces the currently published calendar for the scope). */
+  @IsOptional() @IsBoolean() publish?: boolean
 }
 export class CalendarStateDto {
   @IsIn(['APPROVED', 'ARCHIVED']) status!: 'APPROVED' | 'ARCHIVED'
