@@ -253,6 +253,7 @@ model User {
   studyPathway    StudyPathway @default(TERTIARY)
   secondaryStage  SecondaryStage?
   examGoals       ExamGoal[]
+  examMockAttempts ExamMockAttempt[]
   profileCompletedAt DateTime?
   lastLoginAt    DateTime?
   createdAt      DateTime     @default(now())
@@ -904,6 +905,7 @@ model ExamGoal {
   exam      ExamFamily
   year      Int
   subjects  ExamGoalSubject[]
+  mockAttempts ExamMockAttempt[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   student   User @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -972,4 +974,49 @@ model ExamBankQuestion {
   @@unique([exam, subjectKey, fingerprint])
   @@index([exam, subjectKey, status, topic])
   @@map("exam_bank_questions")
+}
+
+
+model ExamMockTemplate {
+  id             String @id @default(cuid())
+  year           Int @unique
+  title          String
+  durationMinutes Int
+  englishCount   Int
+  otherCount     Int
+  instructions   String @db.Text
+  sourceNote     String
+  status         QuestionStatus @default(DRAFT)
+  revision       Int @default(1)
+  attempts       ExamMockAttempt[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@map("exam_mock_templates")
+}
+
+model ExamMockAttempt {
+  id          String @id @default(cuid())
+  studentId   String
+  goalId      String
+  templateId  String
+  student     User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  goal        ExamGoal @relation(fields: [goalId], references: [id], onDelete: Restrict)
+  template    ExamMockTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  requestKey  String
+  activeKey   String? @unique
+  status      AttemptStatus @default(IN_PROGRESS)
+  version     Int @default(1)
+  startedAt   DateTime @default(now())
+  expiresAt   DateTime
+  submittedAt DateTime?
+  submissionReason String?
+  specification Json
+  questions   Json
+  answers     Json @default("{}")
+  flags       String[]
+  result      Json?
+  @@unique([studentId, requestKey])
+  @@index([status, expiresAt])
+  @@index([studentId, startedAt])
+  @@map("exam_mock_attempts")
 }
