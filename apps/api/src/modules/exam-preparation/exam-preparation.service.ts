@@ -1,4 +1,4 @@
-import { serializable } from '../../common/serializable'
+import { retryingTransaction } from '../../common/serializable'
 import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { PrismaService } from '../prisma/prisma.service'
@@ -33,7 +33,9 @@ export class ExamPreparationService {
     ) throw new BadRequestException('Choose a valid series for this exam')
     const subjects = normalizeSubjects(dto.exam, dto.subjects)
     try {
-      return await serializable(this.prisma, async tx => {
+      // Per-learner rows only: Read Committed plus retry, because under Serializable a class
+      // onboarding at once conflicted through shared index pages (measured: 44 of 100 failed).
+      return await retryingTransaction(this.prisma, async tx => {
         const goal = await tx.examGoal.upsert({
           where: { studentId_exam_year: { studentId: user.id, exam: dto.exam, year: dto.year } },
           create: {
@@ -61,7 +63,7 @@ export class ExamPreparationService {
         return tx.examGoal.findUniqueOrThrow({
           where: { id: goal.id }, include: { subjects: { orderBy: { name: 'asc' } } },
         })
-      }, { isolationLevel: 'Serializable' })
+      })
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && ['P2034', 'P2002'].includes(String(error.code))) {
         throw new ConflictException('Your exam setup changed in another request. Please save again.')

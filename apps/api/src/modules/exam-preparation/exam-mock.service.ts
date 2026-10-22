@@ -25,6 +25,8 @@ import { formatDisclosure } from './exam-format'
 import { waitUntil } from '../../common/wait-until'
 
 /** Bump when the marking pipeline (batching, validation, aggregation) changes. */
+const MARKING_CONCURRENCY = 4
+
 export const WRITTEN_MARKING_IMPLEMENTATION = 'waec-written/2026-10-23.1'
 
 // Recorded with every written result so marks remain traceable to the model and
@@ -588,10 +590,10 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
         take: 10,
         select: { id: true },
       })
-      for (const attempt of pending) {
-        if (this.stopping) return
-        await this.gradeWaec(attempt.id)
-      }
+      // A few papers at a time: marking is AI-latency bound (seconds per paper), so strictly
+      // sequential processing left a class's submissions queued for minutes.
+      for (let i = 0; i < pending.length && !this.stopping; i += MARKING_CONCURRENCY)
+        await Promise.all(pending.slice(i, i + MARKING_CONCURRENCY).map((a) => this.gradeWaec(a.id)))
     } catch (err) {
       this.logger.warn(
         `Mock expiry sweep will retry: ${err instanceof Error ? err.message : 'database error'}`,

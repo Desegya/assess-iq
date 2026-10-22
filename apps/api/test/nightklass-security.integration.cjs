@@ -397,3 +397,16 @@ test('mocks disclose text-only limits and learners can report only questions the
   assert.equal((await call(`/admin/nightklass/exam-content/question-reports/${report.body.id}`, ownerToken, { status: 'RESOLVED', resolutionNote: 'Clarified option C wording.' }, 'PATCH')).status, 200)
   assert.equal((await call('/admin/nightklass/exam-content/question-reports', l.token)).status, 403)
 })
+
+test('reviewed practice pauses for a subject while that subject is in a running mock', async () => {
+  const l = await jambLearner('practice-pause')
+  const subjectKey = subjects[1][0]
+  const practise = () => call('/exam-preparation/practice', l.token, { goalId: l.goal.id, subjectKey, count: 2 })
+  assert.equal((await practise()).status, 201)
+  const started = await call('/exam-preparation/mocks', l.token, { goalId: l.goal.id, requestKey: randomUUID() })
+  assert.equal(started.status, 201)
+  const blocked = await practise()
+  assert.equal(blocked.status, 409); assert.match(blocked.body.message, /paused while your timed mock is running/)
+  assert.equal((await call(`/exam-preparation/mocks/${started.body.id}/submit`, l.token, {})).status, 201)
+  assert.equal((await practise()).status, 201)
+})

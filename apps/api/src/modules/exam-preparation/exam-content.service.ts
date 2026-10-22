@@ -525,6 +525,21 @@ export class ExamContentService {
       : null
     if (dto.objectiveId && !objective)
       throw new NotFoundException('Published objective not found for this goal')
+    // Reviewed practice draws on the same bank as mocks, so it pauses for a subject while
+    // the learner is sitting a timed mock that includes it (other study tools stay open).
+    const running = await this.prisma.examMockAttempt.findFirst({
+      where: {
+        studentId: user.id,
+        status: 'IN_PROGRESS',
+        expiresAt: { gt: new Date() },
+        goal: { subjects: { some: { subjectKey: subject.subjectKey } } },
+      },
+      select: { id: true },
+    })
+    if (running)
+      throw new ConflictException(
+        'Reviewed practice for this subject is paused while your timed mock is running. Submit or finish the mock first.',
+      )
     // Database-side sampling over every published question, least recently seen first.
     const ids = await sampleQuestionIds(this.prisma, {
       studentId: user.id,
