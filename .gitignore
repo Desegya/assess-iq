@@ -48,3 +48,7 @@ packages/db/generated
 uploads/
 .vercel
 .env*
+
+# Browser test artifacts
+playwright-report/
+test-results/
