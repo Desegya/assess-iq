@@ -110,7 +110,7 @@ Open `/admin/exam-content` using a Nightklass ADMIN/OWNER account. Grant the col
 
 Choose any subject and topic. Paste notes or upload a text-based PDF, DOCX, PPTX or TXT file up to 5 MB. Files are extracted into shared text records; original binaries are not retained by this workflow. Provide the source and permission to share, preview extraction, then publish the material when ready.
 
-Generate small original-question batches from a topic alone or selected teaching material. Output is validated and saved as drafts. Review answers and explanations, edit drafts, then approve individual questions. Approved questions cannot be edited; archive defective items. Corrections with full publication lineage remain future work. These are exam-style questions unless separately sourced as actual permitted past questions.
+Generate small original-question batches from a topic alone or selected teaching material. Output is validated and saved as drafts. Review answers and explanations, edit drafts, then approve individual questions. Approved questions cannot be edited directly; create a correction or archive defective items. Use “Create correction” on a published question to create a linked draft. Publishing that draft archives the predecessor; historical quiz/mock copies retain their original content. These are exam-style questions unless separately sourced as actual permitted past questions.
 
 Learners open “Teacher notes & reviewed practice” from their subject cards. Private learner uploads remain in the existing personally owned course workflow and are not copied into this shared bank.
 
@@ -136,3 +136,34 @@ Publish reviewed WAEC bank questions with model answers and explanation/marking 
 Learners open “WAEC paper mocks” on their exam goal, choose the applicable series and paper, and select optional questions explicitly. Submitted answers are frozen. The API marks objectives immediately and stores pending written work in PostgreSQL. It claims marking work with a lease, processes five answers per batch, saves partial feedback, and retries provider failures after one minute. After three failed provider attempts, unanswered written grading remains visibly ungraded with no invented final percentage. A startup/30-second sweep recovers pending work; keep the API running to process it.
 
 The exam integration suite now includes mixed WAEC objective/essay papers, optional selection enforcement, multipart prompt/combined answer persistence, partial rubric credit, marking recovery, expiry with incomplete selections and retry exhaustion. The marking provider is stubbed for these tests. Calibrate real AI feedback against teacher-marked examples before public launch.
+
+
+### Syllabus versions, objective coverage and generation jobs
+
+In `/admin/exam-content`, use “Syllabuses and learning objectives” to create a draft for an exam/year/subject/version. Enter one objective per line as `code | title | learning objective`. Classify teacher-authored structures as CURATED. OFFICIAL requires a source URL and a genuine source/applicability review by the publisher. Save the draft, check its objectives, then publish. Publishing a new version archives the previous active version in the same scope. Published records cannot be edited; copy them into a new version.
+
+Select matching syllabus objectives when generating or authoring questions. Draft questions can change objective mappings; published corrections inherit their predecessor's mappings. The learner's “Syllabus & coverage” page shows reviewed practice availability, recorded study and recent practice evidence, with links to study or practise each objective. Objective-specific practice uses the normal private study topic so quiz results participate in the existing adaptive planner. Untested objectives remain explicitly unassessed.
+
+The generation button now queues a server-side job. Up to 10 batches can be pending per creator, with at most 10 requested questions per batch. Status and counts appear under “Generation batches.” The API claims work with a five-minute lease, retries failures after one minute, and stops after three provider attempts. Administrator access is rechecked before work and during the save transaction. Successful draft insertion and job completion commit together. Keep an API process running; closing the browser does not cancel the job.
+
+Compare anonymized independent teacher and AI marks with:
+
+```sh
+node apps/api/scripts/exam-marking-calibration.cjs /path/to/paired-scores.json
+```
+
+The API must be built first. Each JSON sample contains `questionId`, `maxMarks`, `teacherScore`, and `aiScore`. The report measures disagreement for those samples only; no real calibration dataset was supplied during this implementation.
+
+### Browser verification and release
+
+Apply migrations to the isolated local `nightklass_exam_test` database and build the API before running:
+
+```sh
+DATABASE_URL=<isolated-local-test-database-url> npm run test:e2e --workspace @assessiq/nightklass
+```
+
+Local runs use installed Google Chrome. The tests start their own API on port 3101 and Next frontend on port 3102, create isolated test accounts, use deterministic AI stubs, and run desktop plus mobile-emulation projects. The fixture server refuses nonlocal or differently named databases. Test artifacts are ignored by Git. Do not run a frontend production build/type check concurrently with this development server, because they share Next's generated output directory.
+
+CI uses bundled Chromium and an isolated PostgreSQL service. The added workflow verifies backend tests, full API/database tests, the frontend build and browser flows; no GitHub run is claimed until it is pushed and inspected.
+
+Final local verification: 82 unit tests, 24 API/database integration tests and 12 browser cases pass; both production builds pass; all 19 local migrations are current. The five-request concurrent-read smoke check took 54 ms locally and is not a production benchmark. See [the pilot release checklist](../../docs/nightklass/05-release-readiness.md) for teacher content validation, marking calibration, deployment, monitoring and explicitly unsupported formats.

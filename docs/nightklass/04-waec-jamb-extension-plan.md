@@ -1,50 +1,38 @@
 # Nightklass WAEC and JAMB extension — implementation plan
 
-Status: Approved direction; implementation in progress.  
+Status: Text-based pilot implementation complete; content validation and deployment gates remain.
 Prepared: 22 October 2026.  
 Scope: Nigerian secondary-school learners and school leavers preparing for WASSCE and UTME, within the existing Nightklass product.
 
 ## Implementation status — 22 October 2026
 
-First foundation slice implemented:
+The text-based pilot is implemented and locally verified. The detailed product direction below remains the design reference; later enhancements and real-world launch requirements are separated in [the release checklist](05-release-readiness.md).
 
-- Additive learner-pathway and secondary-stage migration; existing accounts default to tertiary.
-- Conditional secondary onboarding for SS1–SS3 and school leavers, with existing academic records preserved.
-- Authenticated standalone-learner exam-goal API and subject setup across all subject groups, including custom names.
-- One goal per learner/exam/year; transactional saves and conflict handling.
-- Personal subject workspaces reused across WAEC/JAMB and repeated setup; removing a choice preserves learning history.
-- Exam dashboard and subject navigation wired to existing upload, outline, lesson, quiz, chat, flashcard and planning pages.
-- AI course context updated to distinguish secondary subjects from university courses.
-- 62 API unit tests pass, including 12 new foundation cases; API build and frontend/API type checks pass.
-- Migration checked against Prisma's schema diff and applied to local PostgreSQL (`localhost:5432/assessiq`). All 15 migrations are now applied, including the previously pending admin migration. Database integration and browser testing remain outstanding.
-- Frontend production build currently fails fetching existing Google Fonts because the environment cannot resolve fonts.googleapis.com.
+Implemented:
 
-Content-bank and JAMB mock slices implemented:
+- Stage-appropriate secondary/school-leaver onboarding, WAEC/JAMB goals, unrestricted subject entry and shared personal subject workspaces, with tertiary profiles/history preserved.
+- Teacher text/document materials, source notes, preview, publication, reviewed question bank, private learner uploads and existing lessons/chat/flashcards/planning.
+- Versioned syllabuses, source/provenance classification, reviewed publication, objective mappings, learner coverage and weak-objective revision links. Official syllabus data is entered and verified by the teacher; none was fabricated or pre-published.
+- Question corrections with lineage, immutable historical quiz/mock snapshots and atomic retirement of superseded questions.
+- Database-backed generation jobs with queue limits, idempotent requests, leases, bounded retries, live administrator checks and atomic draft/job completion.
+- Complete-count JAMB mock assembly, frozen specifications/questions, autosave/resume, server deadlines, flags, stable submission and labelled practice scores.
+- WAEC text-paper templates scoped by year/series/subject/paper, compulsory/optional sections, written/combined multipart answers, partial credit and recoverable marking. Ungraded work is never silently scored zero.
+- Objective-specific practice uses private learning topics and therefore feeds the existing mastery/adaptive-planning loop. Same-name objectives can share the existing topic; broader curated cross-exam equivalence is not inferred automatically.
+- Teacher/AI calibration report utility, isolated browser fixtures and a GitHub Actions verification workflow.
 
-- `/admin/exam-content`: teacher materials by exam/subject/topic, PDF/DOCX/PPTX/TXT uploads (5 MB), pasted notes, extracted-text preview, publication/archive controls and source/permission notes.
-- Saved AI batches of up to 10 questions, with subject-only or teacher-material context, structured validation and duplicate fingerprints that preserve mathematical operators.
-- Draft authoring/editing, revision checks, teacher approval, immutable published question editing restrictions, archival and transactional audit records. Generated items remain drafts until reviewed.
-- Learner access to published teacher notes and reviewed question practice; model answers/feedback are hidden until submission. Copies preserve quiz history when the bank changes.
-- `/admin/exam-content`: version-checked, exam-year JAMB mock specifications; no exam-year specification is automatically published.
-- Full four-subject JAMB-style mock assembly with complete-count checks, frozen questions/rules, a server deadline, answer autosave, review flags, resume and submission confirmation.
-- Unique active-attempt and request keys, optimistic answer versions, item-membership validation, atomic/idempotent grading, per-subject/topic results and explicitly labelled practice score estimates.
-- Database-backed expiry sweep runs at API startup and every 30 seconds, finalizing expired attempts without a browser. Multiple API instances coordinate through transactional finalization; no Redis worker is assumed.
-- 71 unit cases and 13 HTTP/PostgreSQL integration cases pass. Integration fixtures include a 180-question paper, stale saves, forged IDs, concurrent finalization, late answers and browser-independent expiry.
-- API and frontend production builds pass; the prior Google Fonts restriction was resolved by permitting network access for the build. Real paid-AI generation and browser interaction have not been exercised by these tests.
-- Both new migrations have been applied to local development PostgreSQL; all 17 migrations are current. The isolated integration database is `nightklass_exam_test` and contains test fixtures.
+Verification completed locally:
 
-WAEC text-paper and written-grading slice implemented:
+- **82 unit tests**, **24 HTTP/PostgreSQL integration tests**, and **12 desktop/mobile-emulation browser tests** pass.
+- Browser checks cover teacher publication/generation, secondary onboarding, syllabus evidence, JAMB answer recovery, WAEC optional essays, keyboard activation, viewport fit and cross-origin rejection.
+- Browser testing found and verified a fix for the admin same-origin check when Next normalizes the local hostname.
+- Integration tests include a full 180-question JAMB fixture, concurrency/expiry/late-save handling, written-marking recovery/exhaustion, syllabus ownership, correction history and generation-job idempotency.
+- A local five-request concurrent mock-review smoke check completed in **54 ms**. This is not a production capacity benchmark.
+- API/frontend production builds and TypeScript checks pass. Google Fonts are available when the build runs with network access.
+- All **19 migrations** are applied to local development PostgreSQL. No production database was migrated.
 
-- Teacher-managed paper templates scoped by subject, year, examination series and paper code, with source/verification notes, publication states and revision checks.
-- Configurable compulsory/optional sections with question type, count, choice rules, marks and optional exact-topic filters. Papers assemble only when sufficient approved content matches each section; items are not reused within a paper.
-- Learner paper selection, written-answer autosave/resume, explicit optional-question selection and labelled-subpart prompts. Multipart questions use one combined response and teacher rubric; separate subpart controls and individual subpart scores remain future work.
-- Shared server-deadline, snapshot and expiry machinery, with answer-type/membership validation and paper selection checks. Manual submission requires complete optional selections; expiry finalizes incomplete work using the full paper denominator.
-- Objective marks immediately available after submission. Nonblank written answers stay pending while a database-backed grading task processes batches of five with leased claims, partial-result persistence, one-minute retries and at most three provider attempts.
-- Marking uses model answers and teacher explanation/marking points. Provider failures leave answers visibly ungraded; no final percentage is shown while marks remain ungraded. Practice marks are explicitly distinguished from official WAEC grades.
-- 78 unit tests and 18 HTTP/PostgreSQL integration tests pass, including JAMB regressions, WAEC ownership/choice rules, partial credit, durable recovery, expiry and retry exhaustion. API/frontend builds and type checks pass. Written-marking integration tests use a deterministic provider stub, not a paid live model.
-- Local development PostgreSQL has all 18 migrations applied. Migration preserves existing JAMB attempt data and adds WAEC templates, optional selections and grading state.
+Remaining launch work is content review, real teacher/AI marking calibration, deployment configuration and an invited pilot. No real teacher-marked dataset was provided; all automated AI responses are deterministic stubs. A CI workflow is committed but has not run on GitHub because nothing has been pushed.
 
-Still to implement: official syllabus/version management and coverage blueprints, rich stimuli/diagrams/audio, practical/oral interactions, published-question correction lineage, durable bulk-generation jobs, cross-exam objective mapping/adaptive revision and browser/accessibility/load verification. Shared-bank practice currently records mastery under a subject's exam-practice topic; mock results show topic breakdowns but do not yet update objective-level mastery or study plans. Bank selection samples bounded candidate pools (1,000 for practice, 5,000 per mock subject); indexed sampling is future scale work. Published content must be populated and reviewed by the teacher before full mocks become available. No deployment has been performed.
+Explicit later enhancements: rich passages/assets/diagrams/audio, practical/oral interactions, individual subpart controls, detailed question-distribution blueprints, curated cross-exam equivalence and automatic mock-to-plan objective updates. Selection/evidence queries use bounded pools/history. The release checklist records these limits and the pilot release steps. No public deployment or official examination endorsement is claimed.
 
 ## 1. Outcome and product direction
 
@@ -328,9 +316,9 @@ Use isolated databases and deterministic question fixtures. External AI is stubb
 | Too much scope | Sequence the study/generation engine, JAMB runner, WAEC paper capabilities and combined planning while retaining all subject groups in scope |
 | Historic readiness becomes misleading | Separate practice evidence from timed-mock performance and show untested coverage |
 
-## 14. Approval requested
+## 14. Approved implementation direction
 
-Approve or revise these product choices before implementation:
+The user approved implementation with these product choices:
 
 1. One account with stage-appropriate onboarding and dashboards, including school leavers and later progression to tertiary study; no assumption of simultaneous enrolment.
 2. Broad-subject study and practice foundation, followed by the JAMB mock runner, WAEC paper capabilities and combined-goal planning. This is an engineering sequence, not a subject restriction.
@@ -339,7 +327,7 @@ Approve or revise these product choices before implementation:
 5. Dedicated exam-bank/attempt models that preserve KwikEval institutional boundaries.
 6. Browser-first launch, with reconnect support; native apps, full offline mocks, parent/school dashboards and billing excluded initially.
 
-Approval authorizes implementation of the agreed scope. It does not publish a deployment or imply content/reviewer availability. After approval, begin with Phase 0 and report concrete content gaps before estimating the full delivery schedule.
+Implementation followed the approved direction. No production deployment is implied. Consult the implementation status and pilot release checklist for verified behavior, remaining content inputs and later enhancements.
 
 ## 15. Reference material
 
