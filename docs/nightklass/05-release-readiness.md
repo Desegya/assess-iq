@@ -13,11 +13,12 @@ Prepared 22 October 2026. This is a reviewable release checklist, not a claim of
 - JAMB mock specifications, complete four-subject forms, server timing, saved answers, recovery, review flags, idempotent submission and practice-labelled scores.
 - WAEC text-based paper specifications by year/series/subject/paper, compulsory/optional sections, combined multipart responses, rubric partial credit and recoverable written marking.
 - Learner syllabus coverage, evidence-based practice accuracy and weak-objective revision links. Objective-specific practice uses the private study topic so existing mastery/planning can adapt.
+- Admin-managed exam windows and WAEC PDF/CSV timetables, reviewed draft publication, candidate-series isolation, subject-filtered learner paper dates and opt-in study-plan deadlines.
 - Browser automation, isolated HTTP/PostgreSQL integration tests, backend unit tests and a CI workflow.
 
 ## Software verification
 
-Final local results: 82 unit tests, 24 HTTP/PostgreSQL integration tests and 12 browser cases pass. Both production builds and TypeScript checks pass; all 19 local migrations are applied. Browser testing uses local Chrome desktop and an emulated mobile viewport, not a physical iPhone or Safari. It checks teacher publication/generation, secondary onboarding, syllabus practice, keyboard activation, JAMB saved-answer recovery, WAEC optional essays and cross-origin mutation rejection.
+Final local results: 88 unit tests, 29 HTTP/PostgreSQL integration tests and 14 browser cases pass. Both production builds and TypeScript checks pass; all 20 local migrations are applied. Browser testing uses local Chrome desktop and an emulated mobile viewport, not a physical iPhone or Safari. It checks teacher publication/generation, secondary onboarding, syllabus practice, keyboard activation, JAMB saved-answer recovery, WAEC optional essays cross-origin mutation rejection and WAEC timetable upload/publication with original-source download.
 
 Integration tests include a full 180-question JAMB fixture, concurrent submission, late-save rejection, durable expiry, WAEC rubric/retry recovery, syllabus ownership, correction snapshots and idempotent generation jobs. A five-request concurrent-read smoke check is included. It is not a production capacity benchmark. All AI generation and written-marking test responses are deterministic stubs.
 
@@ -31,7 +32,8 @@ The collaborating teacher needs to:
 2. Link questions to the relevant objectives. Use queued generation with or without teaching notes, then review every item published to the shared bank.
 3. Publish verified JAMB and WAEC paper specifications for the intended year/series. Confirm durations, counts, selection rules and marks against the actual applicable sources.
 4. Supply enough reviewed questions for each advertised complete mock. The UI blocks incomplete forms and displays content shortfalls.
-5. Review representative lessons and independently mark written-answer samples across subjects and ability levels. Compare paired marks and feedback before relying on automatic grading.
+5. Enter verified exam windows and upload the applicable WAEC timetable for each year/series. Review imported CSV rows or manually enter PDF paper dates, subject names and Nigeria-time sessions before publishing. Uploaded PDFs are preserved as sources; paper dates are not automatically inferred from them.
+6. Review representative lessons and independently mark written-answer samples across subjects and ability levels. Compare paired marks and feedback before relying on automatic grading.
 
 Calibration report input is an anonymized JSON array:
 

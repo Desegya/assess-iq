@@ -1,5 +1,6 @@
 'use client'
 
+import { AdminExamCalendars } from './AdminExamCalendars'
 import { AdminExamSyllabuses, type Syllabus } from './AdminExamSyllabuses'
 import { AdminWaecPapers } from './AdminWaecPapers'
 import { AdminMockTemplates } from './AdminMockTemplates'
@@ -156,6 +157,7 @@ export function AdminExamContent() {
           {message}
         </p>
       )}
+      <AdminExamCalendars />
       <AdminExamSyllabuses onChange={syllabusData.reload} />
       <AdminMockTemplates />
       <AdminWaecPapers />

@@ -166,4 +166,21 @@ Local runs use installed Google Chrome. The tests start their own API on port 31
 
 CI uses bundled Chromium and an isolated PostgreSQL service. The added workflow verifies backend tests, full API/database tests, the frontend build and browser flows; no GitHub run is claimed until it is pushed and inspected.
 
-Final local verification: 82 unit tests, 24 API/database integration tests and 12 browser cases pass; both production builds pass; all 19 local migrations are current. The five-request concurrent-read smoke check took 54 ms locally and is not a production benchmark. See [the pilot release checklist](../../docs/nightklass/05-release-readiness.md) for teacher content validation, marking calibration, deployment, monitoring and explicitly unsupported formats.
+Final local verification: 88 unit tests, 29 API/database integration tests and 14 browser cases pass; both production builds pass; all 20 local migrations are current. The five-request concurrent-read smoke check took 116 ms locally and is not a production benchmark. See [the pilot release checklist](../../docs/nightklass/05-release-readiness.md) for teacher content validation, marking calibration, deployment, monitoring and explicitly unsupported formats.
+
+### Exam dates and WAEC timetables
+
+Open **Exam content → Exam dates & WAEC timetables**. Create a calendar for the exam, year and series; enter its start date, optional end date and source/verification note, then save the draft. JAMB dates describe the general UTME window; the learner's examination slip supplies their personal sitting.
+
+For WAEC, choose school candidates, private first series or private second series. Upload an original **PDF or CSV up to 5 MB**. PDFs remain downloadable and may show extracted text for review; enter structured paper rows manually. CSV imports draft rows using these headers:
+
+```csv
+subject,paperCode,title,date,startTime,endTime,notes
+Government,GOV2,Government essay,2099-05-20,09:00,11:00,Illustrative fixture only
+```
+
+Use ISO dates (`YYYY-MM-DD`) and Nigeria-time 24-hour times (`HH:mm`); leave unconfirmed times blank. The example is not a real timetable. Use subject names matching learner subject choices. Review the source, dates, paper codes and rows, save any edits, then publish the calendar. Uploading alone never publishes.
+
+Students see only published dates for their exam year and selected WAEC series, paper rows for their chosen subjects and the original timetable link. They can choose **Use published deadline** after adding study topics and availability; the earliest future subject paper, or exam-window start, becomes the new plan deadline. Explicit personal dates/plan lengths take precedence. Updates do not silently replace personal plans or erase completed sessions.
+
+Published calendars are immutable: copy into a new version and review/publish the replacement. Publishing archives the previous published calendar for that exam/year/series; stale draft changes return a conflict. Existing WAEC goals were migrated to the school-candidate series and learners can edit their series.

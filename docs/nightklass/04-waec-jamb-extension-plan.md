@@ -18,17 +18,18 @@ Implemented:
 - Complete-count JAMB mock assembly, frozen specifications/questions, autosave/resume, server deadlines, flags, stable submission and labelled practice scores.
 - WAEC text-paper templates scoped by year/series/subject/paper, compulsory/optional sections, written/combined multipart answers, partial credit and recoverable marking. Ungraded work is never silently scored zero.
 - Objective-specific practice uses private learning topics and therefore feeds the existing mastery/adaptive-planning loop. Same-name objectives can share the existing topic; broader curated cross-exam equivalence is not inferred automatically.
+- Admin-managed JAMB/WAEC exam windows and versioned WAEC timetables by year and candidate series. Original PDF uploads, CSV row imports, explicit review/publication, learner subject filtering, Nigeria-time countdowns and opt-in published study deadlines.
 - Teacher/AI calibration report utility, isolated browser fixtures and a GitHub Actions verification workflow.
 
 Verification completed locally:
 
-- **82 unit tests**, **24 HTTP/PostgreSQL integration tests**, and **12 desktop/mobile-emulation browser tests** pass.
-- Browser checks cover teacher publication/generation, secondary onboarding, syllabus evidence, JAMB answer recovery, WAEC optional essays, keyboard activation, viewport fit and cross-origin rejection.
+- **88 unit tests**, **29 HTTP/PostgreSQL integration tests**, and **14 desktop/mobile-emulation browser tests** pass.
+- Browser checks cover teacher publication/generation, secondary onboarding, syllabus evidence, JAMB answer recovery, WAEC optional essays, keyboard activation, viewport fit, cross-origin rejection and admin-to-learner timetable upload/publication.
 - Browser testing found and verified a fix for the admin same-origin check when Next normalizes the local hostname.
 - Integration tests include a full 180-question JAMB fixture, concurrency/expiry/late-save handling, written-marking recovery/exhaustion, syllabus ownership, correction history and generation-job idempotency.
-- A local five-request concurrent mock-review smoke check completed in **54 ms**. This is not a production capacity benchmark.
+- A local five-request concurrent mock-review smoke check completed in **116 ms**. This is not a production capacity benchmark.
 - API/frontend production builds and TypeScript checks pass. Google Fonts are available when the build runs with network access.
-- All **19 migrations** are applied to local development PostgreSQL. No production database was migrated.
+- All **20 migrations** are applied to local development PostgreSQL. No production database was migrated.
 
 Remaining launch work is content review, real teacher/AI marking calibration, deployment configuration and an invited pilot. No real teacher-marked dataset was provided; all automated AI responses are deterministic stubs. A CI workflow is committed but has not run on GitHub because nothing has been pushed.
 

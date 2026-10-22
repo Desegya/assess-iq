@@ -8,7 +8,7 @@ const {hash}=require('bcryptjs')
 const url=new URL(process.env.DATABASE_URL||'postgresql://invalid/invalid')
 if(url.pathname!=='/nightklass_exam_test'||!['localhost','127.0.0.1'].includes(url.hostname))throw new Error('Browser fixtures require the isolated local nightklass_exam_test database')
 process.env.JWT_SECRET=randomUUID()+randomUUID();process.env.JWT_REFRESH_SECRET=randomUUID()+randomUUID()
-process.env.OPENAI_API_KEY='';process.env.R2_ACCESS_KEY_ID='';process.env.R2_ENDPOINT=''
+process.env.API_URL='http://127.0.0.1:3101';process.env.OPENAI_API_KEY='';process.env.R2_ACCESS_KEY_ID='';process.env.R2_ENDPOINT=''
 const prisma=new PrismaClient(),suffix=randomUUID().slice(0,8),password='Browser-test-only-42!'
 async function start(){
   const passwordHash=await hash(password,12)
@@ -19,7 +19,7 @@ async function start(){
   const courses=[]
   for(let i=0;i<subjects.length;i++)courses.push(await prisma.course.create({data:{ownerId:learner.id,title:subjects[i],subject:subjects[i],examSubjectKey:keys[i],description:'Nigerian senior secondary exam preparation browser fixture.'}}))
   const goal=await prisma.examGoal.create({data:{studentId:learner.id,exam:'JAMB',year:2099,subjects:{create:subjects.map((name,i)=>({name,subjectKey:keys[i],courseId:courses[i].id}))}}})
-  const waecGoal=await prisma.examGoal.create({data:{studentId:learner.id,exam:'WAEC',year:2099,subjects:{create:[{name:'Government',subjectKey:'government',courseId:courses[1].id}]}}})
+  const waecGoal=await prisma.examGoal.create({data:{studentId:learner.id,exam:'WAEC',year:2099,series:'SCHOOL',subjects:{create:[{name:'Government',subjectKey:'government',courseId:courses[1].id}]}}})
   const options=[{key:'A',text:'Citizens elect representatives'},{key:'B',text:'All power is inherited'},{key:'C',text:'Citizens never vote'},{key:'D',text:'Only one person owns all power'}]
   const questions=[]
   for(let i=0;i<subjects.length;i++){
@@ -36,6 +36,7 @@ async function start(){
   const paper=await prisma.waecPaperTemplate.create({data:{year:2099,series:'SCHOOL',subject:'Government',subjectKey:'government',paperCode:`BROWSER-${suffix}`,title:`Browser WAEC Government ${suffix}`,durationMinutes:60,instructions:'Answer the objective and select exactly one essay. Label your working and subparts.',sourceNote:'Illustrative browser fixture only; not an official WAEC paper.',status:'APPROVED',sections:[{id:'a',title:'Compulsory objective',questionType:'MCQ',count:1,choose:1,marks:1,topic:`Browser ${suffix}`},{id:'b',title:'Choose one essay',questionType:'THEORY',count:2,choose:1,marks:10,topic:`Browser ${suffix}`}]}})
   const {AppModule}=require('../dist/app.module'),{AiService}=require('../dist/modules/ai/ai.service')
   const app=await NestFactory.create(AppModule,{logger:false})
+  app.useStaticAssets(require('node:path').join(process.cwd(),'uploads'),{prefix:'/uploads'})
   app.useBodyParser('json',{limit:'2mb'});app.setGlobalPrefix('api');app.enableVersioning({type:VersioningType.URI,defaultVersion:'1'})
   app.enableCors({origin:'http://127.0.0.1:3102',credentials:true})
   app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true,transformOptions:{enableImplicitConversion:true}}))

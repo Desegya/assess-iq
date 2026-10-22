@@ -134,3 +134,74 @@ test('syllabus objectives can be opened with the keyboard', async ({ page }) => 
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/topics\/[^/]+\/learn$/)
 })
+
+test('teacher publishes a WAEC timetable and learners see their subject papers', async ({
+  page,
+}, testInfo) => {
+  await login(page, true)
+  await page.goto('/admin/exam-content')
+  const existing = await page.request.get('/api/admin/exam-content/calendars')
+  expect(existing.ok()).toBe(true)
+  const calendars = await existing.json()
+  const version =
+    Math.max(
+      0,
+      ...calendars
+        .filter((c: any) => c.exam === 'WAEC' && c.year === 2099 && c.series === 'SCHOOL')
+        .map((c: any) => c.version),
+    ) + 1
+  await page.getByRole('button', { name: 'New exam calendar', exact: true }).click()
+  const form = page
+    .locator('form')
+    .filter({ has: page.getByRole('button', { name: 'Save calendar draft', exact: true }) })
+  const title = `Timetable ${testInfo.project.name} ${fixture.suffix}`
+  await form.getByRole('combobox', { name: 'Examination', exact: true }).selectOption('WAEC')
+  await form.getByLabel('Exam year', { exact: true }).fill('2099')
+  await form.getByLabel('Calendar version', { exact: true }).fill(String(version))
+  await form.getByLabel('Calendar title', { exact: true }).fill(title)
+  await form.getByLabel('Exam starts', { exact: true }).fill('2099-05-01')
+  await form.getByLabel('Exam ends (optional)', { exact: true }).fill('2099-06-30')
+  await form
+    .getByLabel('Source and date verification note', { exact: true })
+    .fill('Teacher reviewed isolated fixture, not actual examination dates.')
+  await form.getByRole('button', { name: 'Save calendar draft', exact: true }).click()
+  await expect(
+    page.getByText('Calendar saved as a draft. Review dates and paper rows before publishing.', {
+      exact: true,
+    }),
+  ).toBeVisible()
+  const csv =
+    'subject,paperCode,title,date,startTime,endTime,notes\nGovernment,GOV2,Government essay,2099-05-20,09:00,11:00,Reviewed\nPhysics,PHY1,Physics objective,2099-05-21,09:00,10:00,Other subject'
+  await form
+    .getByLabel('WAEC timetable PDF or CSV', { exact: true })
+    .setInputFiles({ name: 'waec.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
+  await form.getByRole('button', { name: 'Upload timetable', exact: true }).click()
+  await expect(
+    page.getByText('2 paper rows imported. Review before publishing.', { exact: true }),
+  ).toBeVisible()
+  const card = page
+    .getByRole('article')
+    .filter({ has: page.getByRole('heading', { name: new RegExp(title) }) })
+  await card.getByRole('button', { name: 'Publish calendar', exact: true }).click()
+  await expect(card).toContainText('APPROVED')
+  await login(page)
+  await page.goto('/exam-preparation')
+  const dates = page
+    .getByRole('region', { name: 'Published exam dates' })
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+  await expect(dates).toBeVisible()
+  await dates.getByText('Your subject paper dates (1)', { exact: true }).click()
+  await expect(
+    dates.getByText('Government · GOV2 · Government essay', { exact: true }),
+  ).toBeVisible()
+  await expect(dates.getByText(/Physics objective/)).toHaveCount(0)
+  const href = await dates
+    .getByRole('link', { name: 'View original timetable', exact: true })
+    .getAttribute('href')
+  const original = await page.request.get(href!)
+  expect(original.status()).toBe(200)
+  expect(await original.text()).toContain('Government,GOV2')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+})
