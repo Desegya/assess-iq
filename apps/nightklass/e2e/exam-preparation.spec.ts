@@ -33,7 +33,8 @@ test('learner uses syllabus-linked practice and sees objective evidence', async 
   await page.getByRole('button', { name: 'Submit practice', exact: true }).click()
   await expect(page.getByRole('heading', { name: '100% on graded questions' })).toBeVisible()
   await page.goto(`/exam-preparation/syllabus?goal=${fixture.jambGoal}&subject=government`)
-  await expect(page.getByText(/100% practice accuracy/)).toBeVisible()
+  // One answered question is recorded but is not enough evidence for a percentage.
+  await expect(page.getByText(/Too early to tell · 1 question answered so far/)).toBeVisible()
 })
 test('JAMB mock autosaves, resumes after refresh and submits', async ({ page }) => {
   await login(page)

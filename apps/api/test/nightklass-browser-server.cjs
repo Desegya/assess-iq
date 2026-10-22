@@ -7,12 +7,17 @@ const {hash}=require('bcryptjs')
 const url=new URL(process.env.DATABASE_URL||'postgresql://invalid/invalid')
 if(url.pathname!=='/nightklass_exam_test'||!['localhost','127.0.0.1'].includes(url.hostname))throw new Error('Browser fixtures require the isolated local nightklass_exam_test database')
 process.env.JWT_SECRET=randomUUID()+randomUUID();process.env.JWT_REFRESH_SECRET=randomUUID()+randomUUID()
-process.env.API_URL='http://127.0.0.1:3101';process.env.OPENAI_API_KEY='';process.env.R2_ACCESS_KEY_ID='';process.env.R2_ENDPOINT='';process.env.EXAM_ACCESS='OPEN'
+process.env.API_URL='http://127.0.0.1:3101';process.env.PASSWORD_RESET_URL='http://127.0.0.1:3102/reset-password';process.env.OPENAI_API_KEY='';process.env.R2_ACCESS_KEY_ID='';process.env.R2_ENDPOINT='';process.env.EXAM_ACCESS='OPEN'
 const prisma=new PrismaClient(),suffix=randomUUID().slice(0,8),password='Browser-test-only-42!'
 async function start(){
   const passwordHash=await hash(password,12)
   const account=name=>prisma.user.create({data:{name,email:`browser-${name}-${suffix}@example.test`,passwordHash,role:'STUDENT',status:'ACTIVE',studyPathway:'EXAM_PREPARATION',secondaryStage:'SS3',country:'Nigeria',institutionType:'SECONDARY_SCHOOL',profileCompletedAt:new Date()}})
   const owner=await account('teacher'),learner=await account('learner')
+  // Existing university learner with established history, for tertiary regression checks.
+  const tertiary=await prisma.user.create({data:{name:'Tertiary learner',email:`browser-tertiary-${suffix}@example.test`,passwordHash,role:'STUDENT',status:'ACTIVE',studyPathway:'TERTIARY',institutionType:'UNIVERSITY',country:'Nigeria',programme:'Biochemistry',currentLevel:200,currentSemester:'FIRST',profileCompletedAt:new Date()}})
+  const tertiaryCourse=await prisma.course.create({data:{ownerId:tertiary.id,title:`Enzyme Kinetics ${suffix}`,subject:'Biochemistry',description:'Existing university course fixture.'}})
+  const tertiaryTopic=await prisma.topic.create({data:{courseId:tertiaryCourse.id,name:'Michaelis-Menten kinetics'}})
+  await prisma.flashcard.create({data:{studentId:tertiary.id,front:'What does Km measure?',back:'Substrate concentration at half Vmax',topicId:tertiaryTopic.id}})
   await prisma.nightklassAdmin.create({data:{userId:owner.id,role:'OWNER'}})
   const subjects=['English Language','Government','Literature in English','Economics'],keys=['english','government','literature in english','economics']
   const courses=[]
@@ -39,7 +44,12 @@ async function start(){
   const ai=app.get(AiService)
   ai.gradeWrittenAnswers=async answers=>({model:'browser-fixture',promptVersion:'browser-fixture',grades:answers.map(a=>({id:a.id,score:a.marks/2,feedback:'Browser fixture: definition is partly correct; develop the explanation.',missingPoints:['Expand accountability']}))})
   ai.generateQuestionsWithMeta=async(_text,opts)=>({model:'browser-fixture',promptVersion:'browser-fixture',questions:Array.from({length:opts.count},(_,i)=>({type:'MCQ',questionText:`Browser generated fixture ${suffix} ${randomUUID()} ${i}: choose the democracy answer.`,options,correctAnswer:'A',explanation:'Representative democracy lets citizens elect their representatives.'}))})
-  app.getHttpAdapter().get('/__test/fixtures',(_req,res)=>res.json({teacher:owner.email,learner:learner.email,password,jambGoal:goal.id,waecGoal:waecGoal.id,paperTitle:paper.title,objectiveId:syllabus.objectives[0].id,suffix}))
+  // Account emails are captured instead of sent; tests read reset links from here.
+  const sent=[];app.get(require('../dist/modules/email/email.service').EmailService).deliver=async m=>{sent.push(m)}
+  app.getHttpAdapter().get('/__test/emails',(req,res)=>res.json(sent.filter(m=>m.to===req.query.to)))
+  // Fresh disposable learners for flows that change credentials or delete accounts.
+  app.getHttpAdapter().post('/__test/accounts',async(_req,res)=>{const u=await prisma.user.create({data:{name:'Browser disposable',email:`browser-disposable-${randomUUID().slice(0,8)}@example.test`,passwordHash,role:'STUDENT',status:'ACTIVE',studyPathway:'TERTIARY',profileCompletedAt:new Date(),institutionType:'UNIVERSITY',country:'Nigeria'}});res.json({email:u.email})})
+  app.getHttpAdapter().get('/__test/fixtures',(_req,res)=>res.json({tertiary:tertiary.email,tertiaryCourse:tertiaryCourse.title,teacher:owner.email,learner:learner.email,password,jambGoal:goal.id,waecGoal:waecGoal.id,paperTitle:paper.title,objectiveId:syllabus.objectives[0].id,suffix}))
   await app.listen(3101,'127.0.0.1')
   const stop=async()=>{await app.close();await prisma.$disconnect();process.exit(0)}
   process.on('SIGTERM',stop);process.on('SIGINT',stop)
