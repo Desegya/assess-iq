@@ -275,3 +275,87 @@ test('WAEC exhausted written-marking retries preserve ungraded marks without inv
     assert.equal(calls, 3)
   } finally { ai.gradeWrittenAnswers = original }
 })
+
+let syllabus, syllabusQuestion
+const syllabusCode = `GOV-${suffix.slice(0,8)}`
+test('syllabus drafts are private and official provenance requires a source URL', async () => {
+  const fields = { exam:'JAMB',year:2027,subject:'Government',version:Date.now()%1000000,title:`Reviewed Government syllabus ${suffix}`,provenance:'CURATED',sourceNote:'Original teacher-curated objectives for this isolated test.',objectives:[{code:syllabusCode,title:'Democratic government',description:'Explain representative democracy and political accountability.'}],expectedRevision:0 }
+  // A stable per-run version within the documented input bound.
+  const existing = await admin('syllabuses')
+  fields.version = Math.max(0,...existing.body.filter(s=>s.exam==='JAMB'&&s.year===2027&&s.subjectKey==='government').map(s=>s.version))+1
+  assert.equal((await call('/admin/nightklass/exam-content/syllabuses',learnerToken)).status,403)
+  assert.equal((await admin('syllabuses',{...fields,provenance:'OFFICIAL'})).status,400)
+  const response=await admin('syllabuses',fields)
+  assert.equal(response.status,201);syllabus=response.body
+  const coverage=await call(`/exam-preparation/goals/${goal.id}/subjects/government/coverage`,learnerToken)
+  assert.notEqual(coverage.body.syllabus?.id,syllabus.id)
+  assert.equal((await call('/exam-preparation/objectives/study',learnerToken,{goalId:goal.id,objectiveId:syllabus.objectives[0].id})).status,404)
+})
+test('reviewed syllabus publication is immutable and learner access is owner scoped',async()=>{
+  assert.equal((await admin(`syllabuses/${syllabus.id}/state`,{status:'APPROVED',expectedRevision:1})).status,201)
+  const coverage=await call(`/exam-preparation/goals/${goal.id}/subjects/government/coverage`,learnerToken)
+  assert.equal(coverage.body.syllabus.id,syllabus.id)
+  assert.equal(coverage.body.summary.total,1)
+  assert.equal(coverage.body.objectives[0].practiceAccuracy,null)
+  assert.equal((await call(`/exam-preparation/goals/${goal.id}/subjects/government/coverage`,otherToken)).status,404)
+  const {id,exam,year,subject,version,title,provenance,sourceNote,objectives}=syllabus
+  assert.equal((await admin('syllabuses',{id,exam,year,subject,version,title,provenance,sourceNote,objectives:objectives.map(({code,title,description})=>({code,title,description})),expectedRevision:2})).status,409)
+})
+test('objective study setup is idempotent and reviewed practice feeds objective coverage',async()=>{
+  const objectiveId=syllabus.objectives[0].id
+  const first=await call('/exam-preparation/objectives/study',learnerToken,{goalId:goal.id,objectiveId})
+  const repeated=await call('/exam-preparation/objectives/study',learnerToken,{goalId:goal.id,objectiveId})
+  assert.equal(first.status,201);assert.equal(first.body.topicId,repeated.body.topicId)
+  const q=await admin('questions',{...authored,questionText:`Mapped question ${suffix}: which choice describes democracy?`,objectiveIds:[objectiveId]})
+  assert.equal(q.status,201);syllabusQuestion=q.body
+  assert.equal((await admin(`questions/${q.body.id}/state`,{status:'APPROVED',expectedRevision:1})).status,201)
+  const practiceResult=await call('/exam-preparation/practice',learnerToken,{goalId:goal.id,subjectKey:'government',objectiveId,count:1})
+  assert.equal(practiceResult.status,201);assert.equal(practiceResult.body.topicId,first.body.topicId)
+  const grade=await call(`/study/topics/${first.body.topicId}/quiz/submit`,learnerToken,{answers:[{questionId:practiceResult.body.questions[0].id,selectedAnswer:'A'}]})
+  assert.equal(grade.body.scorePercent,100)
+  const coverage=await call(`/exam-preparation/goals/${goal.id}/subjects/government/coverage`,learnerToken)
+  assert.equal(coverage.body.summary.assessed,1)
+  assert.equal(coverage.body.objectives[0].practiceAccuracy,100)
+  assert.equal(coverage.body.objectives[0].reviewedQuestions,1)
+})
+test('published corrections preserve historical keys and archive the superseded question atomically',async()=>{
+  const corrected=await admin(`questions/${syllabusQuestion.id}/correction`,{status:'APPROVED',expectedRevision:2})
+  assert.equal(corrected.status,201)
+  assert.equal(corrected.body.supersedesId,syllabusQuestion.id)
+  const edited=await admin(`questions/${corrected.body.id}`,{...authored,questionText:`Mapped question ${suffix}: which choice describes democracy?`,correctAnswer:'B',objectiveIds:[syllabus.objectives[0].id],expectedRevision:1},'PATCH')
+  assert.equal(edited.status,200)
+  assert.equal((await admin(`questions/${corrected.body.id}/state`,{status:'APPROVED',expectedRevision:2})).status,201)
+  assert.equal((await prisma.examBankQuestion.findUnique({where:{id:syllabusQuestion.id}})).status,'ARCHIVED')
+  const historical=await prisma.question.findFirst({where:{createdById:learner.id,sourceExamBankQuestionId:syllabusQuestion.id}})
+  assert.equal(historical.correctAnswer,'A')
+  const coverage=await call(`/exam-preparation/goals/${goal.id}/subjects/government/coverage`,learnerToken)
+  assert.equal(coverage.body.objectives[0].reviewedQuestions,1)
+  assert.equal(coverage.body.objectives[0].practiceAccuracy,100)
+})
+test('generation jobs are idempotent and commit validated drafts plus completion atomically',async()=>{
+  const {AiService}=require('../dist/modules/ai/ai.service')
+  const {ExamGenerationService}=require('../dist/modules/exam-preparation/exam-generation.service')
+  const ai=app.get(AiService),original=ai.generateQuestions
+  ai.generateQuestions=async()=>[{type:'MCQ',questionText:`Queued question ${suffix}: choose the correct option.`,options:authored.options,correctAnswer:'A',explanation:'This deterministic generated fixture has option A as its answer.'}]
+  try{
+    const payload={exam:'JAMB',subject:'Government',topic:'Democratic government',count:1,difficulty:'MEDIUM',questionType:'MCQ',objectiveIds:[syllabus.objectives[0].id],requestKey:randomUUID()}
+    const queued=await admin('generation-jobs',payload)
+    assert.equal(queued.status,201)
+    assert.equal((await admin('generation-jobs',payload)).body.id,queued.body.id)
+    let job
+    for(let i=0;i<10;i++){await app.get(ExamGenerationService).process();job=await prisma.examGenerationJob.findUnique({where:{id:queued.body.id}});if(job.status==='SUCCEEDED')break;await new Promise(r=>setTimeout(r,50))}
+    assert.equal(job.status,'SUCCEEDED')
+    assert.equal(job.result.saved,1)
+    const drafts=await prisma.examBankQuestion.findMany({where:{generationJobId:job.id},include:{objectiveLinks:true}})
+    assert.equal(drafts.length,1);assert.equal(drafts[0].status,'DRAFT')
+    assert.equal(drafts[0].objectiveLinks[0].objectiveId,syllabus.objectives[0].id)
+  }finally{ai.generateQuestions=original}
+})
+test('mock review handles a small concurrent-read burst without changing saved results',async()=>{
+  await new Promise(r=>setTimeout(r,1100))
+  const started=performance.now()
+  const responses=await Promise.all(Array.from({length:5},()=>call(`/exam-preparation/mocks/${mock.id}`,learnerToken)))
+  assert.ok(responses.every(r=>r.status===200))
+  assert.ok(responses.every(r=>JSON.stringify(r.body.result)===JSON.stringify(responses[0].body.result)))
+  console.log(`Local concurrency smoke: five mock-review reads completed in ${Math.round(performance.now()-started)} ms; not a production capacity benchmark.`)
+})

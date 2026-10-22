@@ -1,5 +1,18 @@
 import { Type, Transform } from 'class-transformer'
-import { ArrayMaxSize, IsArray, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator'
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator'
 import { ExamFamily, QuestionDifficulty, QuestionType } from '@assessiq/types'
 
 export class ContentFilterDto {
@@ -11,10 +24,16 @@ export class ContentFilterDto {
 }
 export class ContentScopeDto {
   @IsEnum(ExamFamily) exam!: ExamFamily
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  @IsString() @MinLength(2) @MaxLength(100) subject!: string
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  @IsString() @MinLength(2) @MaxLength(150) topic!: string
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  subject!: string
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(2)
+  @MaxLength(150)
+  topic!: string
 }
 export class CreateExamMaterialDto extends ContentScopeDto {
   @IsString() @MinLength(2) @MaxLength(150) title!: string
@@ -26,6 +45,12 @@ export class UploadExamMaterialDto extends ContentScopeDto {
   @IsString() @MinLength(5) @MaxLength(1000) sourceNote!: string
 }
 export class GenerateBankDto extends ContentScopeDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  objectiveIds?: string[]
   @IsOptional() @IsString() @MaxLength(100) materialId?: string
   @IsInt() @Min(1) @Max(10) count = 5
   @IsEnum(QuestionDifficulty) difficulty: QuestionDifficulty = QuestionDifficulty.MEDIUM
@@ -36,9 +61,20 @@ class BankOptionDto {
   @IsString() @MinLength(1) @MaxLength(2000) text!: string
 }
 export class BankQuestionDto extends ContentScopeDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  objectiveIds?: string[]
   @IsString() @MinLength(5) @MaxLength(10000) questionText!: string
   @IsEnum(QuestionType) questionType!: QuestionType
-  @IsOptional() @IsArray() @ArrayMaxSize(6) @ValidateNested({ each: true }) @Type(() => BankOptionDto) options?: BankOptionDto[]
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @ValidateNested({ each: true })
+  @Type(() => BankOptionDto)
+  options?: BankOptionDto[]
   @IsString() @MinLength(1) @MaxLength(10000) correctAnswer!: string
   @IsString() @MinLength(5) @MaxLength(10000) explanation!: string
   @IsInt() @Min(1) @Max(100) marks = 1
@@ -55,6 +91,7 @@ export class MaterialStateDto {
   @IsIn(['APPROVED', 'ARCHIVED']) status!: 'APPROVED' | 'ARCHIVED'
 }
 export class BankPracticeDto {
+  @IsOptional() @IsString() @MaxLength(100) objectiveId?: string
   @IsString() @MinLength(1) @MaxLength(100) goalId!: string
   @IsString() @MinLength(2) @MaxLength(100) subjectKey!: string
   @IsOptional() @IsString() @MaxLength(150) topic?: string

@@ -1,3 +1,7 @@
+import { ExamGenerationController } from './exam-generation.controller'
+import { ExamGenerationService } from './exam-generation.service'
+import { ExamSyllabusService } from './exam-syllabus.service'
+import { ExamSyllabusAdminController, ExamSyllabusController } from './exam-syllabus.controller'
 import { WaecPaperService } from './waec-paper.service'
 import { WaecPaperAdminController, WaecPaperController } from './waec-paper.controller'
 import { ExamMockService } from './exam-mock.service'
@@ -13,6 +17,9 @@ import { ExamPreparationService } from './exam-preparation.service'
 @Module({
   imports: [AiModule],
   controllers: [
+    ExamGenerationController,
+    ExamSyllabusAdminController,
+    ExamSyllabusController,
     WaecPaperAdminController,
     WaecPaperController,
     ExamPreparationController,
@@ -22,6 +29,8 @@ import { ExamPreparationService } from './exam-preparation.service'
     ExamMockAdminController,
   ],
   providers: [
+    ExamGenerationService,
+    ExamSyllabusService,
     WaecPaperService,
     ExamPreparationService,
     ExamContentService,

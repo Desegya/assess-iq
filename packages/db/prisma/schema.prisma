@@ -254,6 +254,7 @@ model User {
   secondaryStage  SecondaryStage?
   examGoals       ExamGoal[]
   examMockAttempts ExamMockAttempt[]
+  syllabusStudyLinks ExamObjectiveStudyLink[]
   profileCompletedAt DateTime?
   lastLoginAt    DateTime?
   createdAt      DateTime     @default(now())
@@ -352,6 +353,7 @@ model Course {
 // ─── Topic ────────────────────────────────────────────────────────────────────
 
 model Topic {
+  syllabusStudyLinks ExamObjectiveStudyLink[]
   id                String    @id @default(cuid())
   courseId          String
   name              String
@@ -498,6 +500,8 @@ model Document {
 // ─── Question ─────────────────────────────────────────────────────────────────
 
 model Question {
+  sourceExamBankQuestionId String?
+  sourceExamBankQuestion ExamBankQuestion? @relation(fields: [sourceExamBankQuestionId], references: [id], onDelete: SetNull)
   id               String             @id @default(cuid())
   organizationId   String?
   createdById      String
@@ -949,6 +953,13 @@ model ExamMaterial {
 }
 
 model ExamBankQuestion {
+  generationJobId String?
+  generationJob ExamGenerationJob? @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+  objectiveLinks ExamQuestionObjective[]
+  practiceCopies Question[]
+  supersedesId String? @unique
+  supersedes ExamBankQuestion? @relation("QuestionCorrections", fields: [supersedesId], references: [id], onDelete: Restrict)
+  correction ExamBankQuestion? @relation("QuestionCorrections")
   id           String @id @default(cuid())
   exam         ExamFamily
   subject      String
@@ -1047,4 +1058,79 @@ model WaecPaperTemplate {
   updatedAt       DateTime @updatedAt
   @@unique([year, series, subjectKey, paperCode])
   @@map("waec_paper_templates")
+}
+
+
+model ExamSyllabus {
+  id String @id @default(cuid())
+  exam ExamFamily
+  year Int
+  subject String
+  subjectKey String
+  version Int
+  title String
+  provenance String
+  sourceUrl String?
+  sourceNote String
+  status QuestionStatus @default(DRAFT)
+  revision Int @default(1)
+  reviewedById String?
+  objectives ExamSyllabusObjective[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([exam, year, subjectKey, version])
+  @@index([exam, year, subjectKey, status])
+  @@map("exam_syllabuses")
+}
+model ExamSyllabusObjective {
+  id String @id @default(cuid())
+  syllabusId String
+  syllabus ExamSyllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+  code String
+  title String
+  description String @db.Text
+  order Int
+  questions ExamQuestionObjective[]
+  studyLinks ExamObjectiveStudyLink[]
+  @@unique([syllabusId, code])
+  @@map("exam_syllabus_objectives")
+}
+model ExamQuestionObjective {
+  questionId String
+  objectiveId String
+  question ExamBankQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  objective ExamSyllabusObjective @relation(fields: [objectiveId], references: [id], onDelete: Restrict)
+  @@id([questionId, objectiveId])
+  @@index([objectiveId])
+  @@map("exam_question_objectives")
+}
+model ExamObjectiveStudyLink {
+  studentId String
+  objectiveId String
+  topicId String
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  objective ExamSyllabusObjective @relation(fields: [objectiveId], references: [id], onDelete: Restrict)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  @@id([studentId, objectiveId])
+  @@index([topicId])
+  @@map("exam_objective_study_links")
+}
+
+model ExamGenerationJob {
+  id String @id @default(cuid())
+  actorId String
+  requestKey String
+  payload Json
+  status String @default("QUEUED")
+  attempts Int @default(0)
+  nextAt DateTime @default(now())
+  leaseUntil DateTime?
+  result Json?
+  error String?
+  questions ExamBankQuestion[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([actorId, requestKey])
+  @@index([status, nextAt])
+  @@map("exam_generation_jobs")
 }
