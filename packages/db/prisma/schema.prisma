@@ -925,3 +925,51 @@ model ExamGoalSubject {
   @@index([courseId])
   @@map("exam_goal_subjects")
 }
+
+
+// Shared exam content is independent of private learner uploads and institutional records.
+model ExamMaterial {
+  id           String @id @default(cuid())
+  exam         ExamFamily
+  subject      String
+  subjectKey   String
+  topic        String
+  title        String
+  body         String @db.Text
+  sourceNote   String
+  status       QuestionStatus @default(DRAFT)
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  questions    ExamBankQuestion[]
+  @@index([exam, subjectKey, status])
+  @@map("exam_materials")
+}
+
+model ExamBankQuestion {
+  id           String @id @default(cuid())
+  exam         ExamFamily
+  subject      String
+  subjectKey   String
+  topic        String
+  materialId   String?
+  material     ExamMaterial? @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  questionText String @db.Text
+  questionType QuestionType
+  options      Json?
+  correctAnswer String @db.Text
+  explanation  String @db.Text
+  marks        Int @default(1)
+  difficulty   QuestionDifficulty
+  status       QuestionStatus @default(DRAFT)
+  revision     Int @default(1)
+  fingerprint  String
+  isAiGenerated Boolean @default(false)
+  createdById  String
+  reviewedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@unique([exam, subjectKey, fingerprint])
+  @@index([exam, subjectKey, status, topic])
+  @@map("exam_bank_questions")
+}

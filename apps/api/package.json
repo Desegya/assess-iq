@@ -10,7 +10,8 @@
     "test": "vitest run",
     "type-check": "tsc --noEmit",
     "test:watch": "vitest",
-    "test:admin:integration": "npm run build && node --test test/nightklass-admin.integration.cjs"
+    "test:admin:integration": "npm run build && node --test test/nightklass-admin.integration.cjs",
+    "test:exam:integration": "npm run build && node --test test/nightklass-exam.integration.cjs"
   },
   "dependencies": {
     "@assessiq/db": "*",
@@ -40,7 +41,8 @@
     "pdf-parse": "^1.1.1",
     "reflect-metadata": "^0.2.2",
     "resend": "^4.0.1",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "file-type": "^20.4.1"
   },
   "devDependencies": {
     "@assessiq/config": "*",
