@@ -1,5 +1,6 @@
 'use client'
 
+import { AdminMockTemplates } from './AdminMockTemplates'
 import { useState } from 'react'
 import { adminRequest, useAdminData } from './admin-api'
 
@@ -46,6 +47,7 @@ export function AdminExamContent() {
     <p className="text-sm text-slate-600">Upload teaching materials, generate and save original exam-style questions, then review before publishing to learners. Your account needs a Nightklass admin grant; an institutional teacher role alone does not grant access.</p>
     {(error || materials.error || questions.error) && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">{error || materials.error || questions.error}</p>}
     {message && <p role="status" className="rounded-xl bg-green-50 p-4 text-green-800">{message}</p>}
+    <AdminMockTemplates />
     <fieldset disabled={busy} className="card grid gap-4 p-5 sm:grid-cols-3">
       <label className="text-sm">Exam<select className="input-base mt-2" value={exam} onChange={e => { setExam(e.target.value); setPage(1); setMaterialId(''); setQuestionType('MCQ') }}><option>JAMB</option><option>WAEC</option></select></label>
       <label className="text-sm">Subject<input className="input-base mt-2" maxLength={100} value={subject} onChange={e => { setSubject(e.target.value); setMaterialId(''); setPage(1) }} placeholder="Any science, arts or commercial subject" /></label>
