@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { CreateCourseDto } from './dto/create-course.dto'
@@ -131,6 +131,9 @@ export class CoursesService {
 
     if (!canDelete) throw new ForbiddenException('You do not have permission to delete this course')
 
+    if (await this.prisma.examGoalSubject.count({ where: { courseId: id } })) {
+      throw new ConflictException('This subject is part of an exam goal. Remove it from your exam subject choices before deleting its study workspace.')
+    }
     await this.prisma.course.delete({ where: { id } })
     return { message: 'Course deleted' }
   }

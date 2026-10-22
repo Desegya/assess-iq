@@ -1178,7 +1178,7 @@ ${describeCourse(course)}
 Topics the student has added: ${topicNames || 'none yet'}.
 
 The student hasn't uploaded slides or notes yet, so answer from your own knowledge of how this course is
-typically taught at university level. When asked for topics, notes, summaries or practice questions, produce
+typically taught at the academic level specified above. When asked for topics, notes, summaries or practice questions, produce
 them. Keep answers clear, accurate and easy to understand, and be honest when you're unsure.`
 
     const messages: ChatMessage[] = [...(dto.history ?? []), { role: 'user', content: dto.message }]

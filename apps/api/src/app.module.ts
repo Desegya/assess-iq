@@ -1,3 +1,4 @@
+import { ExamPreparationModule } from './modules/exam-preparation/exam-preparation.module'
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { ThrottlerModule } from '@nestjs/throttler'
@@ -38,6 +39,7 @@ import { PrismaModule } from './modules/prisma/prisma.module'
     // ─── Feature modules ─────────────────────────────────────────────────────
     AuthModule,
     UsersModule,
+    ExamPreparationModule,
     OrganizationsModule,
     CoursesModule,
     TopicsModule,

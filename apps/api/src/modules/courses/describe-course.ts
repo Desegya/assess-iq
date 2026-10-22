@@ -7,6 +7,7 @@ export function describeCourse(course: {
   courseCode?: string | null
   level?: number | null
   semester?: 'FIRST' | 'SECOND' | null
+  examSubjectKey?: string | null
   description?: string | null
 }): string {
   const details = [
@@ -15,7 +16,7 @@ export function describeCourse(course: {
     course.level ? `${course.level} level` : null,
     course.semester ? SEMESTER_LABEL[course.semester] : null,
   ].filter(Boolean)
-  return `${course.title}${details.length ? ` (${details.join(', ')})` : ''} — a university course${
+  return `${course.title}${details.length ? ` (${details.join(', ')})` : ''} — ${course.examSubjectKey ? 'a Nigerian senior secondary subject for WAEC/JAMB preparation' : 'a university course'}${
     course.description ? `\nDescription: ${course.description}` : ''
   }`
 }

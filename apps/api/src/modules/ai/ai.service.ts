@@ -205,13 +205,13 @@ ${textSlice}`
     const textSlice = extractedText.slice(0, 12000)
     const grounded = opts.groundedInMaterial !== false
     const prompt = `You are an expert tutor creating spaced-repetition flashcards ${
-      grounded ? 'from study material' : 'for a university course'
+      grounded ? 'from study material' : 'for the specified academic context'
     }.
 
 Generate exactly ${opts.count} flashcards ${
       grounded
         ? 'from the text below'
-        : 'using your own knowledge of the course and topic described below, at the depth a university student would be examined on'
+        : 'using your own knowledge of the course and topic described below, at the depth specified in the course context'
     }${opts.topicHint ? ` focused on: ${opts.topicHint}` : ''}.
 - Each card should test one clear fact, definition, or concept
 - The front should be a short question or prompt; the back should be a concise, correct answer
@@ -232,8 +232,8 @@ ${textSlice}`
   // ─── Suggest topics for a course from its title alone (no material) ───────
 
   async suggestCourseTopics(courseDescription: string, opts: CourseGenerationOptions): Promise<RawExtractedTopic[]> {
-    const prompt = `You are an expert university curriculum designer. A student has added the course below but has
-no slides or notes yet. Using your knowledge of how this course is typically taught at university level,
+    const prompt = `You are an expert curriculum designer. A student has added the course below but has
+no slides or notes yet. Using your knowledge of how this course is typically taught at the academic level specified in the course context,
 break it into an ordered list of study topics the student could plan revision sessions around.
 
 - Produce between 6 and 12 topics, in the order they are usually taught
@@ -261,13 +261,13 @@ ${courseDescription}`
     opts: CourseGenerationOptions,
   ): Promise<RawExpandedTopic[]> {
     const topicList = topics.map(t => `- ${t.name}${t.description ? `: ${t.description}` : ''}`).join('\n')
-    const prompt = `You are an expert university tutor turning a course outline into a detailed learning sequence.
+    const prompt = `You are an expert tutor turning a course outline into a detailed learning sequence.
 For each topic below, list the subtopics a student should work through, in the order they should learn them.
 
 - Give 3-6 subtopics per topic, each with a concise name (under 8 words) and a one-sentence description
 - Stay within the scope of each topic; don't repeat the topic name as a subtopic
 - Keep the exact topic names as given in the "topic" field
-${material ? '- Use the course material provided to match what the lecturer covers' : '- Use your knowledge of how this course is typically taught at university level'}
+${material ? '- Use the course material provided to match what the lecturer covers' : '- Use your knowledge of how this course is typically taught at the academic level specified in the course context'}
 
 Return ONLY a valid JSON array — no markdown, no explanation, just the array.
 Each item must match: {"topic":"<exact topic name>","subtopics":[{"name":"...","description":"..."}]}
@@ -289,7 +289,7 @@ ${topicList}${material ? `\n\nCOURSE MATERIAL:\n${material.slice(0, 10000)}` : '
     mimeType: string,
     opts: CourseGenerationOptions,
   ): Promise<{ transcription: string; topics: RawExtractedTopic[] }> {
-    const prompt = `This is a photo or scan of a university course outline, syllabus or prospectus page.
+    const prompt = `This is a photo or scan of a course outline, syllabus or prospectus page.
 
 1. Transcribe the course content faithfully (headings, topics, subtopics). Skip page furniture like page numbers.
 2. Break it into an ordered list of study topics with any subtopics listed under each.
@@ -359,11 +359,11 @@ rather than adding outside knowledge. Cite the excerpt you used at the end of th
       COMBINED: `Ground the lesson in the numbered excerpts from the student's own material and cite them like [S2] wherever you
 use them. Fill important gaps with accurate, level-appropriate knowledge, but never attach a citation to content that
 didn't come from an excerpt.`,
-      AI: `The student has no material for this topic, so teach it from accurate, level-appropriate university knowledge.
+      AI: `The student has no material for this topic, so teach it from accurate knowledge appropriate to the academic level specified in the course context.
 Do not include any citation markers.`,
     }[opts.mode]
 
-    const prompt = `You are an expert university tutor writing a complete, self-contained lesson a student can learn from.
+    const prompt = `You are an expert tutor writing a complete, self-contained lesson a student can learn from.
 
 COURSE:
 ${courseDescription}
@@ -630,13 +630,13 @@ STUDENT ANSWER: ${a.studentAnswer.trim() || '(blank)'}`,
     const grounded = opts.groundedInMaterial !== false
 
     return `You are an expert educator creating exam questions ${
-      grounded ? 'from educational content' : 'for a university course'
+      grounded ? 'from educational content' : 'for the specified academic context'
     }.
 
 Generate exactly ${opts.count} exam questions ${
       grounded
         ? 'from the text below'
-        : 'using your own knowledge of the course and topic described below, at the level a university student would be examined on'
+        : 'using your own knowledge of the course and topic described below, at the level specified in the course context'
     }.
 - Difficulty: ${opts.difficulty} (EASY = recall and definitions, MEDIUM = understanding and application, HARD = analysis, multi-step problems and evaluation)
 - Question types to use: ${typeDescriptions}${opts.topicHint ? `\n- Focus on topic: ${opts.topicHint}` : ''}

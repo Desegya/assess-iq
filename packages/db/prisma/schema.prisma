@@ -250,6 +250,9 @@ model User {
   faculty          String?
   academicSession  String?
   graduationYear   Int?
+  studyPathway    StudyPathway @default(TERTIARY)
+  secondaryStage  SecondaryStage?
+  examGoals       ExamGoal[]
   profileCompletedAt DateTime?
   lastLoginAt    DateTime?
   createdAt      DateTime     @default(now())
@@ -316,6 +319,8 @@ model Course {
   semester       Semester?
   creditUnits    Int?
   isCarryover    Boolean      @default(false)
+  examSubjectKey String?
+  examGoalSubjects ExamGoalSubject[]
   // The original course outline exactly as provided (uploaded, pasted or photographed), never modified by AI
   outlineText    String?      @db.Text
   outlineSource  OutlineSource?
@@ -339,6 +344,7 @@ model Course {
   @@index([organizationId])
   @@index([teacherId])
   @@index([ownerId])
+  @@unique([ownerId, examSubjectKey])
   @@map("courses")
 }
 
@@ -872,4 +878,50 @@ model NightklassAdminAudit {
   @@index([resourceType, resourceId])
   @@index([actorId])
   @@map("nightklass_admin_audits")
+}
+
+// Standalone Nightklass exam preparation; institutional assessment tenancy is unchanged.
+enum StudyPathway {
+  TERTIARY
+  EXAM_PREPARATION
+}
+
+enum SecondaryStage {
+  SS1
+  SS2
+  SS3
+  SCHOOL_LEAVER
+}
+
+enum ExamFamily {
+  JAMB
+  WAEC
+}
+
+model ExamGoal {
+  id        String @id @default(cuid())
+  studentId String
+  exam      ExamFamily
+  year      Int
+  subjects  ExamGoalSubject[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  student   User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, exam, year])
+  @@map("exam_goals")
+}
+
+model ExamGoalSubject {
+  id         String @id @default(cuid())
+  goalId     String
+  subjectKey String
+  name       String
+  courseId   String
+  goal       ExamGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  course     Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  @@unique([goalId, subjectKey])
+  @@index([courseId])
+  @@map("exam_goal_subjects")
 }

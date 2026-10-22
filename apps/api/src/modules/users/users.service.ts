@@ -12,6 +12,8 @@ import { BulkCreateStudentsDto } from './dto/bulk-create-students.dto'
 import { UpdateProfileDto } from './dto/update-profile.dto'
 
 const PROFILE_SELECT = {
+  studyPathway: true,
+  secondaryStage: true,
   name: true,
   country: true,
   institutionType: true,
@@ -129,22 +131,31 @@ export class UsersService {
   }
 
   async updateProfile(dto: UpdateProfileDto, user: AuthUser) {
+    if (dto.studyPathway === 'EXAM_PREPARATION' && (user.organizationId || user.role !== UserRole.STUDENT)) {
+      throw new ForbiddenException('Exam preparation requires a standalone Nightklass learner account')
+    }
     const existing = await this.prisma.user.findUniqueOrThrow({
       where: { id: user.id },
-      select: { profileCompletedAt: true },
+      select: { profileCompletedAt: true, institutionType: true },
     })
     return this.prisma.user.update({
       where: { id: user.id },
       data: {
+        studyPathway: dto.studyPathway ?? 'TERTIARY',
+        ...(dto.studyPathway === 'EXAM_PREPARATION' ? { secondaryStage: dto.secondaryStage } : {}),
         country: dto.country,
-        institutionType: dto.institutionType,
-        programme: dto.programme,
-        currentLevel: dto.currentLevel,
-        currentSemester: dto.currentSemester,
-        institution: dto.institution || null,
-        faculty: dto.faculty || null,
-        academicSession: dto.academicSession || null,
-        graduationYear: dto.graduationYear ?? null,
+        institutionType: dto.studyPathway === 'EXAM_PREPARATION' ? existing.institutionType ?? dto.institutionType : dto.institutionType,
+        ...(dto.studyPathway === 'EXAM_PREPARATION' ? {} : {
+          programme: dto.programme,
+          currentLevel: dto.currentLevel,
+          currentSemester: dto.currentSemester,
+        }),
+        ...(dto.studyPathway === 'EXAM_PREPARATION' ? {} : {
+          institution: dto.institution || null,
+          faculty: dto.faculty || null,
+          academicSession: dto.academicSession || null,
+          graduationYear: dto.graduationYear ?? null,
+        }),
         profileCompletedAt: existing.profileCompletedAt ?? new Date(),
       },
       select: PROFILE_SELECT,

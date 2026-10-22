@@ -1,9 +1,17 @@
-import { IsString, IsOptional, IsInt, IsEnum, Min, Max, MinLength, MaxLength } from 'class-validator'
+import { ValidateIf, IsString, IsOptional, IsInt, IsEnum, Min, Max, MinLength, MaxLength } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { InstitutionType, Semester } from '@assessiq/types'
+import { InstitutionType, Semester, StudyPathway, SecondaryStage } from '@assessiq/types'
 
 // Required fields per docs/nightklass/02-onboarding-and-curriculum.md §3; the rest are optional
 export class UpdateProfileDto {
+  @IsOptional()
+  @IsEnum(StudyPathway)
+  studyPathway?: StudyPathway
+
+  @ValidateIf(o => o.studyPathway === StudyPathway.EXAM_PREPARATION)
+  @IsEnum(SecondaryStage)
+  secondaryStage?: SecondaryStage
+
   @ApiProperty({ example: 'Nigeria' })
   @IsString()
   @MinLength(2)
@@ -14,18 +22,21 @@ export class UpdateProfileDto {
   @IsEnum(InstitutionType)
   institutionType!: InstitutionType
 
+  @ValidateIf(o => o.studyPathway !== StudyPathway.EXAM_PREPARATION)
   @ApiProperty({ example: 'Animal & Environmental Biology' })
   @IsString()
   @MinLength(2)
   @MaxLength(120)
   programme!: string
 
+  @ValidateIf(o => o.studyPathway !== StudyPathway.EXAM_PREPARATION)
   @ApiProperty({ example: 200, description: 'Current level (100-600)' })
   @IsInt()
   @Min(100)
   @Max(600)
   currentLevel!: number
 
+  @ValidateIf(o => o.studyPathway !== StudyPathway.EXAM_PREPARATION)
   @ApiProperty({ enum: Semester, example: Semester.FIRST })
   @IsEnum(Semester)
   currentSemester!: Semester

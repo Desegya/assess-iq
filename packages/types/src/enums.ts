@@ -166,3 +166,18 @@ export enum GpaScale {
   FIVE = 'FIVE',
   FOUR = 'FOUR',
 }
+
+export enum StudyPathway {
+  TERTIARY = 'TERTIARY',
+  EXAM_PREPARATION = 'EXAM_PREPARATION',
+}
+export enum SecondaryStage {
+  SS1 = 'SS1',
+  SS2 = 'SS2',
+  SS3 = 'SS3',
+  SCHOOL_LEAVER = 'SCHOOL_LEAVER',
+}
+export enum ExamFamily {
+  JAMB = 'JAMB',
+  WAEC = 'WAEC',
+}
