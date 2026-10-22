@@ -11,6 +11,7 @@ import { randomUUID } from 'crypto'
 import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 import pdfParse from 'pdf-parse'
+import { AiService } from '../ai/ai.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
 import { DocumentFileValidator } from '../documents/document-file.validator'
@@ -22,6 +23,7 @@ export class ExamCalendarService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly ai: AiService,
   ) {}
   list() {
     return this.prisma.examCalendar.findMany({
@@ -102,6 +104,11 @@ export class ExamCalendarService {
       throw new BadRequestException(
         'The timetable file is unreadable or does not match its file type',
       )
+    const target = await this.prisma.examCalendar.findUnique({ where: { id } })
+    if (!target) throw new NotFoundException('Calendar not found')
+    if (target.exam !== 'WAEC' || target.status !== 'DRAFT' || target.revision !== expectedRevision)
+      throw new ConflictException('Upload to the current WAEC draft, then review before publishing')
+    let extractionWarning = ''
     let extractedText = ''
     let imported: TimetableEntryDto[] | undefined
     if (isCsv) {
@@ -114,9 +121,63 @@ export class ExamCalendarService {
           )
     } else {
       try {
-        extractedText = (await pdfParse(file.buffer)).text.trim()
+        // Older PDF.js expects independent Uint8Array slices rather than pooled Buffer views.
+        extractedText = (
+          await pdfParse(new Uint8Array(file.buffer) as unknown as Buffer)
+        ).text.trim()
       } catch {
         extractedText = ''
+      }
+    }
+    if (!isCsv) {
+      try {
+        if (!extractedText || extractedText.length > 100000)
+          throw new BadRequestException(
+            'PDF has no readable text or exceeds the extraction text limit',
+          )
+        const extracted = await this.ai.extractExamTimetable(extractedText, target.year, {
+          userId: actorId,
+          relatedEntityId: id,
+        })
+        if (!extracted.entries.length || extracted.entries.length > 500)
+          throw new Error('No complete paper rows were extracted')
+        const rows = extracted.entries.map((row) => ({
+          ...row,
+          startTime: row.startTime || undefined,
+          endTime: row.endTime || undefined,
+          notes: row.notes || undefined,
+        }))
+        for (const row of rows) {
+          if (
+            (
+              await validate(plainToInstance(TimetableEntryDto, row), {
+                whitelist: true,
+                forbidNonWhitelisted: true,
+              })
+            ).length
+          )
+            throw new Error(
+              'Extracted rows contain incomplete or invalid fields; enter or correct the paper rows manually',
+            )
+          if (Number(row.date.slice(0, 4)) !== target.year)
+            throw new Error('Extracted dates do not match the calendar year')
+        }
+        const dates = rows.map((row) => row.date).sort()
+        validateCalendar({
+          ...target,
+          exam: target.exam as ExamCalendarDto['exam'],
+          startDate: dates[0]!,
+          endDate: dates[dates.length - 1]!,
+          entries: rows,
+        })
+        imported = rows
+        extractionWarning = extracted.warnings
+          .filter((w) => typeof w === 'string')
+          .join(' ')
+          .slice(0, 4000)
+      } catch (err) {
+        imported = []
+        extractionWarning = `Automatic extraction could not produce a complete valid timetable. Original PDF saved; review and enter dates manually or upload a CSV. ${err instanceof BadRequestException ? err.message : 'Check the source for missing fields and try again.'}`
       }
     }
     const key = `exam-timetables/${randomUUID()}.${isCsv ? 'csv' : 'pdf'}`
@@ -130,20 +191,35 @@ export class ExamCalendarService {
           throw new BadRequestException('Timetable uploads are for WAEC calendars')
         if (calendar.status !== 'DRAFT' || calendar.revision !== expectedRevision)
           throw new ConflictException('Upload to the current draft, then review before publishing')
+        const pdfWindow =
+          !isCsv && imported?.length
+            ? {
+                startDate: imported.map((r) => r.date).sort()[0]!,
+                endDate: imported
+                  .map((r) => r.date)
+                  .sort()
+                  .at(-1)!,
+              }
+            : {}
         if (imported)
           validateCalendar({
             ...calendar,
             exam: calendar.exam as ExamCalendarDto['exam'],
             endDate: calendar.endDate ?? undefined,
             entries: imported,
+            ...pdfWindow,
           })
         previousKey = calendar.fileKey
         const updated = await tx.examCalendar.update({
           where: { id },
           data: {
+            ...pdfWindow,
             fileKey: key,
             fileName: file.originalname.slice(0, 200),
-            extractedText: extractedText.slice(0, 100000),
+            extractedText: (extractionWarning
+              ? `EXTRACTION REVIEW NOTE: ${extractionWarning}\n\n${extractedText}`
+              : extractedText
+            ).slice(0, 100000),
             ...(imported ? { entries: imported as unknown as Prisma.InputJsonValue } : {}),
             revision: { increment: 1 },
           },
@@ -151,7 +227,12 @@ export class ExamCalendarService {
         return { id, result: updated }
       })
       if (previousKey) await this.storage.delete(previousKey).catch(() => undefined)
-      return { ...result, importedRows: imported?.length ?? 0, needsReview: true }
+      return {
+        ...result,
+        importedRows: imported?.length ?? 0,
+        needsReview: true,
+        extractionWarning,
+      }
     } catch (err) {
       await this.storage.delete(key).catch(() => undefined)
       throw err

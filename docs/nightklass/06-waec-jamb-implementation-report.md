@@ -1,7 +1,7 @@
 # Nightklass WAEC/JAMB extension — implementation report
 
 Prepared: 22 October 2026  
-Implementation reviewed through commit: `9abdd32`  
+Implementation baseline: `9abdd32`; updated with automatic PDF timetable extraction.
 Status: Text-based pilot software implemented and locally verified; content preparation and production launch remain.
 
 ## 1. Outcome
@@ -99,7 +99,7 @@ For WAEC, administrators can upload original PDF or CSV timetables up to 5 MB:
 
 | Input | Implemented behavior |
 | --- | --- |
-| PDF | Retains the original for viewing/download, attempts a text preview and allows manual entry/review of structured paper rows. Paper dates are not automatically inferred. |
+| PDF | Retains the original, extracts readable text through the AI engine, validates and saves draft paper dates/times, and fills the draft exam window from those rows. The admin reviews and corrects results before publication. Scanned/unreadable PDFs or invalid/failed extraction show a warning and require manual entry or CSV; replacement failures clear old rows. |
 | CSV | Retains the source and imports draft subject/paper/date/time rows for review. Uses explicit ISO dates and optional 24-hour times. |
 
 Uploads do not publish automatically. Structured rows include subject, paper code, title, date, optional start/end times and notes. Paper dates must fall within the configured window. Times are presented as Nigeria time (`Africa/Lagos`); countdowns use the Lagos calendar day.
@@ -126,14 +126,14 @@ These are the latest recorded local results from implementation, not fresh test 
 
 | Check | Recorded result |
 | --- | --- |
-| Backend unit tests | 88 passing |
+| Backend unit tests | 90 passing |
 | Real HTTP/PostgreSQL integration tests | 29 passing |
 | Browser cases | 14 passing across desktop Chrome and mobile emulation |
 | API production build and TypeScript checks | Passing |
 | Nightklass production build and type validation | Passing |
 | Local development migrations | All 20 applied |
 
-Integration coverage includes a complete 180-question JAMB fixture, ownership and publication permissions, frozen answer keys, stale saves, concurrent submissions, expiry/late-save handling, WAEC optional sections, marking retries/exhaustion, syllabus coverage, correction history, generation idempotency, PDF/CSV timetable uploads, series isolation and published-date study planning.
+Integration coverage includes a complete 180-question JAMB fixture, ownership and publication permissions, frozen answer keys, stale saves, concurrent submissions, expiry/late-save handling, WAEC optional sections, marking retries/exhaustion, syllabus coverage, correction history, generation idempotency, PDF date persistence and extraction-failure recovery, CSV timetable uploads, series isolation and published-date study planning.
 
 Browser coverage includes secondary onboarding, teacher syllabus publication and generation, objective practice/evidence, keyboard activation, viewport fit, JAMB answer recovery/submission, WAEC essays and admin-to-learner timetable publication with original-file download. The existing 12 cases passed; the two new desktop/mobile timetable cases passed after correcting a test dropdown selector.
 

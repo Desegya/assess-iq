@@ -18,7 +18,7 @@ Prepared 22 October 2026. This is a reviewable release checklist, not a claim of
 
 ## Software verification
 
-Final local results: 88 unit tests, 29 HTTP/PostgreSQL integration tests and 14 browser cases pass. Both production builds and TypeScript checks pass; all 20 local migrations are applied. Browser testing uses local Chrome desktop and an emulated mobile viewport, not a physical iPhone or Safari. It checks teacher publication/generation, secondary onboarding, syllabus practice, keyboard activation, JAMB saved-answer recovery, WAEC optional essays, cross-origin mutation rejection and WAEC timetable upload/publication with original-source download.
+Final local results: 90 unit tests, 29 HTTP/PostgreSQL integration tests and 14 browser cases pass. Both production builds and TypeScript checks pass; all 20 local migrations are applied. Browser testing uses local Chrome desktop and an emulated mobile viewport, not a physical iPhone or Safari. It checks teacher publication/generation, secondary onboarding, syllabus practice, keyboard activation, JAMB saved-answer recovery, WAEC optional essays, cross-origin mutation rejection and WAEC timetable upload/publication with original-source download.
 
 Integration tests include a full 180-question JAMB fixture, concurrent submission, late-save rejection, durable expiry, WAEC rubric/retry recovery, syllabus ownership, correction snapshots and idempotent generation jobs. A five-request concurrent-read smoke check is included. It is not a production capacity benchmark. All AI generation and written-marking test responses are deterministic stubs.
 
@@ -32,7 +32,7 @@ The collaborating teacher needs to:
 2. Link questions to the relevant objectives. Use queued generation with or without teaching notes, then review every item published to the shared bank.
 3. Publish verified JAMB and WAEC paper specifications for the intended year/series. Confirm durations, counts, selection rules and marks against the actual applicable sources.
 4. Supply enough reviewed questions for each advertised complete mock. The UI blocks incomplete forms and displays content shortfalls.
-5. Enter verified exam windows and upload the applicable WAEC timetable for each year/series. Review imported CSV rows or manually enter PDF paper dates, subject names and Nigeria-time sessions before publishing. Uploaded PDFs are preserved as sources; paper dates are not automatically inferred from them.
+5. Enter verified exam windows and upload the applicable WAEC timetable for each year/series. Review automatically extracted PDF dates or imported CSV rows, subject names and Nigeria-time sessions before publishing. Readable PDFs populate draft rows and the exam window; scanned/unreadable PDFs and extraction failures retain the source with a warning and require manual entry or CSV.
 6. Review representative lessons and independently mark written-answer samples across subjects and ability levels. Compare paired marks and feedback before relying on automatic grading.
 
 Calibration report input is an anonymized JSON array:

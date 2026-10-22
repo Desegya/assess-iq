@@ -365,10 +365,11 @@ export function AdminExamCalendars() {
                 <div className="space-y-3 rounded-xl border p-4">
                   <h3 className="font-semibold">Upload original WAEC timetable</h3>
                   <p className="text-sm text-slate-500">
-                    Save the draft first. PDF uploads are retained for viewing; enter and verify
-                    structured paper rows below. CSV imports rows automatically, using headers
-                    subject,paperCode,title,date,startTime,endTime,notes and dates as YYYY-MM-DD.
-                    Unknown times should be blank.
+                    Save the draft first. PDF uploads automatically extract and save paper dates as
+                    draft rows. Review them against the original before publishing. Scanned or
+                    unreadable PDFs may need manual entry or CSV. CSV imports rows automatically,
+                    using headers subject,paperCode,title,date,startTime,endTime,notes and dates as
+                    YYYY-MM-DD. Unknown times should be blank.
                   </p>
                   <input
                     type="file"
@@ -386,15 +387,16 @@ export function AdminExamCalendars() {
                         const body = new FormData()
                         body.set('file', file)
                         body.set('expectedRevision', String(form.revision))
-                        const saved = await adminRequest<Calendar & { importedRows: number }>(
-                          `exam-content/calendars/${form.id}/upload`,
-                          { method: 'POST', body },
-                        )
+                        const saved = await adminRequest<
+                          Calendar & { importedRows: number; extractionWarning?: string }
+                        >(`exam-content/calendars/${form.id}/upload`, { method: 'POST', body })
                         setForm(clean(saved))
                         setMessage(
-                          saved.importedRows
-                            ? `${saved.importedRows} paper rows imported. Review before publishing.`
-                            : 'Original PDF uploaded. Review it and enter the paper rows before publishing.',
+                          saved.extractionWarning
+                            ? `Original saved. ${saved.extractionWarning}`
+                            : saved.importedRows
+                              ? `${saved.importedRows} paper rows imported. Review before publishing.`
+                              : 'Original PDF uploaded. Review it and enter the paper rows before publishing.',
                         )
                       })
                     }

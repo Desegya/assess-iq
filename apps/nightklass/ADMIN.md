@@ -166,13 +166,13 @@ Local runs use installed Google Chrome. The tests start their own API on port 31
 
 CI uses bundled Chromium and an isolated PostgreSQL service. The added workflow verifies backend tests, full API/database tests, the frontend build and browser flows; no GitHub run is claimed until it is pushed and inspected.
 
-Final local verification: 88 unit tests, 29 API/database integration tests and 14 browser cases pass; both production builds pass; all 20 local migrations are current. The five-request concurrent-read smoke check took 116 ms locally and is not a production benchmark. See [the pilot release checklist](../../docs/nightklass/05-release-readiness.md) for teacher content validation, marking calibration, deployment, monitoring and explicitly unsupported formats.
+Final local verification: 90 unit tests, 29 API/database integration tests and 14 browser cases pass; both production builds pass; all 20 local migrations are current. The five-request concurrent-read smoke check took 116 ms locally and is not a production benchmark. See [the pilot release checklist](../../docs/nightklass/05-release-readiness.md) for teacher content validation, marking calibration, deployment, monitoring and explicitly unsupported formats.
 
 ### Exam dates and WAEC timetables
 
 Open **Exam content → Exam dates & WAEC timetables**. Create a calendar for the exam, year and series; enter its start date, optional end date and source/verification note, then save the draft. JAMB dates describe the general UTME window; the learner's examination slip supplies their personal sitting.
 
-For WAEC, choose school candidates, private first series or private second series. Upload an original **PDF or CSV up to 5 MB**. PDFs remain downloadable and may show extracted text for review; enter structured paper rows manually. CSV imports draft rows using these headers:
+For WAEC, choose school candidates, private first series or private second series. Upload an original **PDF or CSV up to 5 MB**. Readable PDFs are automatically extracted into draft paper rows, and the draft start/end dates are filled from those rows. Review and correct all dates before publishing. The original remains downloadable. Scanned/unreadable files, missing required fields or AI failures show a warning and require manual rows or CSV; failed replacement extraction clears old rows. CSV imports draft rows using these headers:
 
 ```csv
 subject,paperCode,title,date,startTime,endTime,notes

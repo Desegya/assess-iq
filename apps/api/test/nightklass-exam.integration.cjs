@@ -429,10 +429,28 @@ test('WAEC PDF uploads retain the original timetable for admin review', async()=
   const xref=Buffer.byteLength(pdf)
   pdf+=`xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n ').join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`
   const data=new FormData();data.set('file',new Blob([pdf],{type:'application/pdf'}),'original-waec.pdf');data.set('expectedRevision','1')
+  const {AiService}=require('../dist/modules/ai/ai.service')
+  const ai=app.get(AiService), original=ai.extractExamTimetable
+  ai.extractExamTimetable=async()=>({entries:[{subject:'Government',paperCode:'GOV2',title:'Government essay',date:'2027-01-20',startTime:'09:00',endTime:'11:00',notes:''}],warnings:[]})
   const response=await fetch(base+`/admin/nightklass/exam-content/calendars/${created.body.id}/upload`,{method:'POST',headers:{Authorization:`Bearer ${ownerToken}`},body:data})
+  ai.extractExamTimetable=original
   assert.equal(response.status,201)
   const uploaded=await response.json()
-  assert.equal(uploaded.fileName,'original-waec.pdf');assert.equal(uploaded.status,'DRAFT');assert.equal(uploaded.importedRows,0)
+  assert.equal(uploaded.fileName,'original-waec.pdf');assert.equal(uploaded.status,'DRAFT');assert.equal(uploaded.importedRows,1,uploaded.extractionWarning)
+  assert.equal(uploaded.entries[0].date,'2027-01-20');assert.equal(uploaded.startDate,'2027-01-20');assert.equal(uploaded.endDate,'2027-01-20')
+  const saved=await prisma.examCalendar.findUnique({where:{id:created.body.id}})
+  assert.equal(saved.entries[0].startTime,'09:00')
+  ai.extractExamTimetable=async()=>{throw new Error('fixture provider unavailable')}
+  const retryData=new FormData();retryData.set('file',new Blob([pdf],{type:'application/pdf'}),'replacement.pdf');retryData.set('expectedRevision',String(uploaded.revision))
+  let retry
+  try { retry=await fetch(base+`/admin/nightklass/exam-content/calendars/${created.body.id}/upload`,{method:'POST',headers:{Authorization:`Bearer ${ownerToken}`},body:retryData}) } finally { ai.extractExamTimetable=original }
+  assert.equal(retry.status,201)
+  const failedExtraction=await retry.json()
+  assert.match(failedExtraction.extractionWarning,/Original PDF saved/)
+  assert.equal(failedExtraction.entries.length,0)
+  assert.equal(failedExtraction.fileName,'replacement.pdf')
+  assert.equal(failedExtraction.status,'DRAFT')
+
   const source=await admin(`calendars/${created.body.id}/file`,undefined,'GET')
   assert.equal(source.status,200);assert.match(source.body.url,/exam-timetables\/.+\.pdf/)
   assert.equal((await call(`/admin/nightklass/exam-content/calendars/${created.body.id}/file`,learnerToken)).status,403)
