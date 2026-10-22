@@ -75,9 +75,16 @@ printf '%s\n' 'NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1' > apps/web/.env
 | `NEXT_PUBLIC_API_URL` | Frontends | Full API base URL, including `/api/v1` |
 | `API_URL_INTERNAL` | Nightklass server | Optional server-side API base URL; falls back to `NEXT_PUBLIC_API_URL` |
 | `OPENAI_API_KEY` | API | AI learning and assessment workflows |
-| `R2_*` | API | Persistent object storage |
-| `RESEND_API_KEY`, `EMAIL_FROM` | API | Email delivery |
+| `R2_*` | API | Private object storage (required in production; `R2_PUBLIC_URL` must be unset) |
+| `RESEND_API_KEY`, `EMAIL_FROM` | API | Password-reset and verification email |
+| `PASSWORD_RESET_URL` | API | Frontend reset page, e.g. `https://nightklass.com/reset-password` |
+| `TRUST_PROXY` | API | Reverse-proxy hop count (Railway: `1`) for per-address rate limits |
+| `EXAM_ACCESS`, `EXAM_NEW_ATTEMPTS_PAUSED` | API | Pilot cohort gate and new-mock brake (also adjustable in Admin → Operations) |
+| `AI_PAUSED`, `AI_*_BUDGET_USD`, `AI_USER_DAILY_REQUESTS` | API | AI kill switch and budgets (also adjustable in Admin → Operations) |
+| `NEXT_PUBLIC_SUPPORT_EMAIL` | Nightklass | Contact shown in the privacy notice |
 | `YOUTUBE_API_KEY` | API | Optional recommended video discovery |
+
+In production the API refuses to start with missing or unsafe security configuration. See [the release and operations runbook](docs/nightklass/08-release-and-operations.md) for defaults, migrations, pilot activation, monitoring and restore.
 
 The default local CORS origins are `http://localhost:3000,http://localhost:3002`. AI, email, and external resource features require their respective credentials. Keep secret keys on the API server; do not put them in `NEXT_PUBLIC_*` variables.
 
@@ -137,7 +144,7 @@ Sign in at `/admin/login` using the account’s existing password. See [the admi
 | `npm run db:migrate:deploy --workspace @assessiq/db` | Apply committed migrations |
 | `npm run db:studio` | Open Prisma Studio |
 
-The existing lint scripts need configuration work: the API workspace lacks a working ESLint executable, and the frontend scripts invoke Next.js lint setup. Do not treat `npm run lint` as a configured CI gate yet.
+The existing lint scripts need configuration work: the API workspace lacks a working ESLint executable, and the frontend scripts invoke Next.js lint setup. Do not treat `npm run lint` as a configured CI gate yet; CI relies on type checks and the test suites.
 
 Admin integration tests exercise a real API and PostgreSQL database. They require a disposable database named `nightklass_admin_test`; apply the migrations first and follow [ADMIN.md](apps/nightklass/ADMIN.md). They add fixtures and must not run against production.
 

@@ -30,11 +30,26 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Fails on any critical production advisory; remaining highs are triaged in docs/nightklass/08.
+      - run: npm audit --omit=dev --audit-level=critical
       - run: npm run db:generate --workspace @assessiq/db
+      - run: npm exec --workspace @assessiq/db -- prisma validate
       - run: npm run db:migrate:deploy --workspace @assessiq/db
+      - run: npm exec --workspace @assessiq/db -- prisma migrate status
       - run: npm run build --workspace @assessiq/types
+      - run: npm run type-check --workspace @assessiq/api
+      - run: npm run type-check --workspace @assessiq/nightklass
       - run: npm test --workspace @assessiq/api
+      - run: npm run test:unit --workspace @assessiq/nightklass
       - run: npm run test:exam:integration --workspace @assessiq/api
+      - name: Admin integration suite (separate disposable database)
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nightklass_admin_test
+        run: |
+          psql -h localhost -U postgres -c 'CREATE DATABASE nightklass_admin_test'
+          npm run db:migrate:deploy --workspace @assessiq/db
+          npm run test:admin:integration --workspace @assessiq/api
       - run: npm run build --workspace @assessiq/nightklass
       - run: npm exec --workspace @assessiq/nightklass -- playwright install --with-deps chromium
       - run: npm run test:e2e --workspace @assessiq/nightklass

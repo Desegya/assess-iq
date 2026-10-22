@@ -1,5 +1,11 @@
 # Nightklass WAEC/JAMB extension — implementation report
 
+> **Update, 22 October 2026 (evening):** parts of this document are superseded.
+> - `main` up to `4d85ecb` **was pushed**, and Vercel deployed the exam-extension frontend to production. The Railway API had not yet updated.
+> - The test counts, rate-limiting behaviour and several limitations below changed during launch-readiness remediation.
+>
+> Current status: [07 audit](07-launch-readiness-audit.md), [08 release and operations runbook](08-release-and-operations.md) and [09 remediation report](09-remediation-report.md).
+
 Prepared: 22 October 2026  
 Implementation baseline: `9abdd32`; updated with automatic PDF timetable extraction.
 Status: Text-based pilot software implemented and locally verified; content preparation and production launch remain.

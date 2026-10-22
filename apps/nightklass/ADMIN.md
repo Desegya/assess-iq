@@ -184,3 +184,25 @@ Use ISO dates (`YYYY-MM-DD`) and Nigeria-time 24-hour times (`HH:mm`); leave unc
 Students see only published dates for their exam year and selected WAEC series, paper rows for their chosen subjects and the original timetable link. They can choose **Use published deadline** after adding study topics and availability; the earliest future subject paper, or exam-window start, becomes the new plan deadline. Explicit personal dates/plan lengths take precedence. Updates do not silently replace personal plans or erase completed sessions.
 
 Published calendars are immutable: copy into a new version and review/publish the replacement. Publishing archives the previous published calendar for that exam/year/series; stale draft changes return a conflict. Existing WAEC goals were migrated to the school-candidate series and learners can edit their series.
+
+## Operations, pilot access and learner reports
+
+**Admin → Operations** brings together what the pilot needs day to day. Every change made here is recorded in the audit history.
+
+- **Needs attention** — mocks past their deadline and not finalized, written marking waiting more than 10 minutes, marking or generation failures in the last 24 hours, and open learner reports. Anything above zero needs a look.
+- **AI usage** — spend over the last 24 hours by feature, plus failures. Costs come from provider-reported token counts and the configured price table.
+- **Switches and limits** (owners only):
+  - pause all AI features
+  - pause new mock starts (learners already in a mock can still finish it)
+  - exam access: `COHORT` for invited learners only, `OPEN` for everyone
+  - AI budgets per learner, per admin and overall
+
+  Changes take effect within seconds. "Reset to default" returns a setting to its environment value.
+- **Pilot cohort** — add or remove invited learners by account email. When access is `COHORT`, other learners see an explanation instead of the exam area. This is enforced by the API, not just hidden in the interface.
+- **Learner question reports** — learners can report a wrong, ambiguous, out-of-syllabus or context-dependent question from their mock or practice results.
+  - Open the question and publish a correction if needed. Publishing archives the original, removes it from new forms and stops it counting in coverage.
+  - Then mark the report resolved, or dismiss it, with a short note. Aim to correct within 72 hours.
+
+**Near-duplicates:** `GET /admin/nightklass/exam-content/questions/:id/similar` lists questions with strongly overlapping wording. Treat it as a review prompt: questions that share a common stem but have different options are allowed.
+
+**Marking calibration:** collect at least 60 anonymised scripts per subject, across low, middle and high ability. Have two teachers mark each one independently, and record the AI mark. Then run `node apps/api/scripts/exam-marking-calibration.cjs paired.json`. Until a subject reports `CALIBRATED`, present its written marks as indicative. The input format is described in docs/nightklass/09.
