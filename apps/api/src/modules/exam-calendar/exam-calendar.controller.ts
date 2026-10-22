@@ -9,14 +9,13 @@ import {
   UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { ThrottlerGuard } from '@nestjs/throttler'
 import { AuthUser } from '@assessiq/types'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { NightklassAdminGuard } from '../admin/admin.guard'
 import { ExamCalendarService } from './exam-calendar.service'
 import { CalendarStateDto, ExamCalendarDto, UploadTimetableDto } from './exam-calendar.dto'
 @Controller('admin/nightklass/exam-content/calendars')
-@UseGuards(NightklassAdminGuard, ThrottlerGuard)
+@UseGuards(NightklassAdminGuard)
 export class ExamCalendarAdminController {
   constructor(private readonly calendars: ExamCalendarService) {}
   @Get() list() {
@@ -49,7 +48,6 @@ export class ExamCalendarAdminController {
   }
 }
 @Controller('exam-preparation')
-@UseGuards(ThrottlerGuard)
 export class ExamCalendarController {
   constructor(private readonly calendars: ExamCalendarService) {}
   @Get('goals/:id/calendar') calendar(@Param('id') id: string, @CurrentUser() u: AuthUser) {

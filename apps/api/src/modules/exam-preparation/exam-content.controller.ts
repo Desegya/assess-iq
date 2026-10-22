@@ -11,7 +11,6 @@ import {
   UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { ThrottlerGuard } from '@nestjs/throttler'
 import { AuthUser } from '@assessiq/types'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { NightklassAdminGuard } from '../admin/admin.guard'
@@ -31,7 +30,7 @@ import { ObjectiveMappingDto, SyllabusStateDto } from './exam-syllabus.dto'
 import { extractExamMaterial } from './exam-material.extract'
 
 @Controller('admin/nightklass/exam-content')
-@UseGuards(NightklassAdminGuard, ThrottlerGuard)
+@UseGuards(NightklassAdminGuard)
 export class ExamContentAdminController {
   constructor(private readonly content: ExamContentService) {}
   @Get('materials') materials(@Query() q: ContentFilterDto) {
@@ -103,7 +102,6 @@ export class ExamContentAdminController {
   }
 }
 @Controller('exam-preparation')
-@UseGuards(ThrottlerGuard)
 export class ExamContentLearnerController {
   constructor(private readonly content: ExamContentService) {}
   @Get('goals/:goalId/subjects/:subjectKey/materials') materials(

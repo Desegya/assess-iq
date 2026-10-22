@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   Injectable,
+  Logger,
   UnauthorizedException,
   ConflictException,
   NotFoundException,
@@ -7,13 +9,15 @@ import {
 import { JwtService } from '@nestjs/jwt'
 import { ConfigService } from '@nestjs/config'
 import * as bcrypt from 'bcryptjs'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { PrismaService } from '../prisma/prisma.service'
 import { LoginDto } from './dto/login.dto'
 import { RegisterOrgDto } from './dto/register-org.dto'
 import { JoinOrgDto } from './dto/join-org.dto'
 import { RegisterStudentDto } from './dto/register-student.dto'
 import { AuthUser, UserRole } from '@assessiq/types'
+import { EmailService } from '../email/email.service'
+import { LoginAttemptLimiter } from './login-attempt-limiter'
 
 export interface TokenPair {
   accessToken: string
@@ -26,7 +30,19 @@ interface JwtPayload {
   email: string
   role: string
   organizationId: string | null
+  /** User.sessionVersion at issue time; a bump revokes every outstanding access token. */
+  sv: number
 }
+
+export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex')
+
+// A rotated refresh token presented again within this window is treated as a
+// benign race (two tabs refreshing together), not as theft.
+const ROTATION_GRACE_MS = 20_000
+const RESET_TOKEN_TTL_MS = 30 * 60_000
+const VERIFY_TOKEN_TTL_MS = 48 * 60 * 60_000
+// Compared against when the email is unknown, so response time does not reveal registration.
+const DUMMY_HASH = bcrypt.hashSync(randomUUID(), 12)
 
 @Injectable()
 export class AuthService {
@@ -34,7 +50,10 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly loginLimiter: LoginAttemptLimiter,
+    private readonly email: EmailService,
   ) {}
+  private readonly logger = new Logger(AuthService.name)
 
   // ─── Register ─────────────────────────────────────────────────────────────
 
@@ -94,6 +113,7 @@ export class AuthService {
   // ─── Login ────────────────────────────────────────────────────────────────
 
   async login(dto: LoginDto) {
+    this.loginLimiter.assertAllowed(dto.email)
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
       include: {
@@ -101,7 +121,11 @@ export class AuthService {
       },
     })
 
-    if (!user) throw new UnauthorizedException('Invalid email or password')
+    if (!user || user.deletedAt) {
+      await bcrypt.compare(dto.password, DUMMY_HASH)
+      this.loginLimiter.recordFailure(dto.email)
+      throw new UnauthorizedException('Invalid email or password')
+    }
 
     if (user.status === 'SUSPENDED') {
       throw new UnauthorizedException('Your account has been suspended. Contact your administrator.')
@@ -111,7 +135,11 @@ export class AuthService {
     }
 
     const passwordValid = await bcrypt.compare(dto.password, user.passwordHash)
-    if (!passwordValid) throw new UnauthorizedException('Invalid email or password')
+    if (!passwordValid) {
+      this.loginLimiter.recordFailure(dto.email)
+      throw new UnauthorizedException('Invalid email or password')
+    }
+    this.loginLimiter.reset(dto.email)
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -131,40 +159,68 @@ export class AuthService {
   // ─── Refresh ──────────────────────────────────────────────────────────────
 
   async refresh(rawRefreshToken: string): Promise<TokenPair> {
+    const expired = () => new UnauthorizedException('Session expired. Please log in again.')
     const stored = await this.prisma.refreshToken.findUnique({
-      where: { token: rawRefreshToken },
+      where: { token: hashToken(rawRefreshToken) },
       include: { user: true },
     })
+    if (!stored || stored.expiresAt < new Date() || stored.user.deletedAt) throw expired()
 
-    if (!stored || stored.isRevoked || stored.expiresAt < new Date()) {
-      throw new UnauthorizedException('Session expired. Please log in again.')
+    if (stored.isRevoked) {
+      const benignRace =
+        stored.rotatedAt && Date.now() - stored.rotatedAt.getTime() < ROTATION_GRACE_MS
+      if (!benignRace) {
+        // A rotated token came back: assume it was stolen and end the whole session chain.
+        await this.prisma.refreshToken.updateMany({
+          where: { familyId: stored.familyId, isRevoked: false },
+          data: { isRevoked: true },
+        })
+        this.logger.warn(`event=refresh_token_reuse userId=${stored.userId} family=${stored.familyId}`)
+        throw expired()
+      }
+      // Logout or password reset revokes the family; never resurrect those sessions.
+      const live = await this.prisma.refreshToken.count({
+        where: { familyId: stored.familyId, isRevoked: false, expiresAt: { gt: new Date() } },
+      })
+      if (!live) throw expired()
     }
 
     if (stored.user.organizationId === null && ['SUSPENDED', 'INACTIVE'].includes(stored.user.status)) {
       throw new UnauthorizedException('Account is unavailable')
     }
 
-    // Revoke old token — rotation prevents replay attacks
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { isRevoked: true },
-    })
+    // Rotate: the presented token is revoked and its successor joins the same family.
+    if (!stored.isRevoked) {
+      const rotated = await this.prisma.refreshToken.updateMany({
+        where: { id: stored.id, isRevoked: false },
+        data: { isRevoked: true, rotatedAt: new Date() },
+      })
+      if (!rotated.count) return this.refresh(rawRefreshToken)
+    }
 
-    return this.generateTokenPair({
-      id: stored.user.id,
-      email: stored.user.email,
-      role: stored.user.role as UserRole,
-      organizationId: stored.user.organizationId,
-    })
+    return this.generateTokenPair(
+      {
+        id: stored.user.id,
+        email: stored.user.email,
+        role: stored.user.role as UserRole,
+        organizationId: stored.user.organizationId,
+      },
+      stored.familyId,
+    )
   }
 
   // ─── Logout ───────────────────────────────────────────────────────────────
 
   async logout(rawRefreshToken: string) {
-    await this.prisma.refreshToken.updateMany({
-      where: { token: rawRefreshToken, isRevoked: false },
-      data: { isRevoked: true },
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { token: hashToken(rawRefreshToken) },
+      select: { familyId: true },
     })
+    if (stored)
+      await this.prisma.refreshToken.updateMany({
+        where: { familyId: stored.familyId, isRevoked: false },
+        data: { isRevoked: true },
+      })
     return { message: 'Logged out successfully' }
   }
 
@@ -240,6 +296,7 @@ export class AuthService {
         organizationId: null,
       },
     })
+    await this.sendVerification(user.id, user.email, user.name)
 
     const tokens = await this.generateTokenPair({
       id: user.id,
@@ -251,14 +308,118 @@ export class AuthService {
     return { user: this.sanitizeUser(user), ...tokens }
   }
 
+  // ─── Account recovery and email verification ─────────────────────────────
+
+  private async issueEmailToken(userId: string, purpose: 'PASSWORD_RESET' | 'EMAIL_VERIFICATION') {
+    const token = randomBytes(32).toString('base64url')
+    const ttl = purpose === 'PASSWORD_RESET' ? RESET_TOKEN_TTL_MS : VERIFY_TOKEN_TTL_MS
+    await this.prisma.$transaction([
+      // Only the newest link of each kind works.
+      this.prisma.emailToken.updateMany({
+        where: { userId, purpose, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.emailToken.create({
+        data: { userId, purpose, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + ttl) },
+      }),
+    ])
+    return token
+  }
+
+  /** Always resolves with the same message so the response never reveals whether an account exists. */
+  async requestPasswordReset(email: string) {
+    const generic = {
+      message: 'If an account exists for that email, a reset link has been sent. It expires in 30 minutes.',
+    }
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: email.trim(), mode: 'insensitive' } },
+    })
+    if (!user || user.deletedAt || user.status === 'SUSPENDED') return generic
+    // At most three reset emails per account per hour.
+    const recent = await this.prisma.emailToken.count({
+      where: { userId: user.id, purpose: 'PASSWORD_RESET', createdAt: { gt: new Date(Date.now() - 3600_000) } },
+    })
+    if (recent >= 3) return generic
+    const token = await this.issueEmailToken(user.id, 'PASSWORD_RESET')
+    await this.email.sendPasswordReset(user.email, user.name, token).catch((err) =>
+      this.logger.error(`event=password_reset_email_failed userId=${user.id} reason=${err instanceof Error ? err.message : 'unknown'}`),
+    )
+    return generic
+  }
+
+  async resetPassword(token: string, password: string) {
+    const tokenHash = hashToken(token)
+    const passwordHash = await bcrypt.hash(password, 12)
+    const userId = await this.prisma.$transaction(async (tx) => {
+      // Consuming the token and changing the password are one atomic step, so a link works once.
+      const consumed = await tx.emailToken.updateMany({
+        where: { tokenHash, purpose: 'PASSWORD_RESET', usedAt: null, expiresAt: { gt: new Date() } },
+        data: { usedAt: new Date() },
+      })
+      if (!consumed.count) throw new BadRequestException('This reset link is invalid or has expired. Request a new one.')
+      const { userId } = await tx.emailToken.findUniqueOrThrow({ where: { tokenHash } })
+      await tx.user.update({
+        where: { id: userId },
+        // Receiving the link proves control of the address.
+        data: { passwordHash, sessionVersion: { increment: 1 }, emailVerifiedAt: new Date() },
+      })
+      await tx.refreshToken.updateMany({ where: { userId, isRevoked: false }, data: { isRevoked: true } })
+      return userId
+    })
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } })
+    this.loginLimiter.reset(user.email)
+    return { message: 'Your password has been reset. Sign in with your new password.' }
+  }
+
+  private async sendVerification(userId: string, email: string, name: string) {
+    try {
+      const token = await this.issueEmailToken(userId, 'EMAIL_VERIFICATION')
+      await this.email.sendEmailVerification(email, name, token)
+    } catch (err) {
+      // Verification is not required to sign in, so a delivery failure must not block registration.
+      this.logger.error(`event=verification_email_failed userId=${userId} reason=${err instanceof Error ? err.message : 'unknown'}`)
+    }
+  }
+
+  async resendVerification(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } })
+    if (user.emailVerifiedAt) return { message: 'Your email is already verified.' }
+    const recent = await this.prisma.emailToken.count({
+      where: { userId, purpose: 'EMAIL_VERIFICATION', createdAt: { gt: new Date(Date.now() - 3600_000) } },
+    })
+    if (recent < 3) await this.sendVerification(user.id, user.email, user.name)
+    return { message: 'If your email is not yet verified, a new link has been sent.' }
+  }
+
+  async verifyEmail(token: string) {
+    const tokenHash = hashToken(token)
+    const ok = await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.emailToken.updateMany({
+        where: { tokenHash, purpose: 'EMAIL_VERIFICATION', usedAt: null, expiresAt: { gt: new Date() } },
+        data: { usedAt: new Date() },
+      })
+      if (!consumed.count) return false
+      const { userId } = await tx.emailToken.findUniqueOrThrow({ where: { tokenHash } })
+      await tx.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } })
+      return true
+    })
+    if (!ok) throw new BadRequestException('This verification link is invalid or has expired.')
+    return { message: 'Email verified.' }
+  }
+
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  private async generateTokenPair(authUser: AuthUser): Promise<TokenPair> {
+  private async generateTokenPair(authUser: AuthUser, familyId?: string): Promise<TokenPair> {
+    const { sessionVersion } = await this.prisma.user.findUniqueOrThrow({
+      where: { id: authUser.id },
+      select: { sessionVersion: true },
+    })
     const payload: JwtPayload = {
       sub: authUser.id,
       email: authUser.email,
       role: authUser.role,
       organizationId: authUser.organizationId,
+      sv: sessionVersion,
     }
 
     const jwtExpiresIn = this.config.get<string>('JWT_EXPIRES_IN', '15m')
@@ -278,8 +439,9 @@ export class AuthService {
     const expiresAt = this.parseExpiryToDate(refreshExpiresIn)
     const accessExpiresIn = this.parseDurationToSeconds(jwtExpiresIn)
 
+    const id = randomUUID()
     await this.prisma.refreshToken.create({
-      data: { userId: authUser.id, token: rawRefreshToken, expiresAt },
+      data: { id, userId: authUser.id, token: hashToken(rawRefreshToken), familyId: familyId ?? id, expiresAt },
     })
 
     return { accessToken, refreshToken: rawRefreshToken, expiresIn: accessExpiresIn }

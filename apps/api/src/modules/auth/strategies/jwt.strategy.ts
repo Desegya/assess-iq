@@ -10,6 +10,7 @@ interface JwtPayload {
   email: string
   role: string
   organizationId: string | null
+  sv?: number
   iat: number
   exp: number
 }
@@ -30,10 +31,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // Nightklass status changes take effect even for an already-issued access token.
-    // Institutional JWT behavior remains unchanged.
-    if (payload.organizationId === null) {
-      const account = await this.prisma.user.findUnique({ where: { id: payload.sub }, select: { status: true, organizationId: true } })
-      if (!account || account.organizationId !== null || ['SUSPENDED', 'INACTIVE'].includes(account.status)) throw new UnauthorizedException('Account is unavailable')
+    // Every token carrying a session version is also checked against the account,
+    // so a password reset or deletion revokes outstanding access tokens at once.
+    if (payload.organizationId === null || payload.sv !== undefined) {
+      const account = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { status: true, organizationId: true, sessionVersion: true, deletedAt: true },
+      })
+      if (!account || account.deletedAt) throw new UnauthorizedException('Account is unavailable')
+      if (payload.sv !== undefined && payload.sv !== account.sessionVersion)
+        throw new UnauthorizedException('Session ended. Please sign in again.')
+      if (payload.organizationId === null && (account.organizationId !== null || ['SUSPENDED', 'INACTIVE'].includes(account.status)))
+        throw new UnauthorizedException('Account is unavailable')
     }
     return {
       id: payload.sub,

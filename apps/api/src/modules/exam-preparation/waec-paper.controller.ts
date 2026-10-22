@@ -1,12 +1,11 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
-import { ThrottlerGuard } from '@nestjs/throttler'
 import { AuthUser } from '@assessiq/types'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { NightklassAdminGuard } from '../admin/admin.guard'
 import { StartWaecPaperDto, WaecPaperDto } from './waec-paper.dto'
 import { WaecPaperService } from './waec-paper.service'
 @Controller('admin/nightklass/exam-content/waec-papers')
-@UseGuards(NightklassAdminGuard, ThrottlerGuard)
+@UseGuards(NightklassAdminGuard)
 export class WaecPaperAdminController {
   constructor(private readonly papers: WaecPaperService) {}
   @Get() list() {
@@ -17,7 +16,6 @@ export class WaecPaperAdminController {
   }
 }
 @Controller('exam-preparation')
-@UseGuards(ThrottlerGuard)
 export class WaecPaperController {
   constructor(private readonly papers: WaecPaperService) {}
   @Get('goals/:id/waec-papers') list(@Param('id') id: string, @CurrentUser() u: AuthUser) {

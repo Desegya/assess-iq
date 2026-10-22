@@ -1,3 +1,4 @@
+import { AiThrottle } from '../auth/throttle'
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common'
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
@@ -23,6 +24,8 @@ export class LearningController {
     return this.lessons.getCurrent(topicId, user)
   }
 
+  @AiThrottle()
+
   @Post('topics/:topicId/lesson/generate')
   @ApiOperation({ summary: 'Generate a new lesson version (from your material, AI, or both)' })
   generateLesson(@Param('topicId') topicId: string, @Body() dto: GenerateLessonDto, @CurrentUser() user: AuthUser) {
@@ -41,12 +44,16 @@ export class LearningController {
     return this.lessons.report(id, dto.reason, user)
   }
 
+  @AiThrottle()
+
   @Get('topics/:topicId/resources')
   @ApiQuery({ name: 'refresh', required: false })
   @ApiOperation({ summary: 'Recommended videos and supplementary resources for a topic' })
   getResources(@Param('topicId') topicId: string, @CurrentUser() user: AuthUser, @Query('refresh') refresh?: string) {
     return this.resources.getForTopic(topicId, user, refresh === '1' || refresh === 'true')
   }
+
+  @AiThrottle()
 
   @Post('documents/:id/map')
   @ApiOperation({ summary: 'Map an uploaded document onto the course outline and find topics it adds' })

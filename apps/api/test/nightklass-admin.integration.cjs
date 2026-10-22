@@ -3,7 +3,6 @@ const { test, before, after } = require('node:test')
 const assert = require('node:assert/strict')
 const { randomUUID } = require('node:crypto')
 const { NestFactory } = require('@nestjs/core')
-const { ValidationPipe, VersioningType } = require('@nestjs/common')
 const { PrismaClient } = require('../../../packages/db/generated/client')
 const { hash } = require('bcryptjs')
 if (
@@ -133,16 +132,7 @@ before(
     })
     const { AppModule } = require('../dist/app.module.js')
     app = await NestFactory.create(AppModule, { logger: ['error'] })
-    app.setGlobalPrefix('api')
-    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-        transformOptions: { enableImplicitConversion: true },
-      }),
-    )
+    require('../dist/configure-app').configureApp(app)
     await app.listen(0, '127.0.0.1')
     base = `${await app.getUrl()}/api/v1`
     ownerToken = (await login(owner)).accessToken
@@ -484,8 +474,10 @@ test('all privileged mutations reject ordinary learners and unknown input fields
 })
 
 test('public login rate limits are enforced and bootstrap cannot overwrite established access', async () => {
+  // Repeated wrong passwords for one account trip the per-account lockout
+  // (and, if sent fast enough, the per-address burst limit).
   const results = []
-  for (let i = 0; i < 4; i++)
+  for (let i = 0; i < 12; i++)
     results.push(
       (
         await call('/auth/login', {

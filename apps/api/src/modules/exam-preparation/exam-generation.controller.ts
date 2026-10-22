@@ -1,6 +1,5 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common'
 import { IsUUID } from 'class-validator'
-import { ThrottlerGuard } from '@nestjs/throttler'
 import { AuthUser } from '@assessiq/types'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { NightklassAdminGuard } from '../admin/admin.guard'
@@ -10,7 +9,7 @@ class EnqueueGenerationDto extends GenerateBankDto {
   @IsUUID() requestKey!: string
 }
 @Controller('admin/nightklass/exam-content/generation-jobs')
-@UseGuards(NightklassAdminGuard, ThrottlerGuard)
+@UseGuards(NightklassAdminGuard)
 export class ExamGenerationController {
   constructor(private readonly generation: ExamGenerationService) {}
   @Get() list(@CurrentUser() u: AuthUser) {

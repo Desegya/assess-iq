@@ -1,3 +1,4 @@
+import { AiThrottle } from '../auth/throttle'
 import {
   Body,
   Controller,
@@ -109,6 +110,8 @@ export class StudyController {
 
   // ─── Self-quizzes ─────────────────────────────────────────────────────────
 
+  @AiThrottle()
+
   @Post('topics/:topicId/quiz/generate')
   @ApiOperation({ summary: 'Generate a self-quiz for a topic' })
   generateQuiz(
@@ -118,6 +121,8 @@ export class StudyController {
   ) {
     return this.studyService.generateQuiz(topicId, dto, user)
   }
+
+  @AiThrottle()
 
   @Post('topics/:topicId/quiz/submit')
   @ApiOperation({ summary: 'Submit answers for a self-quiz' })
@@ -135,6 +140,8 @@ export class StudyController {
     return this.studyService.getQuizHistory(topicId, user)
   }
 
+  @AiThrottle()
+
   @Post('quiz-attempts/:id/flashcards')
   @ApiOperation({ summary: 'Create flashcards from the questions missed in a self-quiz attempt' })
   flashcardsFromAttempt(@Param('id') id: string, @CurrentUser() user: AuthUser) {
@@ -150,6 +157,8 @@ export class StudyController {
   }
 
   // ─── Flashcards ───────────────────────────────────────────────────────────
+
+  @AiThrottle()
 
   @Post('topics/:topicId/flashcards/generate')
   @ApiOperation({ summary: 'Generate spaced-repetition flashcards for a topic' })
@@ -202,6 +211,8 @@ export class StudyController {
 
   // ─── Course suggestions ───────────────────────────────────────────────────
 
+  @AiThrottle()
+
   @Post('course-suggestions')
   @ApiOperation({ summary: "Suggest likely courses from the student's programme, level and semester (AI, not official)" })
   suggestCourses(@Body() dto: SuggestCoursesDto, @CurrentUser() user: AuthUser) {
@@ -210,11 +221,15 @@ export class StudyController {
 
   // ─── Course outline ───────────────────────────────────────────────────────
 
+  @AiThrottle()
+
   @Post('courses/:courseId/outline/text')
   @ApiOperation({ summary: 'Save a pasted course outline and propose topics from it' })
   outlineFromText(@Param('courseId') courseId: string, @Body() dto: OutlineTextDto, @CurrentUser() user: AuthUser) {
     return this.studyService.outlineFromText(courseId, dto.text, user)
   }
+
+  @AiThrottle()
 
   @Post('courses/:courseId/outline/document/:documentId')
   @ApiOperation({ summary: 'Use an uploaded document as the course outline and propose topics from it' })
@@ -225,6 +240,8 @@ export class StudyController {
   ) {
     return this.studyService.outlineFromDocument(courseId, documentId, user)
   }
+
+  @AiThrottle()
 
   @Post('courses/:courseId/outline/photo')
   @UseInterceptors(FileInterceptor('file'))
@@ -246,6 +263,8 @@ export class StudyController {
     return this.studyService.outlineFromPhoto(courseId, file, user)
   }
 
+  @AiThrottle()
+
   @Post('courses/:courseId/outline/expand')
   @ApiOperation({ summary: 'Expand the outline with AI subtopics (kept separate from the original outline)' })
   expandOutline(@Param('courseId') courseId: string, @Body() dto: ExpandOutlineDto, @CurrentUser() user: AuthUser) {
@@ -254,6 +273,8 @@ export class StudyController {
 
   // ─── Topic suggestions & notes ────────────────────────────────────────────
 
+  @AiThrottle()
+
   @Post('courses/:courseId/topics/suggest')
   @ApiOperation({ summary: 'Suggest topics for a course from its title alone (no uploaded material needed)' })
   suggestTopics(@Param('courseId') courseId: string, @CurrentUser() user: AuthUser) {
@@ -261,6 +282,8 @@ export class StudyController {
   }
 
   // ─── AI study chat ────────────────────────────────────────────────────────
+
+  @AiThrottle()
 
   @Post('courses/:courseId/chat')
   @ApiOperation({ summary: 'Ask the AI study buddy a question grounded in course material' })

@@ -1,3 +1,4 @@
+import { AiThrottle } from '../auth/throttle'
 import {
   Controller,
   Post,
@@ -36,6 +37,8 @@ export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   // ─── Upload ──────────────────────────────────────────────────────────────
+
+  @AiThrottle()
 
   @Post('upload')
   @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN, UserRole.STUDENT)
@@ -93,6 +96,8 @@ export class DocumentsController {
   }
 
   // ─── Extract topics ──────────────────────────────────────────────────────
+
+  @AiThrottle()
 
   @Post(':id/extract-topics')
   @ApiOperation({ summary: 'Propose candidate topics from a ready document (AI, with a heuristic fallback)' })

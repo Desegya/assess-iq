@@ -1,8 +1,8 @@
-import { Body, Controller, ForbiddenException, Post, UseGuards } from '@nestjs/common'
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler'
+import { Body, Controller, ForbiddenException, Post } from '@nestjs/common'
 import { AuthService } from '../auth/auth.service'
 import { LoginDto } from '../auth/dto/login.dto'
 import { Public } from '../auth/decorators/public.decorator'
+import { AnonymousCredentialThrottle } from '../auth/throttle'
 import { PrismaService } from '../prisma/prisma.service'
 
 @Controller('admin/nightklass-auth')
@@ -13,8 +13,7 @@ export class AdminAuthController {
   ) {}
   @Public()
   @Post('login')
-  @UseGuards(ThrottlerGuard)
-  @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 10, ttl: 15 * 60 * 1000 } })
+  @AnonymousCredentialThrottle(100)
   async login(@Body() dto: LoginDto) {
     const result = await this.auth.login(dto)
     const user = result.user as { id: string; status: string; organizationId: string | null }

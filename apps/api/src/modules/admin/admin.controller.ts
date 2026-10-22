@@ -1,6 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
-import { ThrottlerGuard } from '@nestjs/throttler'
 import { AuthUser } from '@assessiq/types'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { CreateCourseDto } from '../courses/dto/create-course.dto'
@@ -22,7 +21,7 @@ import {
 @ApiTags('Nightklass administration')
 @ApiBearerAuth()
 @Controller('admin/nightklass')
-@UseGuards(NightklassAdminGuard, ThrottlerGuard)
+@UseGuards(NightklassAdminGuard)
 export class AdminController {
   constructor(private readonly admin: AdminService) {}
   @Get('me') me(@CurrentUser() u: AuthUser) {

@@ -1,12 +1,11 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
-import { ThrottlerGuard } from '@nestjs/throttler'
 import { AuthUser } from '@assessiq/types'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { NightklassAdminGuard } from '../admin/admin.guard'
 import { ExamSyllabusDto, ObjectiveStudyDto, SyllabusStateDto } from './exam-syllabus.dto'
 import { ExamSyllabusService } from './exam-syllabus.service'
 @Controller('admin/nightklass/exam-content/syllabuses')
-@UseGuards(NightklassAdminGuard, ThrottlerGuard)
+@UseGuards(NightklassAdminGuard)
 export class ExamSyllabusAdminController {
   constructor(private readonly syllabuses: ExamSyllabusService) {}
   @Get() list() {
@@ -24,7 +23,6 @@ export class ExamSyllabusAdminController {
   }
 }
 @Controller('exam-preparation')
-@UseGuards(ThrottlerGuard)
 export class ExamSyllabusController {
   constructor(private readonly syllabuses: ExamSyllabusService) {}
   @Get('goals/:goalId/subjects/:key/coverage') coverage(

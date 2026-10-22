@@ -133,6 +133,10 @@ enum AIAction {
   ANSWER_QUESTION
   EMBED_CONTENT
   RECOMMEND_RESOURCES
+  EXTRACT_TIMETABLE
+  CHAT
+  GENERATE_LESSON
+  GRADE_ANSWERS
 }
 
 enum StudyPlanStatus {
@@ -256,6 +260,10 @@ model User {
   examMockAttempts ExamMockAttempt[]
   syllabusStudyLinks ExamObjectiveStudyLink[]
   profileCompletedAt DateTime?
+  emailVerifiedAt DateTime?
+  // Incremented to revoke every issued access token (password reset, deletion).
+  sessionVersion Int @default(0)
+  deletedAt      DateTime?
   lastLoginAt    DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -278,6 +286,10 @@ model User {
   gpaEntries     GpaEntry[]    @relation("GpaEntryStudent")
   nightklassAdmin NightklassAdmin?
   adminAuditLogs NightklassAdminAudit[]
+  emailTokens    EmailToken[]
+  examCohort     ExamCohortMember?
+  questionExposures ExamQuestionExposure[]
+  questionReports ExamQuestionReport[]
 
   @@index([organizationId])
   @@index([email])
@@ -290,7 +302,11 @@ model User {
 model RefreshToken {
   id        String   @id @default(cuid())
   userId    String
+  // SHA-256 of the issued token; the raw value is never stored.
   token     String   @unique
+  // Rotations share a family so reuse of a rotated token revokes the whole chain.
+  familyId  String
+  rotatedAt DateTime?
   expiresAt DateTime
   isRevoked Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -298,7 +314,7 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([token])
+  @@index([familyId])
   @@map("refresh_tokens")
 }
 
@@ -668,6 +684,10 @@ model AIUsageLog {
   costUsd         Float
   durationMs      Int
   success         Boolean      @default(true)
+  // True while a call is in flight: its reserved estimate counts toward quotas
+  // until the provider's measured usage replaces it.
+  pending         Boolean      @default(false)
+  reservedCostUsd Float        @default(0)
   errorMessage    String?
   relatedEntityId String?      // documentId, assessmentId, etc.
   createdAt       DateTime     @default(now())
@@ -676,7 +696,7 @@ model AIUsageLog {
   user            User         @relation(fields: [userId], references: [id])
 
   @@index([organizationId])
-  @@index([userId])
+  @@index([userId, createdAt])
   @@index([createdAt])
   @@map("ai_usage_logs")
 }
@@ -979,6 +999,12 @@ model ExamBankQuestion {
   revision     Int @default(1)
   fingerprint  String
   isAiGenerated Boolean @default(false)
+  // 1 = question stem only (legacy rows); 2 = stem plus normalized options.
+  fingerprintVersion Int @default(1)
+  generatorModel String?
+  generatorPromptVersion String?
+  exposures    ExamQuestionExposure[]
+  reports      ExamQuestionReport[]
   createdById  String
   reviewedById String?
   createdAt    DateTime @default(now())
@@ -1159,4 +1185,66 @@ model ExamCalendar {
   @@unique([exam,year,series,version])
   @@index([exam,year,series,status])
   @@map("exam_calendars")
+}
+
+enum EmailTokenPurpose {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+}
+model EmailToken {
+  id        String @id @default(cuid())
+  userId    String
+  purpose   EmailTokenPurpose
+  tokenHash String @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, purpose, createdAt])
+  @@map("email_tokens")
+}
+// Operator-adjustable switches and limits (AI kill switch, budgets, exam access).
+model RuntimeSetting {
+  key       String @id
+  value     Json
+  updatedById String?
+  updatedAt DateTime @updatedAt
+  @@map("runtime_settings")
+}
+model ExamCohortMember {
+  userId    String @id
+  addedById String
+  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("exam_cohort_members")
+}
+// Which reviewed questions a learner has been shown, for unseen-first form assembly and item statistics.
+model ExamQuestionExposure {
+  studentId  String
+  questionId String
+  timesSeen  Int @default(1)
+  lastSeenAt DateTime @default(now())
+  student    User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  question   ExamBankQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  @@id([studentId, questionId])
+  @@index([questionId])
+  @@map("exam_question_exposures")
+}
+model ExamQuestionReport {
+  id         String @id @default(cuid())
+  questionId String
+  reporterId String
+  attemptId  String?
+  reason     String
+  details    String @db.Text
+  status     String @default("OPEN")
+  resolutionNote String?
+  resolvedById String?
+  resolvedAt DateTime?
+  createdAt  DateTime @default(now())
+  question   ExamBankQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  reporter   User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  @@unique([reporterId, questionId])
+  @@index([status, createdAt])
+  @@map("exam_question_reports")
 }

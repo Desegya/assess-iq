@@ -1,12 +1,10 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common'
-import { ThrottlerGuard } from '@nestjs/throttler'
 import { AuthUser } from '@assessiq/types'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { NightklassAdminGuard } from '../admin/admin.guard'
 import { ExamMockService } from './exam-mock.service'
 import { MockTemplateDto, SaveMockDto, StartMockDto } from './exam-mock.dto'
 @Controller('exam-preparation')
-@UseGuards(ThrottlerGuard)
 export class ExamMockController {
   constructor(private readonly mocks: ExamMockService) {}
   @Get('goals/:id/mock-availability') availability(@Param('id') id: string, @CurrentUser() u: AuthUser) { return this.mocks.availability(id, u) }
@@ -17,7 +15,7 @@ export class ExamMockController {
   @Post('mocks/:id/submit') submit(@Param('id') id: string, @CurrentUser() u: AuthUser) { return this.mocks.submit(id, u) }
 }
 @Controller('admin/nightklass/exam-content/mock-templates')
-@UseGuards(NightklassAdminGuard, ThrottlerGuard)
+@UseGuards(NightklassAdminGuard)
 export class ExamMockAdminController {
   constructor(private readonly mocks: ExamMockService) {}
   @Get() list() { return this.mocks.templates() }
