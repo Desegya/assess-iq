@@ -3,6 +3,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useApi } from '@/hooks/use-api'
+import { describeSaveStatus, MockAutosave, type SaveStatus } from '@/lib/mock-autosave'
 interface WaecSection {
   id: string
   title: string
@@ -20,6 +21,7 @@ interface WaecPaper {
   ready: boolean
   active: { id: string } | null
   coverage: { title: string; available: number; required: number }[]
+  format?: FormatDisclosure
 }
 interface MockQuestion {
   sectionId?: string
@@ -51,6 +53,7 @@ interface Attempt {
     durationMinutes: number
     exam?: string
     sections?: WaecSection[]
+    format?: FormatDisclosure
   }
   result: {
     exam?: string
@@ -79,7 +82,40 @@ interface Attempt {
     }[]
   } | null
 }
+interface FormatDisclosure {
+  textOnly: boolean
+  summary: string
+  notIncluded: string[]
+}
+/** What this mock leaves out, shown before starting, during the mock and with results. */
+function FormatNotice({ format, compact }: { format?: FormatDisclosure; compact?: boolean }) {
+  if (!format) return null
+  if (compact)
+    return (
+      <details className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <summary className="cursor-pointer font-medium">Text-only practice: what this mock leaves out</summary>
+        <p className="mt-2">{format.summary}</p>
+        <ul className="mt-2 list-disc pl-5">
+          {format.notIncluded.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </details>
+    )
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <p className="font-medium">{format.summary}</p>
+      <p className="mt-2">Not included:</p>
+      <ul className="mt-1 list-disc pl-5">
+        {format.notIncluded.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 interface Availability {
+  format?: FormatDisclosure
   ready: boolean
   template: { title: string; instructions: string; durationMinutes: number } | null
   subjects: { name: string; available: number; required: number | null }[]
@@ -92,7 +128,6 @@ function MockScreen() {
   const isWaec = params.get('exam') === 'WAEC'
   const [papers, setPapers] = useState<WaecPaper[]>([])
   const [selected, setSelected] = useState<string[]>([])
-  const selectedRef = useRef<string[]>([])
   const [availability, setAvailability] = useState<Availability | null>(null)
   const [history, setHistory] = useState<
     { id: string; goalId: string; status: string; startedAt: string }[]
@@ -103,35 +138,59 @@ function MockScreen() {
   const [current, setCurrent] = useState(0)
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState('')
-  const [saveState, setSaveState] = useState('')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
-  const version = useRef(1)
-  const dirty = useRef(false)
-  const saving = useRef(false)
-  const answersRef = useRef<Record<string, string>>({})
-  const flagsRef = useRef<string[]>([])
-  const changeSerial = useRef(0)
+  const [unsavedAtSubmit, setUnsavedAtSubmit] = useState(0)
+  const [reporting, setReporting] = useState<string | null>(null)
   const clockOffset = useRef(0)
-  const conflict = useRef(false)
-  const attemptRef = useRef<Attempt | null>(null)
+  const autosave = useRef<MockAutosave | null>(null)
   const requestKey = useRef('')
   function install(value: Attempt) {
-    attemptRef.current = value
+    autosave.current?.dispose()
+    autosave.current = null
     setAttempt(value)
-    version.current = value.version
     clockOffset.current = Date.parse(value.serverTime) - Date.now()
-    selectedRef.current = value.selectedQuestions ?? []
-    setSelected(selectedRef.current)
-    answersRef.current = value.answers
-    flagsRef.current = value.flags
-    setAnswers(value.answers)
-    setFlags(value.flags)
-    dirty.current = false
-    conflict.current = false
-    setSaveState('All answers saved')
     setConfirmSubmit(false)
+    setUnsavedAtSubmit(0)
+    if (value.status === 'IN_PROGRESS') {
+      const saver = new MockAutosave({
+        attemptId: value.id,
+        initial: value,
+        storage: typeof window === 'undefined' ? null : window.localStorage,
+        transport: {
+          save: (body) => api.patch<{ version: number }>(`/exam-preparation/mocks/${value.id}/answers`, body),
+          reload: () => api.get<Attempt>(`/exam-preparation/mocks/${value.id}`),
+        },
+        onStatus: setSaveStatus,
+        onMerged: (state) => {
+          setAnswers(state.answers)
+          setFlags(state.flags)
+          setSelected(state.selected)
+        },
+        onEnded: (server, unsaved) => {
+          install(server as Attempt)
+          if (unsaved)
+            setError(
+              `This mock ended before ${unsaved} change${unsaved === 1 ? '' : 's'} could be saved. Only saved answers were marked.`,
+            )
+        },
+      })
+      autosave.current = saver
+      // Answers kept on this device from an earlier session are restored and saved.
+      setAnswers(saver.answers)
+      setFlags(saver.currentFlags)
+      setSelected(saver.currentSelected)
+      setSaveStatus(saver.unsavedCount() ? { kind: 'unsaved', unsaved: saver.unsavedCount() } : { kind: 'saved', at: new Date() })
+      if (saver.unsavedCount()) void saver.flush()
+    } else {
+      setAnswers(value.answers)
+      setFlags(value.flags)
+      setSelected(value.selectedQuestions ?? [])
+      setSaveStatus(null)
+    }
   }
+  useEffect(() => () => autosave.current?.dispose(), [])
   useEffect(() => {
     let active = true
     const loadAvailability = isWaec
@@ -171,78 +230,56 @@ function MockScreen() {
       setBusy(false)
     }
   }
-  async function save() {
-    const active = attemptRef.current
-    if (
-      !active ||
-      active.status !== 'IN_PROGRESS' ||
-      !dirty.current ||
-      saving.current ||
-      conflict.current
-    )
-      return !dirty.current
-    saving.current = true
-    setSaveState('Saving…')
-    const serial = changeSerial.current
-    try {
-      const response = await api.patch<{ version: number }>(
-        `/exam-preparation/mocks/${active.id}/answers`,
-        {
-          expectedVersion: version.current,
-          answers: Object.entries(answersRef.current).map(([questionId, answer]) => ({
-            questionId,
-            answer,
-          })),
-          flags: flagsRef.current,
-          selectedQuestions: selectedRef.current,
-        },
-      )
-      version.current = response.version
-      dirty.current = changeSerial.current !== serial
-      setSaveState(
-        dirty.current ? 'Saving new changes…' : `Saved at ${new Date().toLocaleTimeString()}`,
-      )
-      return !dirty.current
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not save'
-      if (/reload|another request|changed|ended|expired/i.test(message)) {
-        conflict.current = true
-        setError(message)
-      }
-      setSaveState('Changes not yet saved. Keep this page open; reconnect to retry.')
-      return false
-    } finally {
-      saving.current = false
-    }
-  }
   useEffect(() => {
     if (!attempt || attempt.status !== 'IN_PROGRESS') return
+    let finishing = false
     const tick = () => {
       const left = Math.max(
         0,
         Math.ceil((Date.parse(attempt.expiresAt) - Date.now() - clockOffset.current) / 1000),
       )
       setSeconds(left)
-      if (!left && !saving.current) {
-        api
-          .get<Attempt>(`/exam-preparation/mocks/${attempt.id}`)
+      if (!left && !finishing) {
+        finishing = true
+        // One last save attempt; the server rejects anything after its deadline.
+        void (autosave.current?.flush() ?? Promise.resolve(true))
+          .catch(() => false)
+          .then(() => api.get<Attempt>(`/exam-preparation/mocks/${attempt.id}`))
           .then((value) => {
-            if (value.status !== 'IN_PROGRESS') install(value)
+            if (value.status !== 'IN_PROGRESS') {
+              const unsaved = autosave.current?.unsavedCount() ?? 0
+              install(value)
+              if (unsaved)
+                setError(
+                  `Time ended before ${unsaved} change${unsaved === 1 ? '' : 's'} could be saved. Only saved answers were marked.`,
+                )
+            } else finishing = false
           })
-          .catch(() => setSaveState('Time ended. Reconnect to retrieve the saved result.'))
-      } else if (left) void save()
+          .catch(() => {
+            finishing = false
+            setError('Time ended. Reconnect to see your result; your saved answers are safe on the server.')
+          })
+      }
     }
     tick()
     const timer = setInterval(tick, 1000)
+    const flushNow = () => void autosave.current?.flush()
+    const hidden = () => {
+      if (document.visibilityState === 'hidden') flushNow()
+    }
     const unload = (e: BeforeUnloadEvent) => {
-      if (dirty.current) {
+      if (autosave.current?.unsavedCount()) {
         e.preventDefault()
         e.returnValue = ''
       }
     }
+    window.addEventListener('online', flushNow)
+    document.addEventListener('visibilitychange', hidden)
     window.addEventListener('beforeunload', unload)
     return () => {
       clearInterval(timer)
+      window.removeEventListener('online', flushNow)
+      document.removeEventListener('visibilitychange', hidden)
       window.removeEventListener('beforeunload', unload)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -258,39 +295,29 @@ function MockScreen() {
     return () => clearInterval(timer)
   }, [api, attempt?.id, attempt?.status])
   function choose(id: string) {
-    const next = selectedRef.current.includes(id)
-      ? selectedRef.current.filter((q) => q !== id)
-      : [...selectedRef.current, id]
-    selectedRef.current = next
+    const next = selected.includes(id) ? selected.filter((q) => q !== id) : [...selected, id]
     setSelected(next)
-    dirty.current = true
-    changeSerial.current++
-    setSaveState('Unsaved selection')
+    autosave.current?.setSelected(next)
   }
-  function answer(questionId: string, answer: string) {
-    const next = { ...answersRef.current, [questionId]: answer }
-    answersRef.current = next
-    setAnswers(next)
-    dirty.current = true
-    changeSerial.current++
-    setSaveState('Unsaved changes')
+  function answer(questionId: string, value: string) {
+    setAnswers((prev) => ({ ...prev, [questionId]: value }))
+    autosave.current?.setAnswer(questionId, value)
   }
   function toggleFlag(id: string) {
-    const next = flagsRef.current.includes(id)
-      ? flagsRef.current.filter((f) => f !== id)
-      : [...flagsRef.current, id]
-    flagsRef.current = next
+    const next = flags.includes(id) ? flags.filter((f) => f !== id) : [...flags, id]
     setFlags(next)
-    dirty.current = true
-    changeSerial.current++
+    autosave.current?.setFlags(next)
   }
-  async function submit() {
-    if (!attempt || saving.current) return
+  async function submit(force = false) {
+    if (!attempt || busy) return
     setBusy(true)
     setError('')
     try {
-      if (dirty.current && !(await save())) {
-        setError('Wait for all answers to save before submitting.')
+      const saved = (await autosave.current?.flush()) ?? true
+      const unsaved = autosave.current?.unsavedCount() ?? 0
+      if (!saved && unsaved && !force) {
+        // Never submit silently over unsaved work: let the learner retry or decide.
+        setUnsavedAtSubmit(unsaved)
         return
       }
       install(await api.post<Attempt>(`/exam-preparation/mocks/${attempt.id}/submit`, {}))
@@ -298,6 +325,17 @@ function MockScreen() {
       setError(err instanceof Error ? err.message : 'Could not submit')
     } finally {
       setBusy(false)
+    }
+  }
+  async function reportQuestion(questionId: string, reason: string, details: string) {
+    try {
+      await api.post('/exam-preparation/question-reports', { questionId, attemptId: attempt?.id, reason, details })
+      setReporting(null)
+      setError('')
+      return true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send the report')
+      return false
     }
   }
   const q = attempt?.questions[current]
@@ -357,6 +395,7 @@ function MockScreen() {
                     {p.title} · {p.series.replaceAll('_', ' ')} · {p.paperCode}
                   </h2>
                   <p className="whitespace-pre-wrap text-sm">{p.instructions}</p>
+                  <FormatNotice format={p.format} />
                   <p className="text-sm">
                     {p.durationMinutes} minutes. The server timer continues during disconnection;
                     only saved answers are marked.
@@ -405,6 +444,7 @@ function MockScreen() {
                 {availability.template?.title ?? 'Mock specification not published yet'}
               </h2>
               <p className="whitespace-pre-wrap text-sm">{availability.template?.instructions}</p>
+              <FormatNotice format={availability.format} />
               <p className="text-sm">
                 {availability.template
                   ? `${availability.template.durationMinutes} minutes. The timer continues if you close this page or lose connectivity. Only confirmed saved answers can be marked.`
@@ -483,13 +523,18 @@ function MockScreen() {
             <p role="timer" className="font-mono text-xl">
               {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
             </p>
-            <p role="status" className="text-xs">
-              {saveState}
+            <p
+              role="status"
+              aria-live="polite"
+              className={`text-xs ${saveStatus && saveStatus.kind !== 'saved' && saveStatus.kind !== 'saving' ? 'font-medium text-amber-700' : ''}`}
+            >
+              {describeSaveStatus(saveStatus)}
             </p>
             <p className="text-sm">
               {answeredRequired}/{requiredQuestions} answered
             </p>
           </div>
+          <FormatNotice format={attempt.specification.format} compact />
           <div className="flex flex-wrap gap-2">
             {[...new Set(attempt.questions.map((item) => item.subjectKey))].map((key) => (
               <button
@@ -534,7 +579,7 @@ function MockScreen() {
               {q.subject} · question {current + 1} of {attempt.questions.length}
             </p>
             <h2 className="whitespace-pre-wrap font-semibold">{q.questionText}</h2>
-            <fieldset disabled={busy || seconds <= 0 || conflict.current || !selectable}>
+            <fieldset disabled={busy || seconds <= 0 || saveStatus?.kind === 'ended' || !selectable}>
               <legend className="sr-only">Choose your answer</legend>
               {q.questionType && q.questionType !== 'MCQ' ? (
                 <textarea
@@ -631,7 +676,22 @@ function MockScreen() {
                     /{s.choose} selected
                   </p>
                 ))}
-              <button className="btn-primary" disabled={busy || saving.current} onClick={submit}>
+              {unsavedAtSubmit > 0 && (
+                <div role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                  {unsavedAtSubmit} change{unsavedAtSubmit === 1 ? ' is' : 's are'} not saved yet
+                  (connection or server busy). Retry to keep {unsavedAtSubmit === 1 ? 'it' : 'them'}, or
+                  submit now and only saved answers will be marked.
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button className="btn-secondary" disabled={busy} onClick={() => submit()}>
+                      Retry saving and submit
+                    </button>
+                    <button className="btn-secondary" disabled={busy} onClick={() => submit(true)}>
+                      Submit saved answers only
+                    </button>
+                  </div>
+                </div>
+              )}
+              <button className="btn-primary" disabled={busy} onClick={() => submit()}>
                 {busy ? 'Submitting…' : 'Confirm submission'}
               </button>
               <button className="btn-secondary ml-3" onClick={() => setConfirmSubmit(false)}>
@@ -652,6 +712,7 @@ function MockScreen() {
               Practice estimate: {attempt.result.practiceScore}/400
             </h2>
             <p className="text-sm">{attempt.result.scoringNote}</p>
+            <FormatNotice format={attempt.specification.format} compact />
             <p className="text-sm">
               {attempt.submissionReason === 'TIME_EXPIRED'
                 ? 'Time expired. Confirmed saved answers were marked.'
@@ -685,6 +746,12 @@ function MockScreen() {
                 {item.correctAnswer}
               </p>
               <p className="mt-2 whitespace-pre-wrap text-sm">{item.explanation}</p>
+              <ReportQuestion
+                open={reporting === item.id}
+                onOpen={() => setReporting(item.id)}
+                onClose={() => setReporting(null)}
+                onSend={(reason, details) => reportQuestion(item.id, reason, details)}
+              />
             </details>
           ))}
         </section>
@@ -709,6 +776,7 @@ function MockScreen() {
               </p>
             )}
             <p className="text-sm">{attempt.result.scoringNote}</p>
+            <FormatNotice format={attempt.specification.format} compact />
           </div>
           {attempt.questions.map((item, i) => {
             const marked = attempt.result?.results?.find((r) => r.questionId === item.id)
@@ -722,10 +790,10 @@ function MockScreen() {
                   Your answer: {answers[item.id] || 'Unanswered'}
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm">
-                  Model answer: {item.correctAnswer}
+                  {item.questionType === 'MCQ' ? 'Correct answer' : 'Marking scheme'}: {item.correctAnswer}
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm">
-                  Marking points: {item.explanation}
+                  {item.questionType === 'MCQ' ? 'Explanation' : 'Teacher notes'}: {item.explanation}
                 </p>
                 {marked && (
                   <>
@@ -740,12 +808,87 @@ function MockScreen() {
                     ))}
                   </>
                 )}
+                <ReportQuestion
+                  open={reporting === item.id}
+                  onOpen={() => setReporting(item.id)}
+                  onClose={() => setReporting(null)}
+                  onSend={(reason, details) => reportQuestion(item.id, reason, details)}
+                />
               </details>
             )
           })}
         </section>
       )}
     </div>
+  )
+}
+const REPORT_REASONS = [
+  ['WRONG_ANSWER', 'The marked answer is wrong'],
+  ['AMBIGUOUS', 'More than one answer could be right'],
+  ['TYPO', 'Typing or wording error'],
+  ['OUT_OF_SYLLABUS', 'Not in my syllabus'],
+  ['MISSING_CONTEXT', 'Needs a passage, diagram or table'],
+  ['OTHER', 'Something else'],
+] as const
+function ReportQuestion({
+  open,
+  onOpen,
+  onClose,
+  onSend,
+}: {
+  open: boolean
+  onOpen: () => void
+  onClose: () => void
+  onSend: (reason: string, details: string) => Promise<boolean>
+}) {
+  const [reason, setReason] = useState<string>('WRONG_ANSWER')
+  const [details, setDetails] = useState('')
+  const [sent, setSent] = useState(false)
+  if (sent) return <p className="mt-3 text-sm text-emerald-700">Thanks — a teacher will review this question.</p>
+  if (!open)
+    return (
+      <button className="mt-3 text-sm text-violet-700 underline" onClick={onOpen}>
+        Report a problem with this question
+      </button>
+    )
+  return (
+    <form
+      className="mt-3 space-y-2 rounded-xl border p-3"
+      onSubmit={async (e) => {
+        e.preventDefault()
+        if (await onSend(reason, details)) setSent(true)
+      }}
+    >
+      <label className="block text-sm">
+        What is wrong?
+        <select className="input-base mt-1" value={reason} onChange={(e) => setReason(e.target.value)}>
+          {REPORT_REASONS.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block text-sm">
+        Details for the teacher
+        <textarea
+          className="input-base mt-1 min-h-20"
+          minLength={5}
+          maxLength={2000}
+          required
+          value={details}
+          onChange={(e) => setDetails(e.target.value)}
+        />
+      </label>
+      <div className="flex gap-2">
+        <button className="btn-primary" type="submit">
+          Send report
+        </button>
+        <button className="btn-secondary" type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </form>
   )
 }
 export default function MockPage() {

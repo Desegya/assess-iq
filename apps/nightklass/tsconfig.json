@@ -9,6 +9,7 @@
       "@assessiq/types": ["../../packages/types/dist"]
     },
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "incremental": true,
     "isolatedModules": true
   },
