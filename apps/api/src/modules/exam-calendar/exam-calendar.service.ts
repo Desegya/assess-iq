@@ -11,7 +11,7 @@ import { AuthUser, UserRole } from '@assessiq/types'
 import { randomUUID } from 'crypto'
 import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
-import pdfParse from 'pdf-parse'
+import { extractPdfText } from '../../common/pdf-text'
 import { AiService } from '../ai/ai.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
@@ -122,10 +122,7 @@ export class ExamCalendarService {
           )
     } else {
       try {
-        // Older PDF.js expects independent Uint8Array slices rather than pooled Buffer views.
-        extractedText = (
-          await pdfParse(new Uint8Array(file.buffer) as unknown as Buffer)
-        ).text.trim()
+        extractedText = (await extractPdfText(file.buffer)).text.trim()
       } catch {
         extractedText = ''
       }

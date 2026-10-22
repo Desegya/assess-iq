@@ -13,7 +13,7 @@ import { DocumentType } from '@assessiq/db'
 import { UploadDocumentDto } from './dto/upload-document.dto'
 import { extractTopicsHeuristically } from './topic-extraction-fallback'
 import { RetrievalService } from '../learning/retrieval.service'
-import pdfParse from 'pdf-parse'
+import { extractPdfText } from '../../common/pdf-text'
 import mammoth from 'mammoth'
 import JSZip from 'jszip'
 
@@ -234,8 +234,8 @@ export class DocumentsService {
   ): Promise<{ text: string; pageCount?: number }> {
     if (type === DocumentType.PDF) {
       try {
-        const result = await pdfParse(buffer)
-        return { text: result.text, pageCount: result.numpages }
+        const result = await extractPdfText(buffer)
+        return { text: result.text, pageCount: result.pageCount }
       } catch (err) {
         this.logger.warn('PDF extraction failed, continuing without text', err)
         return { text: '' }

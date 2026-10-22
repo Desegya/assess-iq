@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common'
-import pdfParse from 'pdf-parse'
+import { extractPdfText } from '../../common/pdf-text'
 import mammoth from 'mammoth'
 import JSZip from 'jszip'
 import { DocumentFileValidator } from '../documents/document-file.validator'
@@ -9,7 +9,7 @@ export async function extractExamMaterial(file: Express.Multer.File) {
   let body = ''
   try {
     if (file.mimetype === 'text/plain') body = file.buffer.toString('utf8')
-    else if (file.mimetype === 'application/pdf') body = (await pdfParse(file.buffer)).text
+    else if (file.mimetype === 'application/pdf') body = (await extractPdfText(file.buffer)).text
     else {
       const zip = await JSZip.loadAsync(file.buffer)
       const entries = Object.values(zip.files)
