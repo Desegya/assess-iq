@@ -11,7 +11,7 @@
     "type-check": "tsc --noEmit",
     "test:watch": "vitest",
     "test:admin:integration": "npm run build && node --test test/nightklass-admin.integration.cjs",
-    "test:exam:integration": "npm run build && node --test test/nightklass-exam.integration.cjs"
+    "test:exam:integration": "npm run build && node --test test/nightklass-exam.integration.cjs test/nightklass-security.integration.cjs"
   },
   "dependencies": {
     "@assessiq/db": "*",
