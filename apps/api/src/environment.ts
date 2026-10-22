@@ -18,8 +18,13 @@ export function productionEnvironmentProblems(env: Env) {
   if (!env.DATABASE_URL) problems.push('DATABASE_URL is required')
   if (secret('JWT_SECRET') && secret('JWT_REFRESH_SECRET') && env.JWT_SECRET === env.JWT_REFRESH_SECRET)
     problems.push('JWT_SECRET and JWT_REFRESH_SECRET must differ')
-  for (const name of ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ENDPOINT', 'R2_BUCKET_NAME'])
-    if (!env[name]) problems.push(`${name} is required: production never stores uploads on local disk`)
+  // Disk storage is allowed only by explicit opt-in (a persistent volume mounted at
+  // STORAGE_LOCAL_DIR); files are then served solely through signed, expiring links.
+  if (env.STORAGE_DRIVER === 'local') {
+    if (!env.STORAGE_LOCAL_DIR) problems.push('STORAGE_LOCAL_DIR must point at a persistent volume when STORAGE_DRIVER=local')
+  } else
+    for (const name of ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ENDPOINT', 'R2_BUCKET_NAME'])
+      if (!env[name]) problems.push(`${name} is required (or set STORAGE_DRIVER=local with a persistent volume)`)
   if (env.R2_PUBLIC_URL)
     problems.push('R2_PUBLIC_URL must be unset: private uploads are served only through short-lived signed URLs')
   const origins = (env.APP_URL ?? '').split(',').map((o) => o.trim()).filter(Boolean)

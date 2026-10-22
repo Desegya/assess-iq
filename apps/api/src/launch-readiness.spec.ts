@@ -146,6 +146,14 @@ describe('local storage signing', () => {
     get: (key: string, fallback?: string) => ({ API_URL: 'http://api.test' } as Record<string, string>)[key] ?? fallback,
     getOrThrow: () => 'test-secret',
   }
+  it('allows production disk storage only by explicit opt-in with a volume path', () => {
+    const optIn = { ...config, get: (key: string, fallback?: string) => ({ NODE_ENV: 'production', STORAGE_DRIVER: 'local', STORAGE_LOCAL_DIR: '/tmp/nk-volume' } as Record<string, string>)[key] ?? config.get(key, fallback) }
+    expect(() => new StorageService(optIn as any)).not.toThrow()
+    const base = { DATABASE_URL: 'postgresql://db/app', JWT_SECRET: 'a'.repeat(40), JWT_REFRESH_SECRET: 'b'.repeat(40), APP_URL: 'https://nightklass.com', TRUST_PROXY: '1' }
+    expect(productionEnvironmentProblems({ ...base, STORAGE_DRIVER: 'local' }).join()).toMatch(/STORAGE_LOCAL_DIR/)
+    expect(productionEnvironmentProblems({ ...base }).join()).toMatch(/R2_ACCESS_KEY_ID is required/)
+    expect(productionEnvironmentProblems({ ...base, STORAGE_DRIVER: 'local', STORAGE_LOCAL_DIR: '/data/uploads' })).toEqual([])
+  })
   it('refuses to run on local disk in production', () => {
     const prod = { ...config, get: (key: string, fallback?: string) => (key === 'NODE_ENV' ? 'production' : config.get(key, fallback)) }
     expect(() => new StorageService(prod as any)).toThrow(/production/)
