@@ -18,7 +18,7 @@ Prepared 22 October 2026. This is a reviewable release checklist, not a claim of
 
 ## Software verification
 
-Final local results: 88 unit tests, 29 HTTP/PostgreSQL integration tests and 14 browser cases pass. Both production builds and TypeScript checks pass; all 20 local migrations are applied. Browser testing uses local Chrome desktop and an emulated mobile viewport, not a physical iPhone or Safari. It checks teacher publication/generation, secondary onboarding, syllabus practice, keyboard activation, JAMB saved-answer recovery, WAEC optional essays cross-origin mutation rejection and WAEC timetable upload/publication with original-source download.
+Final local results: 88 unit tests, 29 HTTP/PostgreSQL integration tests and 14 browser cases pass. Both production builds and TypeScript checks pass; all 20 local migrations are applied. Browser testing uses local Chrome desktop and an emulated mobile viewport, not a physical iPhone or Safari. It checks teacher publication/generation, secondary onboarding, syllabus practice, keyboard activation, JAMB saved-answer recovery, WAEC optional essays, cross-origin mutation rejection and WAEC timetable upload/publication with original-source download.
 
 Integration tests include a full 180-question JAMB fixture, concurrent submission, late-save rejection, durable expiry, WAEC rubric/retry recovery, syllabus ownership, correction snapshots and idempotent generation jobs. A five-request concurrent-read smoke check is included. It is not a production capacity benchmark. All AI generation and written-marking test responses are deterministic stubs.
 
