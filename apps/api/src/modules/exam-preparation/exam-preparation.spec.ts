@@ -76,7 +76,25 @@ describe('Exam goals and subject identity', () => {
     await new ExamPreparationService({ $transaction: transaction } as never).save({ exam: 'WAEC', year: 2027, subjects: ['English', 'Government'] } as never, learner)
     expect(tx.course.upsert.mock.calls[0]![0].where).toEqual({ ownerId_examSubjectKey: { ownerId: 'learner', examSubjectKey: 'english' } })
     expect(tx.examGoalSubject.deleteMany).toHaveBeenCalledWith({ where: { goalId: 'goal-1' } })
-    expect(transaction.mock.calls[0]![1]).toEqual({ isolationLevel: 'Serializable' })
+    // Read Committed (no isolation option): per-learner rows only; Serializable made
+    // unrelated learners fail each other under concurrent onboarding.
+    expect(transaction.mock.calls[0]![1]).toBeUndefined()
+  })
+  it('retries a unique-key race from the same learner and settles on one result', async () => {
+    const tx = {
+      examGoal: { upsert: vi.fn().mockResolvedValue({ id: 'goal-1' }), findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'goal-1' }) },
+      course: { upsert: vi.fn().mockResolvedValue({ id: 'course-1' }) },
+      examGoalSubject: { deleteMany: vi.fn(), createMany: vi.fn() },
+    }
+    let calls = 0
+    const transaction = vi.fn(async (callback: (value: typeof tx) => unknown) => {
+      if (++calls === 1) throw Object.assign(new Error('unique'), { code: 'P2002' })
+      return callback(tx)
+    })
+    await expect(
+      new ExamPreparationService({ $transaction: transaction } as never).save({ exam: 'WAEC', year: 2027, subjects: ['English'] } as never, learner),
+    ).resolves.toEqual({ id: 'goal-1' })
+    expect(transaction).toHaveBeenCalledTimes(2)
   })
   it('returns retryable conflicts instead of silently accepting concurrent overwrites', async () => {
     const service = new ExamPreparationService({ $transaction: vi.fn().mockRejectedValue({ code: 'P2034' }) } as never)
