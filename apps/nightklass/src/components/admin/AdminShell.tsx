@@ -22,6 +22,7 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: '/admin/materials', label: 'Study materials', icon: 'upload' },
   { href: '/admin/activity', label: 'Learning activity', icon: 'chart' },
   { href: '/admin/reports', label: 'Content reports', icon: 'chat' },
+  { href: '/admin/operations', label: 'Operations', icon: 'chart' },
   { href: '/admin/audit', label: 'Audit history', icon: 'clock' },
   { href: '/admin/access', label: 'Admin access', icon: 'user' },
 ]
