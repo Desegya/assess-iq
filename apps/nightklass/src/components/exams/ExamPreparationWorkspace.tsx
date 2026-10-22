@@ -48,10 +48,17 @@ export function ExamPreparationWorkspace() {
   const [custom, setCustom] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [unavailable, setUnavailable] = useState('')
   useEffect(() => {
     api
-      .get<Goal[]>('/exam-preparation/goals')
-      .then(setGoals)
+      .get<{ available: boolean; message: string | null }>('/exam-preparation/access')
+      .then((access) => {
+        if (!access.available) {
+          setUnavailable(access.message ?? 'WAEC and JAMB preparation is not available on your account yet.')
+          return
+        }
+        return api.get<Goal[]>('/exam-preparation/goals').then(setGoals)
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load exam goals'))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,6 +87,15 @@ export function ExamPreparationWorkspace() {
       setSaving(false)
     }
   }
+  if (unavailable)
+    return (
+      <section className="card mx-auto max-w-2xl space-y-3 p-6">
+        <h1 className="text-xl font-semibold">WAEC and JAMB preparation</h1>
+        <p role="status" className="text-sm text-slate-600">
+          {unavailable}
+        </p>
+      </section>
+    )
   return (
     <div className="space-y-6">
       <PageHeader

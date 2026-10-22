@@ -21,9 +21,26 @@ interface Coverage {
     topicId: string | null
     studied: boolean
     practiceAccuracy: number | null
+    evidence?: { distinctQuestions: number; level: 'NONE' | 'INSUFFICIENT' | 'EMERGING' | 'ESTABLISHED' }
   }[]
   summary: { total: number; withReviewedPractice: number; studied: number; assessed: number }
+  evidencePolicy?: { insufficientBelow: number; establishedFrom: number; method: string }
   note: string
+}
+// Accuracy is shown only with the amount of evidence behind it.
+function evidenceText(o: Coverage['objectives'][number]) {
+  const n = o.evidence?.distinctQuestions ?? 0
+  const items = `${n} question${n === 1 ? '' : 's'}`
+  switch (o.evidence?.level) {
+    case 'INSUFFICIENT':
+      return `Too early to tell · ${items} answered so far`
+    case 'EMERGING':
+      return `${o.practiceAccuracy}% across ${items} · early indication`
+    case 'ESTABLISHED':
+      return `${o.practiceAccuracy}% across ${items}`
+    default:
+      return o.practiceAccuracy === null ? 'No practice evidence yet' : `${o.practiceAccuracy}% practice accuracy`
+  }
 }
 function SyllabusScreen() {
   const api = useApi(),
@@ -108,8 +125,15 @@ function SyllabusScreen() {
                 <p>{data.summary.total} objectives</p>
                 <p>{data.summary.withReviewedPractice} with reviewed practice</p>
                 <p>{data.summary.studied} studied</p>
-                <p>{data.summary.assessed} assessed</p>
+                <p>{data.summary.assessed} with enough evidence</p>
               </div>
+              {data.evidencePolicy && (
+                <p className="text-xs text-slate-500">
+                  A percentage appears once you have answered at least {data.evidencePolicy.insufficientBelow} different
+                  questions for an objective; {data.evidencePolicy.establishedFrom}+ gives a steadier picture. Repeating
+                  the same question counts once.
+                </p>
+              )}
             </section>
           )}
           {revision.length > 0 && (
@@ -122,7 +146,7 @@ function SyllabusScreen() {
                   key={o.id}
                   onClick={() => study(o.id)}
                 >
-                  {o.title} · {o.practiceAccuracy}%
+                  {o.title} · {o.practiceAccuracy}% ({o.evidence?.distinctQuestions ?? 0} questions)
                 </button>
               ))}
             </section>
@@ -136,9 +160,7 @@ function SyllabusScreen() {
               <p className="text-sm text-slate-500">
                 {o.reviewedQuestions} reviewed questions ·{' '}
                 {o.studied ? 'Studied' : 'Not recorded as studied'} ·{' '}
-                {o.practiceAccuracy === null
-                  ? 'No assessed practice evidence yet'
-                  : `${o.practiceAccuracy}% practice accuracy`}
+                {evidenceText(o)}
               </p>
               <div className="flex flex-wrap gap-3">
                 <button className="btn-primary" disabled={!!busy} onClick={() => study(o.id)}>
