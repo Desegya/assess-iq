@@ -1,0 +1,60 @@
+{
+  "learners": 100,
+  "answersPerLearner": 60,
+  "restartTested": true,
+  "statuses": {
+    "login:200": 120,
+    "login:429": 18,
+    "goal:200": 100,
+    "start:201": 100,
+    "save:200": 6000,
+    "save:0": 379,
+    "submit:201": 50,
+    "waec-start:201": 20,
+    "waec-save:200": 20,
+    "waec-submit:201": 20
+  },
+  "errors": {},
+  "saves": {
+    "count": 6000,
+    "p50": 14,
+    "p95": 26,
+    "p99": 37,
+    "retries": 379,
+    "conflicts": 0
+  },
+  "confirmedAnswers": 6000,
+  "confirmedAnswerLoss": 0,
+  "login": {
+    "p50": 90,
+    "p95": 129
+  },
+  "start": {
+    "p50": 1420,
+    "p95": 1534
+  },
+  "phases": {
+    "seedMs": 503,
+    "loginMs": 20100,
+    "goalsMs": 503,
+    "startMs": 1546,
+    "restartDowntimeMs": 4518,
+    "answeringMs": 90012,
+    "submitMs": 985,
+    "expiryFinalizeMs": 24188,
+    "writtenMarkingMs": 104691
+  },
+  "expiredStillInProgress": 0,
+  "waec": {
+    "graded": 20,
+    "gradingFailed": 0,
+    "stillSubmitted": 0
+  },
+  "ai": {
+    "aiCalls": 24,
+    "aiFailures": 4,
+    "memoryMb": 48
+  },
+  "dbConnectionsMax": 19,
+  "serverMemoryMbMax": 386
+}
