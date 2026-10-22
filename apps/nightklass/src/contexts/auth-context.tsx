@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   useCallback,
   type ReactNode,
@@ -28,7 +29,8 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (user: AuthUser, accessToken: string, refreshToken: string, expiresIn: number) => void
   logout: () => Promise<void>
-  refreshAccessToken: () => Promise<boolean>
+  /** Resolves to a fresh access token, or null when the session has ended or the network is unavailable. */
+  refreshAccessToken: () => Promise<string | null>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -38,27 +40,46 @@ const USER_KEY = 'nightklass:user'
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
 const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 // 7 days, matches server
 
-function setTokenCookie(token: string, maxAge: number) {
-  const secure = location.protocol === 'https:' ? '; Secure' : ''
-  document.cookie = `accessToken=${token}; path=/; max-age=${maxAge}; SameSite=Strict${secure}`
-}
+// Tokens are never written to cookies: cookies travel with every page request
+// and end up in hosting logs. The middleware only needs to know a session may
+// exist, so it gets a non-secret marker. The refresh token stays in this
+// origin's storage and is rotated (with server-side reuse detection) on use.
+const SESSION_MARKER = 'nk_session'
 
-function clearTokenCookie() {
+function setSessionMarker() {
+  const secure = location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${SESSION_MARKER}=1; path=/; max-age=${REFRESH_COOKIE_MAX_AGE}; SameSite=Lax${secure}`
+  // Remove token cookies written by earlier versions.
   document.cookie = 'accessToken=; path=/; max-age=0'
-}
-
-function setRefreshCookie(token: string) {
-  const secure = location.protocol === 'https:' ? '; Secure' : ''
-  document.cookie = `refreshToken=${token}; path=/; max-age=${REFRESH_COOKIE_MAX_AGE}; SameSite=Strict${secure}`
-}
-
-function clearRefreshCookie() {
   document.cookie = 'refreshToken=; path=/; max-age=0'
 }
+
+function clearSessionCookies() {
+  document.cookie = `${SESSION_MARKER}=; path=/; max-age=0`
+  document.cookie = 'accessToken=; path=/; max-age=0'
+  document.cookie = 'refreshToken=; path=/; max-age=0'
+}
+
+type RefreshResult =
+  | { kind: 'ok'; accessToken: string; user: AuthUser }
+  | { kind: 'ended' }
+  | { kind: 'unreachable' }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ user: null, accessToken: null, isLoading: true })
   const router = useRouter()
+  // Concurrent 401s (autosave plus page requests) share one rotation of the refresh token.
+  const inflight = useRef<Promise<RefreshResult> | null>(null)
+
+  function refreshOnce(): Promise<RefreshResult> {
+    const stored = localStorage.getItem(REFRESH_KEY)
+    if (!stored) return Promise.resolve({ kind: 'ended' })
+    if (!inflight.current)
+      inflight.current = doRefresh(stored).finally(() => {
+        inflight.current = null
+      })
+    return inflight.current
+  }
 
   useEffect(() => {
     const storedUser = localStorage.getItem(USER_KEY)
@@ -69,9 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    doRefresh(storedRefresh).then(result => {
-      if (result) {
+    refreshOnce().then(result => {
+      if (result.kind === 'ok') {
         setState({ user: result.user, accessToken: result.accessToken, isLoading: false })
+      } else if (result.kind === 'unreachable') {
+        // Show the signed-in shell from the cached profile; requests retry the refresh.
+        setState({ user: JSON.parse(storedUser) as AuthUser, accessToken: null, isLoading: false })
       } else {
         clearStoredAuth()
         setState({ user: null, accessToken: null, isLoading: false })
@@ -80,45 +104,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function doRefresh(refreshTok: string): Promise<{ accessToken: string; user: AuthUser } | null> {
+  async function doRefresh(refreshTok: string): Promise<RefreshResult> {
     try {
       const res = await fetch(`${API_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: refreshTok }),
       })
-      if (!res.ok) return null
+      // Only an explicit rejection ends the session; throttling or outages do not.
+      if (res.status === 401) return { kind: 'ended' }
+      if (!res.ok) return { kind: 'unreachable' }
       const data = (await res.json()) as { accessToken: string; refreshToken: string; expiresIn: number }
       localStorage.setItem(REFRESH_KEY, data.refreshToken)
-      setRefreshCookie(data.refreshToken)
-      setTokenCookie(data.accessToken, data.expiresIn)
+      setSessionMarker()
 
       const meRes = await fetch(`${API_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${data.accessToken}` },
       })
-      if (!meRes.ok) return null
+      if (meRes.status === 401) return { kind: 'ended' }
+      if (!meRes.ok) return { kind: 'unreachable' }
       const freshUser = (await meRes.json()) as AuthUser
       localStorage.setItem(USER_KEY, JSON.stringify(freshUser))
 
-      return { accessToken: data.accessToken, user: freshUser }
+      return { kind: 'ok', accessToken: data.accessToken, user: freshUser }
     } catch {
-      return null
+      // Network failure (offline, dropped connection): keep the session for a retry.
+      return { kind: 'unreachable' }
     }
   }
 
   function clearStoredAuth() {
     localStorage.removeItem(REFRESH_KEY)
     localStorage.removeItem(USER_KEY)
-    clearTokenCookie()
-    clearRefreshCookie()
+    clearSessionCookies()
   }
 
   const login = useCallback(
     (user: AuthUser, accessToken: string, refreshToken: string, expiresIn: number) => {
       localStorage.setItem(REFRESH_KEY, refreshToken)
       localStorage.setItem(USER_KEY, JSON.stringify(user))
-      setTokenCookie(accessToken, expiresIn)
-      setRefreshCookie(refreshToken)
+      setSessionMarker()
+      void expiresIn
       setState({ user, accessToken, isLoading: false })
     },
     [],
@@ -141,19 +167,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/login')
   }, [state, router])
 
-  const refreshAccessToken = useCallback(async (): Promise<boolean> => {
-    const storedRefresh = localStorage.getItem(REFRESH_KEY)
-    if (!storedRefresh) return false
-
-    const result = await doRefresh(storedRefresh)
-    if (result) {
+  const refreshAccessToken = useCallback(async (): Promise<string | null> => {
+    const result = await refreshOnce()
+    if (result.kind === 'ok') {
       setState(s => ({ ...s, accessToken: result.accessToken, user: result.user }))
-      return true
+      return result.accessToken
     }
-
-    clearStoredAuth()
-    setState({ user: null, accessToken: null, isLoading: false })
-    return false
+    if (result.kind === 'ended') {
+      clearStoredAuth()
+      setState({ user: null, accessToken: null, isLoading: false })
+    }
+    return null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
