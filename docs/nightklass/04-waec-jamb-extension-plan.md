@@ -19,7 +19,21 @@ First foundation slice implemented:
 - Migration checked against Prisma's schema diff and applied to local PostgreSQL (`localhost:5432/assessiq`). All 15 migrations are now applied, including the previously pending admin migration. Database integration and browser testing remain outstanding.
 - Frontend production build currently fails fetching existing Google Fonts because the environment cannot resolve fonts.googleapis.com.
 
-Still to implement: official syllabus/version management, teacher-managed shared materials and saved question-bank generation/review, exam specifications, full timed mocks, durable expiry/grading, WAEC paper structures, exam-specific analytics and combined-goal revision. Existing topic quizzes are not full exam simulations. No deployment has been performed. The local development database migration was applied on 22 October 2026.
+Content-bank and JAMB mock slices implemented:
+
+- `/admin/exam-content`: teacher materials by exam/subject/topic, PDF/DOCX/PPTX/TXT uploads (5 MB), pasted notes, extracted-text preview, publication/archive controls and source/permission notes.
+- Saved AI batches of up to 10 questions, with subject-only or teacher-material context, structured validation and duplicate fingerprints that preserve mathematical operators.
+- Draft authoring/editing, revision checks, teacher approval, immutable published question editing restrictions, archival and transactional audit records. Generated items remain drafts until reviewed.
+- Learner access to published teacher notes and reviewed question practice; model answers/feedback are hidden until submission. Copies preserve quiz history when the bank changes.
+- `/admin/exam-content`: version-checked, exam-year JAMB mock specifications; no exam-year specification is automatically published.
+- Full four-subject JAMB-style mock assembly with complete-count checks, frozen questions/rules, a server deadline, answer autosave, review flags, resume and submission confirmation.
+- Unique active-attempt and request keys, optimistic answer versions, item-membership validation, atomic/idempotent grading, per-subject/topic results and explicitly labelled practice score estimates.
+- Database-backed expiry sweep runs at API startup and every 30 seconds, finalizing expired attempts without a browser. Multiple API instances coordinate through transactional finalization; no Redis worker is assumed.
+- 71 unit cases and 13 HTTP/PostgreSQL integration cases pass. Integration fixtures include a 180-question paper, stale saves, forged IDs, concurrent finalization, late answers and browser-independent expiry.
+- API and frontend production builds pass; the prior Google Fonts restriction was resolved by permitting network access for the build. Real paid-AI generation and browser interaction have not been exercised by these tests.
+- Both new migrations have been applied to local development PostgreSQL; all 17 migrations are current. The isolated integration database is `nightklass_exam_test` and contains test fixtures.
+
+Still to implement: official syllabus/version management and coverage blueprints, rich stimuli/diagrams/audio, published-question correction lineage, durable bulk-generation/written-grading jobs, full WAEC paper structures, cross-exam objective mapping/adaptive revision and browser/accessibility/load verification. Shared-bank practice currently records mastery under a subject's exam-practice topic; mock results show topic breakdowns but do not yet update objective-level mastery or study plans. Bank selection samples bounded candidate pools (1,000 for practice, 5,000 per mock subject); indexed sampling is future scale work. Published content must be populated and reviewed by the teacher before full mocks become available. No deployment has been performed.
 
 ## 1. Outcome and product direction
 

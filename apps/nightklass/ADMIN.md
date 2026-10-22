@@ -102,3 +102,26 @@ lacks an executable, and Next prompts for configuration). Temporary external
 ESLint checks can validate the changes without upgrading repository dependencies.
 The API build uses a nonincremental build config to avoid missing JavaScript
 outputs when a preceding no-emit type check writes incremental state.
+
+
+## WAEC/JAMB content and JAMB practice mocks
+
+Open `/admin/exam-content` using a Nightklass ADMIN/OWNER account. Grant the collaborating teacher access through the existing owner-managed access screen; an institutional TEACHER role does not grant this standalone product permission.
+
+Choose any subject and topic. Paste notes or upload a text-based PDF, DOCX, PPTX or TXT file up to 5 MB. Files are extracted into shared text records; original binaries are not retained by this workflow. Provide the source and permission to share, preview extraction, then publish the material when ready.
+
+Generate small original-question batches from a topic alone or selected teaching material. Output is validated and saved as drafts. Review answers and explanations, edit drafts, then approve individual questions. Approved questions cannot be edited; archive defective items. Corrections with full publication lineage remain future work. These are exam-style questions unless separately sourced as actual permitted past questions.
+
+Learners open “Teacher notes & reviewed practice” from their subject cards. Private learner uploads remain in the existing personally owned course workflow and are not copied into this shared bank.
+
+Publish a JAMB mock specification for the intended examination year after checking the rules and recording a source/verification note. The default form fields follow the published baseline: 60 English questions, 40 in each of three other subjects and 120 minutes overall. They are editable configuration, not an automatically verified specification for any future cycle. A full mock requires the configured number of approved questions in every selected subject. Scores are explicitly labelled practice estimates, not official JAMB scoring.
+
+The API finalizes overdue attempts at startup and through a 30-second database-backed sweep. Keep the API running for timely finalization; a read also finalizes an overdue attempt. Confirmed answers survive refresh; unsaved changes require the page to stay open and connectivity to return. The server deadline continues during disconnection. Written WAEC paper mocks are not implemented yet.
+
+Run the dedicated integration suite only against the isolated local database named `nightklass_exam_test`, with committed migrations applied:
+
+```sh
+DATABASE_URL=<isolated-test-database-url> npm run test:exam:integration --workspace @assessiq/api
+```
+
+The suite starts the actual API, uses real authentication and PostgreSQL, and creates test fixtures. It checks content visibility, uploads, question publication, practice, a full 180-question mock, answer ownership/versioning, concurrent submission and expiry recovery. It does not call paid AI or external storage. Fixtures remain in the disposable test database; core bank fixtures use per-run identities to avoid collisions.
