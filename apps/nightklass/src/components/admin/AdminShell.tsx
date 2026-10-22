@@ -18,6 +18,7 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: '/admin/courses', label: 'Courses & topics', icon: 'book' },
   { href: '/admin/lessons', label: 'Lessons', icon: 'cards' },
   { href: '/admin/questions', label: 'Questions', icon: 'target' },
+  { href: '/admin/exam-content', label: 'WAEC / JAMB content', icon: 'book' },
   { href: '/admin/materials', label: 'Study materials', icon: 'upload' },
   { href: '/admin/activity', label: 'Learning activity', icon: 'chart' },
   { href: '/admin/reports', label: 'Content reports', icon: 'chat' },

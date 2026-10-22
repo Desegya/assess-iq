@@ -36,7 +36,7 @@ export function backend(path: string, options: RequestInit = {}) {
   return fetch(`${API_URL}${path}`, {
     ...options,
     cache: 'no-store',
-    signal: AbortSignal.timeout(15000),
+    signal: options.signal ?? AbortSignal.timeout(15000),
   })
 }
 export async function authenticated(request: NextRequest, path: string, options: RequestInit = {}) {
@@ -45,7 +45,7 @@ export async function authenticated(request: NextRequest, path: string, options:
     backend(path, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
         ...options.headers,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
