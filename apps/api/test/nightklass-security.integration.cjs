@@ -378,3 +378,22 @@ test('WAEC retakes draw unseen questions first and refuse incomplete forms', asy
   const refused = await call('/exam-preparation/waec-papers/start', token, { goalId: goal.id, paperId: paper.id, requestKey: randomUUID() })
   assert.equal(refused.status, 400); assert.match(refused.body.message, /needs 2 reviewed questions/)
 })
+
+test('mocks disclose text-only limits and learners can report only questions they were shown', async () => {
+  const l = await jambLearner('reporter')
+  const availability = await call(`/exam-preparation/goals/${l.goal.id}/mock-availability`, l.token)
+  assert.equal(availability.body.format.textOnly, true)
+  assert.ok(availability.body.format.notIncluded.some(item => /passage/i.test(item)))
+  const started = await call('/exam-preparation/mocks', l.token, { goalId: l.goal.id, requestKey: randomUUID() })
+  assert.match(started.body.specification.format.summary, /not a complete UTME paper/)
+  const shown = started.body.questions[0].id
+  const unseen = await prisma.examBankQuestion.findFirst({ where: { status: 'APPROVED', id: { notIn: started.body.questions.map(q => q.id) }, exposures: { none: { studentId: l.user.id } } } })
+  assert.equal((await call('/exam-preparation/question-reports', l.token, { questionId: unseen.id, reason: 'WRONG_ANSWER', details: 'Probing an unseen question' })).status, 404)
+  const report = await call('/exam-preparation/question-reports', l.token, { questionId: shown, attemptId: started.body.id, reason: 'AMBIGUOUS', details: 'Two options look correct to me.' })
+  assert.equal(report.status, 201); assert.equal(report.body.status, 'OPEN')
+  const queue = await call('/admin/nightklass/exam-content/question-reports', ownerToken)
+  const mine = queue.body.find(r => r.id === report.body.id)
+  assert.ok(mine); assert.equal(mine.question.id, shown)
+  assert.equal((await call(`/admin/nightklass/exam-content/question-reports/${report.body.id}`, ownerToken, { status: 'RESOLVED', resolutionNote: 'Clarified option C wording.' }, 'PATCH')).status, 200)
+  assert.equal((await call('/admin/nightklass/exam-content/question-reports', l.token)).status, 403)
+})

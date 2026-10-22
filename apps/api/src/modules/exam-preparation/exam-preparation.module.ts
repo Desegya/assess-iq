@@ -11,6 +11,7 @@ import { NightklassAdminGuard } from '../admin/admin.guard'
 import { ExamContentAdminController, ExamContentLearnerController } from './exam-content.controller'
 import { ExamContentService } from './exam-content.service'
 import { Module } from '@nestjs/common'
+import { ExamReportAdminController, ExamReportController, ExamReportService } from './exam-reports'
 import { ExamAccessStatusController, ExamPreparationController } from './exam-preparation.controller'
 import { ExamPreparationService } from './exam-preparation.service'
 
@@ -28,6 +29,8 @@ import { ExamPreparationService } from './exam-preparation.service'
     ExamContentLearnerController,
     ExamMockController,
     ExamMockAdminController,
+    ExamReportController,
+    ExamReportAdminController,
   ],
   providers: [
     ExamGenerationService,
@@ -36,6 +39,7 @@ import { ExamPreparationService } from './exam-preparation.service'
     ExamPreparationService,
     ExamContentService,
     ExamMockService,
+    ExamReportService,
     NightklassAdminGuard,
   ],
 })

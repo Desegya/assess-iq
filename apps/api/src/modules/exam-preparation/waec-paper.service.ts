@@ -16,6 +16,7 @@ import { validateSections, WaecQuestion } from './waec-paper.rules'
 import { subjectIdentity } from './exam-content.rules'
 import { freezeQuestion } from './exam-mock.rules'
 import { recordExposures, sampleQuestionIds } from './exam-sampling'
+import { formatDisclosure } from './exam-format'
 @Injectable()
 export class WaecPaperService {
   constructor(
@@ -126,6 +127,7 @@ export class WaecPaperService {
         })
         return {
           ...paper,
+          format: formatDisclosure('WAEC'),
           coverage,
           ready: coverage.every((s) => s.available === s.required),
           active,
@@ -212,6 +214,7 @@ export class WaecPaperService {
             instructions: paper.instructions,
             sourceNote: paper.sourceNote,
             templateRevision: paper.revision,
+            format: formatDisclosure('WAEC'),
             sections: sections as unknown as Prisma.InputJsonValue,
           },
         },

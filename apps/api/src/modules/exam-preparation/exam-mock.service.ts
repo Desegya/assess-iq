@@ -21,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { MockTemplateDto, SaveMockDto, StartMockDto } from './exam-mock.dto'
 import { freezeQuestion, FrozenMockQuestion, markMock } from './exam-mock.rules'
 import { recordExposures, sampleQuestionIds } from './exam-sampling'
+import { formatDisclosure } from './exam-format'
 import { waitUntil } from '../../common/wait-until'
 
 /** Bump when the marking pipeline (batching, validation, aggregation) changes. */
@@ -165,6 +166,7 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
     return {
       template,
       subjects,
+      format: formatDisclosure('JAMB'),
       active,
       ready: !!template && subjects.every((s) => s.available >= s.required!),
     }
@@ -256,6 +258,7 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
             durationMinutes: template.durationMinutes,
             sourceNote: template.sourceNote,
             year: goal.year,
+            format: formatDisclosure('JAMB'),
           },
         },
       })
