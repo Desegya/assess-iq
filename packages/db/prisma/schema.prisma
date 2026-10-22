@@ -308,7 +308,8 @@ model RefreshToken {
   // SHA-256 of the issued token; the raw value is never stored.
   token     String   @unique
   // Rotations share a family so reuse of a rotated token revokes the whole chain.
-  familyId  String
+  // Defaulted so a previous API version, still serving during a rollout, can keep issuing tokens.
+  familyId  String   @default(dbgenerated("(gen_random_uuid())::text"))
   rotatedAt DateTime?
   expiresAt DateTime
   isRevoked Boolean  @default(false)

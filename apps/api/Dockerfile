@@ -42,4 +42,5 @@ ENV NODE_ENV=production
 COPY --from=build /app ./
 WORKDIR /app/apps/api
 EXPOSE 3001
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=/app/packages/db/prisma/schema.prisma && node dist/main.js"]
+# Validate configuration before migrating, so a bad release never alters the schema.
+CMD ["sh", "-c", "node dist/check-env.js && npx prisma migrate deploy --schema=/app/packages/db/prisma/schema.prisma && node dist/main.js"]
