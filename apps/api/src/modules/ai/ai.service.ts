@@ -467,7 +467,7 @@ ${videos.map(v => `${v.id} | ${v.title} | ${v.channel} | ${v.description.slice(0
     context: string,
     opts: CourseGenerationOptions,
   ): Promise<WrittenAnswerGrade[]> {
-    const prompt = `You are a fair, encouraging university examiner marking a student's self-test.
+    const prompt = `You are a fair, encouraging examiner marking a student's practice answers at the academic level specified below.
 
 ${context}
 

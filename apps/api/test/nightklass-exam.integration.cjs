@@ -28,6 +28,7 @@ before(async () => {
   await prisma.nightklassAdmin.create({ data: { userId: owner.id, role: 'OWNER' } })
   const { AppModule } = require('../dist/app.module')
   app = await NestFactory.create(AppModule, { logger: false })
+  app.useBodyParser('json', { limit: '2mb' })
   app.setGlobalPrefix('api'); app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, transformOptions: { enableImplicitConversion: true } }))
   await app.listen(0, '127.0.0.1')
@@ -170,4 +171,107 @@ test('expired mock rejects late answers and finalizes from persisted state witho
   const persisted = await prisma.examMockAttempt.findUnique({ where: { id } })
   assert.equal(persisted.status, 'GRADED'); assert.equal(persisted.submissionReason, 'TIME_EXPIRED')
   assert.equal(persisted.result.practiceScore, 0)
+})
+
+let waecGoal, waecPaper, waecAttempt
+const waecTopic = `WAEC government ${suffix}`
+const waecSections = [{ id: 'objectives', title: 'Compulsory objectives', questionType: 'MCQ', count: 1, choose: 1, marks: 1, topic: waecTopic }, { id: 'essays', title: 'Answer one essay', questionType: 'THEORY', count: 2, choose: 1, marks: 10, topic: waecTopic }]
+test('WAEC publishes subject/series paper rules and checks section coverage', async () => {
+  const goalResponse = await call('/exam-preparation/goals', learnerToken, { exam: 'WAEC', year: 2027, subjects: ['Government'] }, 'PUT')
+  assert.equal(goalResponse.status, 200); waecGoal = goalResponse.body
+  const fields = { year: 2027, series: 'SCHOOL', subject: 'Government', paperCode: `TEST-${suffix.slice(0,8)}`, title: 'Government objectives and essays practice', durationMinutes: 60, instructions: 'Answer the objective question and select exactly one essay. Label all subparts and show your reasoning.', sourceNote: 'Isolated integration fixture; illustrative paper, not an official WAEC specification.', status: 'APPROVED', sections: waecSections, expectedRevision: 0 }
+  assert.equal((await admin('waec-papers', { ...fields, sections: [{ ...waecSections[1], choose: 3 }] })).status, 400)
+  const paperResponse = await admin('waec-papers', fields)
+  assert.equal(paperResponse.status, 201); waecPaper = paperResponse.body
+  const availability = await call(`/exam-preparation/goals/${waecGoal.id}/waec-papers`, learnerToken)
+  assert.equal(availability.body.find(p => p.id === waecPaper.id).ready, false)
+  assert.equal((await call('/exam-preparation/waec-papers/start', learnerToken, { goalId: waecGoal.id, paperId: waecPaper.id, requestKey: randomUUID() })).status, 400)
+  assert.equal((await call(`/exam-preparation/goals/${waecGoal.id}/waec-papers`, otherToken)).status, 404)
+})
+test('WAEC starts frozen paper sections and validates optional choices and written saves', async () => {
+  for (let i = 0; i < 3; i++) {
+    const text = `WAEC fixture ${suffix} ${i}: ${i === 0 ? 'Choose option A.' : '(a) Define democracy. (b) Explain two benefits.'}`
+    await prisma.examBankQuestion.create({ data: { exam: 'WAEC', subject: 'Government', subjectKey: 'government', topic: waecTopic, questionText: text, questionType: i === 0 ? 'MCQ' : 'THEORY', options: i === 0 ? authored.options : [], correctAnswer: i === 0 ? 'A' : 'A definition and two explained benefits.', explanation: i === 0 ? 'Option A is correct.' : 'Definition: 4 marks. Two explained benefits: 3 marks each.', marks: i === 0 ? 1 : 10, difficulty: 'MEDIUM', status: 'APPROVED', createdById: owner.id, reviewedById: owner.id, fingerprint: createHash('sha256').update(text).digest('hex') } })
+  }
+  const start = await call('/exam-preparation/waec-papers/start', learnerToken, { goalId: waecGoal.id, paperId: waecPaper.id, requestKey: randomUUID() })
+  assert.equal(start.status, 201); waecAttempt = start.body
+  assert.equal(waecAttempt.specification.exam, 'WAEC')
+  assert.equal(waecAttempt.questions.length, 3)
+  assert.ok(waecAttempt.questions.every(q => q.correctAnswer === undefined && q.explanation === undefined))
+  assert.equal((await call(`/exam-preparation/mocks/${waecAttempt.id}/submit`, learnerToken, {})).status, 400)
+  const essays = waecAttempt.questions.filter(q => q.questionType === 'THEORY')
+  const savePath = `/exam-preparation/mocks/${waecAttempt.id}/answers`
+  assert.equal((await call(savePath, learnerToken, { expectedVersion: 1, answers: [], flags: [], selectedQuestions: essays.map(q => q.id) }, 'PATCH')).status, 400)
+  const objective = waecAttempt.questions.find(q => q.questionType === 'MCQ')
+  const saved = await call(savePath, learnerToken, { expectedVersion: 1, answers: [{ questionId: objective.id, answer: 'A' }, { questionId: essays[0].id, answer: '(a) People elect representatives. (b) This supports accountability.' }], flags: [essays[0].id], selectedQuestions: [essays[0].id] }, 'PATCH')
+  assert.equal(saved.status, 200)
+  const resumed = await call(`/exam-preparation/mocks/${waecAttempt.id}`, learnerToken)
+  assert.match(resumed.body.answers[essays[0].id], /accountability/)
+  assert.deepEqual(resumed.body.selectedQuestions, [essays[0].id])
+})
+test('WAEC marking persists failures, retries from the database, and preserves rubric partial credit', async () => {
+  const { AiService } = require('../dist/modules/ai/ai.service')
+  const { ExamMockService } = require('../dist/modules/exam-preparation/exam-mock.service')
+  const ai = app.get(AiService), original = ai.gradeWrittenAnswers
+  let calls = 0
+  ai.gradeWrittenAnswers = async () => { calls++; throw new Error('Deterministic provider outage') }
+  try {
+    const submitted = await call(`/exam-preparation/mocks/${waecAttempt.id}/submit`, learnerToken, {})
+    assert.equal(submitted.status, 201)
+    let pending
+    for (let i = 0; i < 30; i++) { pending = await prisma.examMockAttempt.findUnique({ where: { id: waecAttempt.id } }); if (pending.gradingAttempts === 1 && !pending.gradingLeaseUntil) break; await new Promise(r => setTimeout(r, 20)) }
+    assert.equal(pending.status, 'SUBMITTED')
+    assert.equal(pending.result.ungradedMarks, 10)
+    assert.equal(pending.result.percentage, null)
+    assert.equal(calls, 1)
+    assert.equal((await call(`/exam-preparation/mocks/${waecAttempt.id}/answers`, learnerToken, { expectedVersion: 2, answers: [], flags: [] }, 'PATCH')).status, 409)
+    ai.gradeWrittenAnswers = async answers => { calls++; return answers.map(a => ({ id: a.id, score: 4.5, feedback: 'Definition is partly correct; expand the benefits.', missingPoints: ['Explain both benefits'] })) }
+    await prisma.examMockAttempt.update({ where: { id: waecAttempt.id }, data: { gradingNextAt: new Date(Date.now() - 1000) } })
+    await app.get(ExamMockService).sweep()
+    const finished = await call(`/exam-preparation/mocks/${waecAttempt.id}`, learnerToken)
+    assert.equal(finished.body.status, 'GRADED')
+    assert.equal(finished.body.result.earnedMarks, 5.5)
+    assert.equal(finished.body.result.maxMarks, 11)
+    assert.equal(finished.body.result.percentage, 50)
+    assert.equal(finished.body.result.ungradedMarks, 0)
+    assert.equal(calls, 2)
+    assert.ok(finished.body.result.results.some(r => r.feedback?.includes('expand')))
+    assert.match(finished.body.result.scoringNote, /not an official WAEC grade/)
+  } finally { ai.gradeWrittenAnswers = original }
+})
+test('WAEC expiry permits incomplete optional selections and keeps the full paper denominator', async () => {
+  const response = await call('/exam-preparation/waec-papers/start', learnerToken, { goalId: waecGoal.id, paperId: waecPaper.id, requestKey: randomUUID() })
+  assert.equal(response.status, 201)
+  await prisma.examMockAttempt.update({ where: { id: response.body.id }, data: { expiresAt: new Date(Date.now() - 1000) } })
+  const result = await call(`/exam-preparation/mocks/${response.body.id}`, learnerToken)
+  assert.equal(result.body.status, 'GRADED')
+  assert.equal(result.body.submissionReason, 'TIME_EXPIRED')
+  assert.equal(result.body.result.maxMarks, 11)
+  assert.equal(result.body.result.percentage, 0)
+})
+test('WAEC exhausted written-marking retries preserve ungraded marks without inventing a final percentage', async () => {
+  const { AiService } = require('../dist/modules/ai/ai.service')
+  const { ExamMockService } = require('../dist/modules/exam-preparation/exam-mock.service')
+  const ai = app.get(AiService), original = ai.gradeWrittenAnswers
+  let calls = 0
+  ai.gradeWrittenAnswers = async () => { calls++; throw new Error('Persistent deterministic outage') }
+  try {
+    // Earlier expiry releases its active key when read, allowing a fresh paper.
+    const start = await call('/exam-preparation/waec-papers/start', learnerToken, { goalId: waecGoal.id, paperId: waecPaper.id, requestKey: randomUUID() })
+    const id = start.body.id, essay = start.body.questions.find(q => q.questionType === 'THEORY')
+    assert.equal((await call(`/exam-preparation/mocks/${id}/answers`, learnerToken, { expectedVersion: 1, answers: [{ questionId: essay.id, answer: 'A nonblank essay answer' }], flags: [], selectedQuestions: [essay.id] }, 'PATCH')).status, 200)
+    assert.equal((await call(`/exam-preparation/mocks/${id}/submit`, learnerToken, {})).status, 201)
+    for (let retry = 1; retry <= 3; retry++) {
+      for (let poll = 0; poll < 40; poll++) { const a = await prisma.examMockAttempt.findUnique({ where: { id } }); if (a.gradingAttempts >= retry && !a.gradingLeaseUntil) break; await new Promise(r => setTimeout(r,20)) }
+      if (retry < 3) { await prisma.examMockAttempt.update({ where: { id }, data: { gradingNextAt: new Date(Date.now()-1000) } }); await app.get(ExamMockService).sweep() }
+    }
+    const finished = await call(`/exam-preparation/mocks/${id}`, learnerToken)
+    assert.equal(finished.body.status, 'GRADED')
+    assert.equal(finished.body.result.gradingFailed, true)
+    assert.equal(finished.body.result.ungradedMarks, 10)
+    assert.equal(finished.body.result.percentage, null)
+    assert.equal(calls, 3)
+    await app.get(ExamMockService).sweep()
+    assert.equal(calls, 3)
+  } finally { ai.gradeWrittenAnswers = original }
 })

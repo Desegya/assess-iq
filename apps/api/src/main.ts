@@ -8,6 +8,9 @@ import { AppModule } from './app.module'
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule)
 
+  // Bounded JSON payloads accommodate saved written papers and shared teaching notes.
+  app.useBodyParser('json', { limit: '2mb' })
+
   // ─── Local file storage (dev fallback when R2 is not configured) ──────────
   // Serves uploads/ as static files at /uploads/...
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' })

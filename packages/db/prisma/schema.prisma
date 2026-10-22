@@ -998,10 +998,12 @@ model ExamMockAttempt {
   id          String @id @default(cuid())
   studentId   String
   goalId      String
-  templateId  String
+  templateId  String?
+  waecPaperId String?
+  waecPaper   WaecPaperTemplate? @relation(fields: [waecPaperId], references: [id], onDelete: Restrict)
   student     User @relation(fields: [studentId], references: [id], onDelete: Cascade)
   goal        ExamGoal @relation(fields: [goalId], references: [id], onDelete: Restrict)
-  template    ExamMockTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  template    ExamMockTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict)
   requestKey  String
   activeKey   String? @unique
   status      AttemptStatus @default(IN_PROGRESS)
@@ -1014,9 +1016,35 @@ model ExamMockAttempt {
   questions   Json
   answers     Json @default("{}")
   flags       String[]
+  selectedQuestions String[] @default([])
+  gradingAttempts Int @default(0)
+  gradingNextAt DateTime?
+  gradingLeaseUntil DateTime?
   result      Json?
   @@unique([studentId, requestKey])
   @@index([status, expiresAt])
   @@index([studentId, startedAt])
   @@map("exam_mock_attempts")
+}
+
+
+model WaecPaperTemplate {
+  id              String @id @default(cuid())
+  year            Int
+  series          String
+  subject         String
+  subjectKey      String
+  paperCode       String
+  title           String
+  durationMinutes Int
+  instructions    String @db.Text
+  sourceNote      String
+  sections        Json
+  status          QuestionStatus @default(DRAFT)
+  revision        Int @default(1)
+  attempts        ExamMockAttempt[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@unique([year, series, subjectKey, paperCode])
+  @@map("waec_paper_templates")
 }

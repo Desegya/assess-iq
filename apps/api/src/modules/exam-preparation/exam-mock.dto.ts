@@ -1,5 +1,18 @@
 import { Type } from 'class-transformer'
-import { ArrayMaxSize, IsArray, IsIn, IsInt, IsString, IsUUID, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator'
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator'
 export class MockTemplateDto {
   @IsInt() @Min(2026) @Max(2100) year!: number
   @IsString() @MinLength(5) @MaxLength(150) title!: string
@@ -17,10 +30,24 @@ export class StartMockDto {
 }
 class MockAnswerDto {
   @IsString() @MinLength(1) @MaxLength(100) questionId!: string
-  @IsIn(['A', 'B', 'C', 'D', '']) answer!: string
+  @IsString() @MaxLength(6000) answer!: string
 }
 export class SaveMockDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  selectedQuestions?: string[]
   @IsInt() @Min(1) expectedVersion!: number
-  @IsArray() @ArrayMaxSize(400) @ValidateNested({ each: true }) @Type(() => MockAnswerDto) answers!: MockAnswerDto[]
-  @IsArray() @ArrayMaxSize(400) @IsString({ each: true }) @MaxLength(100, { each: true }) flags!: string[]
+  @IsArray()
+  @ArrayMaxSize(400)
+  @ValidateNested({ each: true })
+  @Type(() => MockAnswerDto)
+  answers!: MockAnswerDto[]
+  @IsArray()
+  @ArrayMaxSize(400)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  flags!: string[]
 }
