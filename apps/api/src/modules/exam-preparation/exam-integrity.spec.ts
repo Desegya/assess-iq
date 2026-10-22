@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { shuffleOptions } from './exam-sampling'
 import { freezeQuestion, markMock } from './exam-mock.rules'
-import { questionFingerprintV2, questionSimilarity, sameOptionSet } from './exam-content.rules'
+import { questionFingerprintV2, questionSimilarity, sameOptionSet, subjectIdentity } from './exam-content.rules'
+import { normalizeSubjects } from './exam-goal.rules'
 import { evidenceLevel } from './exam-syllabus.service'
 
 const options = [
@@ -73,5 +74,25 @@ describe('coverage evidence levels', () => {
     expect(evidenceLevel(3)).toBe('EMERGING')
     expect(evidenceLevel(7)).toBe('EMERGING')
     expect(evidenceLevel(8)).toBe('ESTABLISHED')
+  })
+})
+
+describe('canonical subject identity', () => {
+  it('maps unambiguous names and abbreviations to one key', () => {
+    expect(subjectIdentity('CRK')).toBe('christian religious studies')
+    expect(subjectIdentity(' Christian  Religious Knowledge ')).toBe('christian religious studies')
+    expect(subjectIdentity('Lit-in-English')).toBe('literature in english')
+    expect(subjectIdentity('Further Maths')).toBe('further mathematics')
+    expect(subjectIdentity('Use of English')).toBe('english')
+  })
+  it('keeps distinct and custom subjects separate', () => {
+    expect(subjectIdentity('Agriculture')).toBe('agriculture')
+    expect(subjectIdentity('Agricultural Science')).toBe('agricultural science')
+    expect(subjectIdentity('Principles of Accounts')).not.toBe(subjectIdentity('Financial Accounting'))
+    expect(subjectIdentity('Data Processing')).toBe('data processing')
+  })
+  it('stores the canonical display name and rejects duplicates entered under two names', () => {
+    expect(normalizeSubjects('WAEC', ['CRK', 'Govt']).map((s) => s.name)).toEqual(['Christian Religious Studies', 'Government'])
+    expect(() => normalizeSubjects('WAEC', ['CRK', 'Christian Religious Studies'])).toThrow(/only once/)
   })
 })

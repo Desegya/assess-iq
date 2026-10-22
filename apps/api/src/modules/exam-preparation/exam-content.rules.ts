@@ -2,11 +2,54 @@ import { BadRequestException } from '@nestjs/common'
 import { createHash } from 'crypto'
 import type { BankQuestionDto } from './exam-content.dto'
 
+/**
+ * Canonical subject keys for names and abbreviations that unambiguously mean the
+ * same WAEC/JAMB subject. Anything not listed keeps its own lower-cased key, so
+ * custom subjects still work and genuinely different subjects (for example JAMB
+ * "Agriculture" and WAEC "Agricultural Science", or "Principles of Accounts" and
+ * "Financial Accounting") are never merged by guesswork.
+ */
+export const SUBJECT_ALIASES: Record<string, string[]> = {
+  english: ['english', 'english language', 'use of english'],
+  mathematics: ['math', 'maths', 'general mathematics', 'mathematics'],
+  'further mathematics': ['further mathematics', 'further maths', 'further math'],
+  'christian religious studies': [
+    'christian religious studies',
+    'christian religious knowledge',
+    'crs',
+    'crk',
+  ],
+  'islamic studies': ['islamic studies', 'islamic religious studies', 'islamic religious knowledge', 'irs', 'irk'],
+  'literature in english': ['literature in english', 'literature-in-english', 'lit in english', 'lit-in-english', 'literature'],
+  'agricultural science': ['agricultural science', 'agric', 'agric science', 'agric. science'],
+  economics: ['economics', 'econs'],
+  government: ['government', 'govt'],
+  geography: ['geography', 'geog'],
+  biology: ['biology', 'bio'],
+  chemistry: ['chemistry', 'chem'],
+  physics: ['physics', 'phy'],
+}
+/** Display names for canonical keys, so "CRK" is shown as the full subject name. */
+export const SUBJECT_NAMES: Record<string, string> = {
+  english: 'English Language',
+  mathematics: 'Mathematics',
+  'further mathematics': 'Further Mathematics',
+  'christian religious studies': 'Christian Religious Studies',
+  'islamic studies': 'Islamic Studies',
+  'literature in english': 'Literature in English',
+  'agricultural science': 'Agricultural Science',
+  economics: 'Economics',
+  government: 'Government',
+  geography: 'Geography',
+  biology: 'Biology',
+  chemistry: 'Chemistry',
+  physics: 'Physics',
+}
+const ALIAS_INDEX = new Map(Object.entries(SUBJECT_ALIASES).flatMap(([key, names]) => names.map((n) => [n, key])))
+
 export function subjectIdentity(name: string) {
   const normalized = name.trim().replace(/\s+/g, ' ').toLowerCase()
-  if (['english', 'english language', 'use of english'].includes(normalized)) return 'english'
-  if (['math', 'maths', 'general mathematics', 'mathematics'].includes(normalized)) return 'mathematics'
-  return normalized
+  return ALIAS_INDEX.get(normalized) ?? normalized
 }
 const normalize = (text: string) => text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim()
 
