@@ -20,7 +20,7 @@ function PracticeScreen() {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [result, setResult] = useState<Result | null>(null)
   const [count, setCount] = useState(10)
-  const [topic, setTopic] = useState('')
+  const [topic, setTopic] = useState(params.get('topic') ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -40,7 +40,7 @@ function PracticeScreen() {
   const subject = goal?.subjects.find(s => s.subjectKey === subjectKey)
   async function start(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setError(''); setMessage('')
-    try { setPractice(await api.post<Practice>('/exam-preparation/practice', { goalId, subjectKey, count, ...(topic.trim() ? { topic: topic.trim() } : {}) })); setAnswers({}); setResult(null) }
+    try { setPractice(await api.post<Practice>('/exam-preparation/practice', { goalId, subjectKey, count, ...(params.get('objective') ? { objectiveId: params.get('objective') } : {}), ...(topic.trim() ? { topic: topic.trim() } : {}) })); setAnswers({}); setResult(null) }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not start practice') }
     finally { setBusy(false) }
   }

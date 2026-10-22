@@ -52,7 +52,7 @@ export function ExamPreparationWorkspace() {
         <div className="flex flex-wrap gap-2"><Link className="btn-primary" href={`/exam-preparation/mocks?goal=${goal.id}&exam=${goal.exam}`}>{goal.exam === 'WAEC' ? 'WAEC paper mocks' : 'Timed mock'}</Link><button className="btn-secondary" disabled={saving} onClick={() => { setExam(goal.exam); setYear(goal.year); setSubjects(goal.subjects.map(s => s.name)); setMessage('Editing your subject choices below. Previous learning progress is preserved.'); document.getElementById('exam-setup')?.scrollIntoView({ behavior: 'smooth' }) }}>Edit subjects</button></div></div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">{goal.subjects.map(s => <div key={s.subjectKey}><Link className="block rounded-xl border border-violet-100 p-4 hover:bg-violet-50" href={`/courses/${s.courseId}`}>
         <span className="font-semibold">{goal.exam === 'JAMB' && s.subjectKey === 'english' ? 'Use of English' : s.name}</span><span className="mt-1 block text-sm text-slate-500">Open lessons, upload notes, and practise →</span>
-      </Link><Link href={`/exam-preparation/practice?goal=${goal.id}&subject=${encodeURIComponent(s.subjectKey)}`} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-violet-700">Teacher notes & reviewed practice →</Link></div>)}</div>
+      </Link><Link href={`/exam-preparation/practice?goal=${goal.id}&subject=${encodeURIComponent(s.subjectKey)}`} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-violet-700">Teacher notes & reviewed practice →</Link><Link className="ml-3 inline-flex min-h-11 items-center text-sm font-medium text-violet-700" href={`/exam-preparation/syllabus?goal=${goal.id}&subject=${encodeURIComponent(s.subjectKey)}`}>Syllabus & coverage →</Link></div>)}</div>
     </section>)}
     <form id="exam-setup" onSubmit={save} className="card space-y-5 p-6">
       <h2 className="text-xl font-semibold">Set up an exam goal</h2>
@@ -66,7 +66,7 @@ export function ExamPreparationWorkspace() {
         <div><label htmlFor="custom-subject" className="mb-2 block text-sm font-medium">Add any other subject</label><div className="flex gap-2"><input id="custom-subject" className="input-base" value={custom} maxLength={100} onChange={e => setCustom(e.target.value)} placeholder="Enter a subject name" /><button type="button" className="btn-secondary" onClick={() => add(custom)} disabled={custom.trim().length < 2}>Add</button></div></div>
         <button className="btn-primary" disabled={subjects.length === 0}>{saving ? 'Saving…' : 'Save exam and subjects'}</button>
       </fieldset>
-      <p className="text-xs leading-relaxed text-slate-500">These subject suggestions are setup shortcuts. AI-generated outlines and topic quizzes are practice aids; full exam-format mocks will be available once the exam engine and reviewed templates are ready.</p>
+      <p className="text-xs leading-relaxed text-slate-500">These subject suggestions are setup shortcuts. AI-generated outlines are practice aids. Timed mocks become available when a verified paper specification and sufficient reviewed questions are published.</p>
     </form>
   </div>
 }

@@ -7,7 +7,21 @@ const API_URL =
   process.env.API_URL_INTERNAL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
 
 export function sameOrigin(request: NextRequest) {
-  return request.headers.get('origin') === request.nextUrl.origin
+  const origin = request.headers.get('origin')
+  if (!origin) return false
+  if (origin === request.nextUrl.origin) return true
+  // Next can normalize a loopback/custom hostname. Compare the actual request
+  // authority as well, without trusting caller-supplied forwarded-host headers.
+  try {
+    const supplied = new URL(origin)
+    return (
+      supplied.origin === origin &&
+      supplied.host === request.headers.get('host') &&
+      supplied.protocol === new URL(request.url).protocol
+    )
+  } catch {
+    return false
+  }
 }
 export function clearSession(response: NextResponse) {
   for (const name of [ADMIN_ACCESS, ADMIN_REFRESH])
