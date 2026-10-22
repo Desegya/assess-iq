@@ -1,3 +1,4 @@
+import { ExamAccessGuard } from '../operations/exam-access'
 import {
   Body,
   Controller,
@@ -102,6 +103,7 @@ export class ExamContentAdminController {
   }
 }
 @Controller('exam-preparation')
+@UseGuards(ExamAccessGuard)
 export class ExamContentLearnerController {
   constructor(private readonly content: ExamContentService) {}
   @Get('goals/:goalId/subjects/:subjectKey/materials') materials(

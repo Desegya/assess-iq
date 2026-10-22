@@ -4,10 +4,12 @@ import { AiService } from '../ai/ai.service'
 
 describe('PDF timetable AI extraction contract', () => {
   function setup(text: string) {
-    const create = vi.fn().mockResolvedValue({})
+    const create = vi.fn().mockResolvedValue(undefined)
+    const quota = { reserve: vi.fn().mockResolvedValue('reservation-1'), settle: create }
     const provider = {
       name: 'fixture',
       isConfigured: () => true,
+      estimateCostUsd: () => 0.01,
       complete: vi
         .fn()
         .mockResolvedValue({
@@ -19,7 +21,7 @@ describe('PDF timetable AI extraction contract', () => {
         }),
       embed: vi.fn(),
     }
-    const service = new AiService({ aIUsageLog: { create } } as any, provider)
+    const service = new AiService(quota as any, provider)
     return { service, provider, create }
   }
   it('requests structured source-based dates and records usage', async () => {
@@ -48,6 +50,8 @@ describe('PDF timetable AI extraction contract', () => {
     expect(provider.complete.mock.calls[0][0].jsonSchema.name).toBe('waec_timetable')
     expect(provider.complete.mock.calls[0][0].input).toContain('never invent dates')
     expect(create).toHaveBeenCalledOnce()
+    expect(create.mock.calls[0][0]).toBe('reservation-1')
+    expect(create.mock.calls[0][1]).toMatchObject({ model: 'fixture', inputTokens: 10, outputTokens: 20 })
   })
   it('rejects malformed structured output', async () => {
     const { service } = setup('{"entries": "not rows", "warnings": []}')

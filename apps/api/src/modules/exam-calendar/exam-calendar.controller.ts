@@ -1,3 +1,4 @@
+import { ExamAccessGuard } from '../operations/exam-access'
 import {
   Body,
   Controller,
@@ -48,6 +49,7 @@ export class ExamCalendarAdminController {
   }
 }
 @Controller('exam-preparation')
+@UseGuards(ExamAccessGuard)
 export class ExamCalendarController {
   constructor(private readonly calendars: ExamCalendarService) {}
   @Get('goals/:id/calendar') calendar(@Param('id') id: string, @CurrentUser() u: AuthUser) {

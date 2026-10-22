@@ -1,3 +1,4 @@
+import { serializable } from '../../common/serializable'
 import {
   BadRequestException,
   ConflictException,
@@ -11,28 +12,65 @@ import {
 import { Prisma } from '@assessiq/db'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { AiService } from '../ai/ai.service'
+import { AiPausedException } from '../ai/ai-quota.service'
+import { ExamAccessService } from '../operations/exam-access'
+
 import { WaecSectionDto } from './waec-paper.dto'
 import { chosenWaecQuestions, markWaec, WaecGrade, WaecQuestion } from './waec-paper.rules'
 import { PrismaService } from '../prisma/prisma.service'
 import { MockTemplateDto, SaveMockDto, StartMockDto } from './exam-mock.dto'
 import { FrozenMockQuestion, markMock } from './exam-mock.rules'
+import { waitUntil } from '../../common/wait-until'
+
+/** Bump when the marking pipeline (batching, validation, aggregation) changes. */
+export const WRITTEN_MARKING_IMPLEMENTATION = 'waec-written/2026-10-23.1'
+
+// Recorded with every written result so marks remain traceable to the model and
+// prompt that produced them. Results are indicative until calibration evidence
+// for the subject exists; nothing here claims calibrated accuracy.
+function gradingRecord(meta: { model?: string; promptVersion?: string }) {
+  return {
+    model: meta.model ?? 'unknown',
+    promptVersion: meta.promptVersion ?? 'unknown',
+    implementation: WRITTEN_MARKING_IMPLEMENTATION,
+    reliability: 'INDICATIVE',
+  }
+}
 
 @Injectable()
 export class ExamMockService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    private readonly access: ExamAccessService,
   ) {}
   private readonly logger = new Logger(ExamMockService.name)
   private timer?: ReturnType<typeof setInterval>
   private sweeping = false
+  private stopping = false
+  // Grading leases this process holds, released on shutdown so another instance resumes promptly.
+  private readonly leases = new Map<string, Date>()
   onModuleInit() {
     this.timer = setInterval(() => void this.sweep(), 30000)
     this.timer.unref()
     void this.sweep()
   }
-  onModuleDestroy() {
+  async onModuleDestroy() {
+    this.stopping = true
     if (this.timer) clearInterval(this.timer)
+    await waitUntil(() => !this.sweeping && !this.leases.size, 10_000)
+    for (const [id, lease] of this.leases)
+      await this.prisma.examMockAttempt
+        .updateMany({
+          where: { id, status: 'SUBMITTED', gradingLeaseUntil: lease },
+          // Partial grades are already saved; refund the interrupted attempt and make it due now.
+          data: {
+            gradingLeaseUntil: null,
+            gradingNextAt: new Date(),
+            gradingAttempts: { decrement: 1 },
+          },
+        })
+        .catch(() => undefined)
   }
   private learner(user: AuthUser) {
     if (user.organizationId || user.role !== UserRole.STUDENT)
@@ -43,43 +81,42 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
   }
   async template(dto: MockTemplateDto, actorId: string) {
     const { expectedRevision, ...data } = dto
-    return this.prisma
-      .$transaction(
-        async (tx) => {
-          const grant = await tx.nightklassAdmin.findUnique({
-            where: { userId: actorId },
-            include: { user: { select: { status: true, organizationId: true } } },
+    return serializable(
+      this.prisma,
+      async (tx) => {
+        const grant = await tx.nightklassAdmin.findUnique({
+          where: { userId: actorId },
+          include: { user: { select: { status: true, organizationId: true } } },
+        })
+        if (!grant || grant.user.status !== 'ACTIVE' || grant.user.organizationId)
+          throw new ForbiddenException('Administrator access required')
+        let result
+        if (expectedRevision === 0) result = await tx.examMockTemplate.create({ data })
+        else {
+          const changed = await tx.examMockTemplate.updateMany({
+            where: { year: dto.year, revision: expectedRevision },
+            data: { ...data, revision: { increment: 1 } },
           })
-          if (!grant || grant.user.status !== 'ACTIVE' || grant.user.organizationId)
-            throw new ForbiddenException('Administrator access required')
-          let result
-          if (expectedRevision === 0) result = await tx.examMockTemplate.create({ data })
-          else {
-            const changed = await tx.examMockTemplate.updateMany({
-              where: { year: dto.year, revision: expectedRevision },
-              data: { ...data, revision: { increment: 1 } },
-            })
-            if (changed.count !== 1)
-              throw new ConflictException('Template changed. Reload before saving.')
-            result = await tx.examMockTemplate.findUniqueOrThrow({ where: { year: dto.year } })
-          }
-          await tx.nightklassAdminAudit.create({
-            data: {
-              actorId,
-              action: 'exam.mock-template.save',
-              resourceType: 'exam-template',
-              resourceId: result.id,
-            },
-          })
-          return result
-        },
-        { isolationLevel: 'Serializable' },
-      )
-      .catch((err) => {
-        if (['P2002', 'P2034'].includes(err?.code))
-          throw new ConflictException('Concurrent template change. Reload and try again.')
-        throw err
-      })
+          if (changed.count !== 1)
+            throw new ConflictException('Template changed. Reload before saving.')
+          result = await tx.examMockTemplate.findUniqueOrThrow({ where: { year: dto.year } })
+        }
+        await tx.nightklassAdminAudit.create({
+          data: {
+            actorId,
+            action: 'exam.mock-template.save',
+            resourceType: 'exam-template',
+            resourceId: result.id,
+          },
+        })
+        return result
+      },
+      { isolationLevel: 'Serializable' },
+    ).catch((err) => {
+      if (['P2002', 'P2034'].includes(err?.code))
+        throw new ConflictException('Concurrent template change. Reload and try again.')
+      throw err
+    })
   }
   private async goal(id: string, user: AuthUser) {
     this.learner(user)
@@ -167,6 +204,7 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
       })
       if (current.status === 'IN_PROGRESS') return this.view(current)
     }
+    await this.access.assertCanStartAttempt()
     const template = await this.prisma.examMockTemplate.findFirst({
       where: { year: goal.year, status: 'APPROVED' },
     })
@@ -202,19 +240,17 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
         ;[pool[i], pool[j]] = [pool[j]!, pool[i]!]
       }
       frozen.push(
-        ...pool
-          .slice(0, count)
-          .map((q) => ({
-            id: q.id,
-            subjectKey: q.subjectKey,
-            subject: q.subject,
-            topic: q.topic,
-            questionText: q.questionText,
-            options: q.options as unknown as FrozenMockQuestion['options'],
-            correctAnswer: q.correctAnswer,
-            explanation: q.explanation,
-            bankRevision: q.revision,
-          })),
+        ...pool.slice(0, count).map((q) => ({
+          id: q.id,
+          subjectKey: q.subjectKey,
+          subject: q.subject,
+          topic: q.topic,
+          questionText: q.questionText,
+          options: q.options as unknown as FrozenMockQuestion['options'],
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation,
+          bankRevision: q.revision,
+        })),
       )
     }
     try {
@@ -294,69 +330,58 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
   }
   async save(id: string, dto: SaveMockDto, user: AuthUser) {
     this.learner(user)
-    try {
-      return await this.prisma.$transaction(
-        async (tx) => {
-          const attempt = await tx.examMockAttempt.findFirst({ where: { id, studentId: user.id } })
-          if (!attempt) throw new NotFoundException('Mock attempt not found')
-          if (attempt.status !== 'IN_PROGRESS' || attempt.expiresAt <= new Date())
-            throw new ConflictException('This mock has ended; reload to view your result')
-          if (attempt.version !== dto.expectedVersion)
-            throw new ConflictException(
-              'Answers changed in another request. Reload before continuing.',
-            )
-          const questions = attempt.questions as unknown as FrozenMockQuestion[]
-          const byId = new Map(questions.map((q) => [q.id, q]))
-          if (new Set(dto.answers.map((a) => a.questionId)).size !== dto.answers.length)
-            throw new BadRequestException('Duplicate answer IDs')
-          const waec = !!attempt.waecPaperId
-          const selected = dto.selectedQuestions ?? attempt.selectedQuestions
-          if (waec)
-            chosenWaecQuestions(
-              questions as WaecQuestion[],
-              (attempt.specification as unknown as { sections: WaecSectionDto[] }).sections,
-              selected,
-            )
-          else if (selected.length)
-            throw new BadRequestException('JAMB questions are all compulsory')
-          if (
-            dto.answers.some(
-              (a) =>
-                !byId.has(a.questionId) ||
-                ((!waec || (byId.get(a.questionId) as WaecQuestion).questionType === 'MCQ') &&
-                  a.answer &&
-                  !byId.get(a.questionId)!.options.some((o) => o.key === a.answer)),
-            ) ||
-            dto.flags.some((flag) => !byId.has(flag))
-          )
-            throw new BadRequestException('Answer or flag does not belong to this paper')
-          const answers = { ...(attempt.answers as Record<string, string>) }
-          for (const a of dto.answers) answers[a.questionId] = a.answer
-          const changed = await tx.examMockAttempt.updateMany({
-            where: {
-              id,
-              version: dto.expectedVersion,
-              status: 'IN_PROGRESS',
-              expiresAt: { gt: new Date() },
-            },
-            data: {
-              answers,
-              selectedQuestions: selected,
-              flags: [...new Set(dto.flags)],
-              version: { increment: 1 },
-            },
-          })
-          if (changed.count !== 1)
-            throw new ConflictException('Mock changed or expired. Reload to continue.')
-          return { version: attempt.version + 1, savedAt: new Date() }
-        },
-        { isolationLevel: 'Serializable' },
+    // No Serializable transaction: the version-checked conditional update below is the
+    // concurrency control, so learners saving at the same time never fail each other.
+    const tx = this.prisma
+    const attempt = await tx.examMockAttempt.findFirst({ where: { id, studentId: user.id } })
+    if (!attempt) throw new NotFoundException('Mock attempt not found')
+    if (attempt.status !== 'IN_PROGRESS' || attempt.expiresAt <= new Date())
+      throw new ConflictException('This mock has ended; reload to view your result')
+    if (attempt.version !== dto.expectedVersion)
+      throw new ConflictException('Answers changed in another request. Reload before continuing.')
+    const questions = attempt.questions as unknown as FrozenMockQuestion[]
+    const byId = new Map(questions.map((q) => [q.id, q]))
+    if (new Set(dto.answers.map((a) => a.questionId)).size !== dto.answers.length)
+      throw new BadRequestException('Duplicate answer IDs')
+    const waec = !!attempt.waecPaperId
+    const selected = dto.selectedQuestions ?? attempt.selectedQuestions
+    if (waec)
+      chosenWaecQuestions(
+        questions as WaecQuestion[],
+        (attempt.specification as unknown as { sections: WaecSectionDto[] }).sections,
+        selected,
       )
-    } catch (err) {
-      if ((err as { code?: string }).code === 'P2034')
-        throw new ConflictException('Concurrent answer change. Reload to continue.')
-      throw err
-    }
+    else if (selected.length) throw new BadRequestException('JAMB questions are all compulsory')
+    if (
+      dto.answers.some(
+        (a) =>
+          !byId.has(a.questionId) ||
+          ((!waec || (byId.get(a.questionId) as WaecQuestion).questionType === 'MCQ') &&
+            a.answer &&
+            !byId.get(a.questionId)!.options.some((o) => o.key === a.answer)),
+      ) ||
+      dto.flags.some((flag) => !byId.has(flag))
+    )
+      throw new BadRequestException('Answer or flag does not belong to this paper')
+    const answers = { ...(attempt.answers as Record<string, string>) }
+    for (const a of dto.answers) answers[a.questionId] = a.answer
+    const changed = await tx.examMockAttempt.updateMany({
+      where: {
+        id,
+        version: dto.expectedVersion,
+        status: 'IN_PROGRESS',
+        expiresAt: { gt: new Date() },
+      },
+      data: {
+        answers,
+        selectedQuestions: selected,
+        flags: [...new Set(dto.flags)],
+        version: { increment: 1 },
+      },
+    })
+    if (changed.count !== 1)
+      throw new ConflictException('Mock changed or expired. Reload to continue.')
+    return { version: attempt.version + 1, savedAt: new Date() }
   }
   async submit(id: string, user: AuthUser) {
     this.learner(user)
@@ -372,7 +397,8 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
   private async finish(id: string, expiredOnly: boolean) {
     for (let retry = 0; retry < 3; retry++) {
       try {
-        return await this.prisma.$transaction(
+        return await serializable(
+          this.prisma,
           async (tx) => {
             const attempt = await tx.examMockAttempt.findUnique({ where: { id } })
             if (!attempt || attempt.status !== 'IN_PROGRESS') return
@@ -416,6 +442,7 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
     }
   }
   private async gradeWaec(id: string) {
+    if (this.stopping) return
     const lease = new Date(Date.now() + 300000)
     try {
       const claim = await this.prisma.examMockAttempt.updateMany({
@@ -429,12 +456,17 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
         data: { gradingLeaseUntil: lease, gradingAttempts: { increment: 1 } },
       })
       if (!claim.count) return
+      this.leases.set(id, lease)
       const attempt = await this.prisma.examMockAttempt.findUniqueOrThrow({ where: { id } })
       const questions = attempt.questions as unknown as WaecQuestion[]
       const sections = (attempt.specification as unknown as { sections: WaecSectionDto[] }).sections
       const answers = attempt.answers as Record<string, string>
-      const previous = attempt.result as unknown as { writtenGrades?: WaecGrade[] }
+      const previous = attempt.result as unknown as {
+        writtenGrades?: WaecGrade[]
+        grading?: { model?: string; promptVersion?: string }
+      }
       const grades: WaecGrade[] = previous.writtenGrades ?? []
+      let gradingMeta: { model?: string; promptVersion?: string } = previous.grading ?? {}
       try {
         if (attempt.gradingAttempts > 3) throw new Error('Recovered exhausted grading lease')
         const written = chosenWaecQuestions(questions, sections, attempt.selectedQuestions).filter(
@@ -443,35 +475,38 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
         )
         for (let start = 0; start < written.length; start += 5) {
           const batch = written.slice(start, start + 5)
-          const marked = await this.ai.gradeWrittenAnswers(
+          const {
+            grades: marked,
+            model,
+            promptVersion,
+          } = await this.ai.gradeWrittenAnswers(
             batch.map((q) => ({
               id: q.id,
               type: q.questionType as 'SHORT_ANSWER' | 'THEORY',
               question: q.questionText,
-              modelAnswer: q.correctAnswer + '\nMarking points: ' + q.explanation,
+              // Bank convention: correctAnswer holds the marking scheme/guide that marks are
+              // awarded against; explanation holds teacher notes or an example answer.
+              markingScheme: q.correctAnswer,
+              teacherNotes: q.explanation,
               marks: q.marks,
               studentAnswer: answers[q.id]!,
             })),
-            'Nigerian senior secondary WAEC-style practice. Apply the teacher rubric, including method marks and labelled subparts. Feedback is a practice estimate.',
-            { userId: attempt.studentId, relatedEntityId: id },
+            'Nigerian senior secondary WAEC-style practice. Apply the teacher marking scheme, including method marks and labelled subparts. Feedback is a practice estimate.',
+            // The learner already holds this submitted paper, so marking draws on the global budget only.
+            { userId: attempt.studentId, relatedEntityId: id, budget: 'granted' },
           )
           if (
             marked.length !== batch.length ||
             new Set(marked.map((g) => g.id)).size !== batch.length ||
-            marked.some(
-              (g) =>
-                !batch.some((q) => q.id === g.id) ||
-                !Number.isFinite(g.score) ||
-                typeof g.feedback !== 'string' ||
-                !Array.isArray(g.missingPoints) ||
-                g.missingPoints.some((point) => typeof point !== 'string'),
-            )
+            marked.some((g) => !batch.some((q) => q.id === g.id))
           )
             throw new Error('Incomplete written grading response')
+          gradingMeta = { model, promptVersion }
           grades.push(...marked)
           const result = {
             ...markWaec(questions, sections, attempt.selectedQuestions, answers, grades, true),
             writtenGrades: grades,
+            grading: gradingRecord(gradingMeta),
           }
           const saved = await this.prisma.examMockAttempt.updateMany({
             where: { id, status: 'SUBMITTED', gradingLeaseUntil: lease },
@@ -482,6 +517,7 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
         const result = {
           ...markWaec(questions, sections, attempt.selectedQuestions, answers, grades, false),
           writtenGrades: grades,
+          grading: gradingRecord(gradingMeta),
         }
         await this.prisma.examMockAttempt.updateMany({
           where: { id, status: 'SUBMITTED', gradingLeaseUntil: lease },
@@ -493,10 +529,31 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
           },
         })
       } catch (err) {
+        if (err instanceof AiPausedException) {
+          // Paused AI (kill switch or global budget) is an operator decision, not a
+          // marking failure: keep partial grades, refund the attempt and retry later.
+          await this.prisma.examMockAttempt.updateMany({
+            where: { id, status: 'SUBMITTED', gradingLeaseUntil: lease },
+            data: {
+              gradingLeaseUntil: null,
+              gradingAttempts: { decrement: 1 },
+              gradingNextAt: new Date(Date.now() + 5 * 60000),
+              result: {
+                ...markWaec(questions, sections, attempt.selectedQuestions, answers, grades, true),
+                writtenGrades: grades,
+                grading: gradingRecord(gradingMeta),
+                gradingDeferred: true,
+              } as unknown as Prisma.InputJsonValue,
+            },
+          })
+          this.logger.warn(`event=written_marking_deferred attemptId=${id} reason=ai_paused`)
+          return
+        }
         const exhausted = attempt.gradingAttempts >= 3
         const result = {
           ...markWaec(questions, sections, attempt.selectedQuestions, answers, grades, !exhausted),
           writtenGrades: grades,
+          grading: gradingRecord(gradingMeta),
           gradingFailed: exhausted,
         }
         await this.prisma.examMockAttempt.updateMany({
@@ -509,17 +566,19 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
           },
         })
         this.logger.warn(
-          `Written mock marking will ${exhausted ? 'remain ungraded after retry limit' : 'retry'}: ${err instanceof Error ? err.message : 'provider error'}`,
+          `event=${exhausted ? 'written_marking_failed' : 'written_marking_retry'} attemptId=${id} attempt=${attempt.gradingAttempts} reason=${err instanceof Error ? err.message.slice(0, 200) : 'provider error'}`,
         )
       }
     } catch (err) {
       this.logger.warn(
-        `Written mock grading recovery: ${err instanceof Error ? err.message : 'database error'}`,
+        `event=written_marking_recovery attemptId=${id} reason=${err instanceof Error ? err.message : 'database error'}`,
       )
+    } finally {
+      this.leases.delete(id)
     }
   }
   private async sweep() {
-    if (this.sweeping) return
+    if (this.sweeping || this.stopping) return
     this.sweeping = true
     try {
       const expired = await this.prisma.examMockAttempt.findMany({
@@ -527,7 +586,10 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
         take: 100,
         select: { id: true },
       })
-      for (const attempt of expired) await this.finish(attempt.id, true)
+      for (const attempt of expired) {
+        if (this.stopping) return
+        await this.finish(attempt.id, true)
+      }
       const pending = await this.prisma.examMockAttempt.findMany({
         where: {
           status: 'SUBMITTED',
@@ -538,7 +600,10 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
         take: 10,
         select: { id: true },
       })
-      for (const attempt of pending) await this.gradeWaec(attempt.id)
+      for (const attempt of pending) {
+        if (this.stopping) return
+        await this.gradeWaec(attempt.id)
+      }
     } catch (err) {
       this.logger.warn(
         `Mock expiry sweep will retry: ${err instanceof Error ? err.message : 'database error'}`,

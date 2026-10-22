@@ -1,3 +1,4 @@
+import { ExamAccessGuard } from '../operations/exam-access'
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
 import { AuthUser } from '@assessiq/types'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
@@ -16,6 +17,7 @@ export class WaecPaperAdminController {
   }
 }
 @Controller('exam-preparation')
+@UseGuards(ExamAccessGuard)
 export class WaecPaperController {
   constructor(private readonly papers: WaecPaperService) {}
   @Get('goals/:id/waec-papers') list(@Param('id') id: string, @CurrentUser() u: AuthUser) {

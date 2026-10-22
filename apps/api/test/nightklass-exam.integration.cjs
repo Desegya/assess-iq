@@ -3,7 +3,6 @@ const { test, before, after } = require('node:test')
 const assert = require('node:assert/strict')
 const { randomUUID } = require('node:crypto')
 const { NestFactory } = require('@nestjs/core')
-const { ValidationPipe, VersioningType } = require('@nestjs/common')
 const { PrismaClient } = require('../../../packages/db/generated/client')
 const { hash } = require('bcryptjs')
 if (!process.env.DATABASE_URL || new URL(process.env.DATABASE_URL).pathname !== '/nightklass_exam_test') throw new Error('Use disposable database nightklass_exam_test')
@@ -12,6 +11,8 @@ process.env.JWT_REFRESH_SECRET = randomUUID() + randomUUID()
 process.env.OPENAI_API_KEY = ''
 process.env.R2_ACCESS_KEY_ID = ''
 process.env.R2_ENDPOINT = ''
+process.env.EXAM_ACCESS = 'OPEN'
+process.env.API_URL = 'http://127.0.0.1:0'
 const prisma = new PrismaClient()
 let app, base, owner, learner, other, ownerToken, learnerToken, otherToken, material, bankQuestion, goal, practice
 const suffix = randomUUID(), password = randomUUID()
@@ -42,9 +43,7 @@ before(async () => {
   await prisma.nightklassAdmin.create({ data: { userId: owner.id, role: 'OWNER' } })
   const { AppModule } = require('../dist/app.module')
   app = await NestFactory.create(AppModule, { logger: false })
-  app.useBodyParser('json', { limit: '2mb' })
-  app.setGlobalPrefix('api'); app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, transformOptions: { enableImplicitConversion: true } }))
+  require('../dist/configure-app').configureApp(app)
   await app.listen(0, '127.0.0.1')
   base = `http://127.0.0.1:${app.getHttpServer().address().port}/api/v1`
   // Local signed download links point back at this test server.
@@ -241,7 +240,7 @@ test('WAEC marking persists failures, retries from the database, and preserves r
     assert.equal(pending.result.percentage, null)
     assert.equal(calls, 1)
     assert.equal((await call(`/exam-preparation/mocks/${waecAttempt.id}/answers`, learnerToken, { expectedVersion: 2, answers: [], flags: [] }, 'PATCH')).status, 409)
-    ai.gradeWrittenAnswers = async answers => { calls++; return answers.map(a => ({ id: a.id, score: 4.5, feedback: 'Definition is partly correct; expand the benefits.', missingPoints: ['Explain both benefits'] })) }
+    ai.gradeWrittenAnswers = async answers => { calls++; return { model: 'fixture-model', promptVersion: 'fixture-prompt', grades: answers.map(a => ({ id: a.id, score: 4.5, feedback: 'Definition is partly correct; expand the benefits.', missingPoints: ['Explain both benefits'] })) } }
     await prisma.examMockAttempt.update({ where: { id: waecAttempt.id }, data: { gradingNextAt: new Date(Date.now() - 1000) } })
     await app.get(ExamMockService).sweep()
     const finished = await call(`/exam-preparation/mocks/${waecAttempt.id}`, learnerToken)

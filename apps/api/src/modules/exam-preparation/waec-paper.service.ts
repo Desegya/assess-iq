@@ -1,3 +1,4 @@
+import { serializable } from '../../common/serializable'
 import {
   BadRequestException,
   ConflictException,
@@ -9,6 +10,7 @@ import { AuthUser, UserRole } from '@assessiq/types'
 import { Prisma } from '@assessiq/db'
 import { PrismaService } from '../prisma/prisma.service'
 import { ExamMockService } from './exam-mock.service'
+import { ExamAccessService } from '../operations/exam-access'
 import { StartWaecPaperDto, WaecPaperDto, WaecSectionDto } from './waec-paper.dto'
 import { validateSections, WaecQuestion } from './waec-paper.rules'
 import { subjectIdentity } from './exam-content.rules'
@@ -17,6 +19,7 @@ export class WaecPaperService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mocks: ExamMockService,
+    private readonly access: ExamAccessService,
   ) {}
   list() {
     return this.prisma.waecPaperTemplate.findMany({
@@ -28,7 +31,7 @@ export class WaecPaperService {
     validateSections(dto.sections)
     const { expectedRevision, id, ...data } = dto
     try {
-      return await this.prisma.$transaction(
+      return await serializable(this.prisma, 
         async (tx) => {
           const grant = await tx.nightklassAdmin.findUnique({
             where: { userId: actorId },
@@ -141,6 +144,7 @@ export class WaecPaperService {
     const activeKey = `${user.id}:${goal.id}:${dto.paperId}`
     const active = await this.prisma.examMockAttempt.findUnique({ where: { activeKey } })
     if (active) return this.mocks.read(active.id, user)
+    await this.access.assertCanStartAttempt()
     const paper = await this.prisma.waecPaperTemplate.findFirst({
       where: {
         id: dto.paperId,

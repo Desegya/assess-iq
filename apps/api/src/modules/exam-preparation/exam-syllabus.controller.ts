@@ -1,3 +1,4 @@
+import { ExamAccessGuard } from '../operations/exam-access'
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
 import { AuthUser } from '@assessiq/types'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
@@ -23,6 +24,7 @@ export class ExamSyllabusAdminController {
   }
 }
 @Controller('exam-preparation')
+@UseGuards(ExamAccessGuard)
 export class ExamSyllabusController {
   constructor(private readonly syllabuses: ExamSyllabusService) {}
   @Get('goals/:goalId/subjects/:key/coverage') coverage(

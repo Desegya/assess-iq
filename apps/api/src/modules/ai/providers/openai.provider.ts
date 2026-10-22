@@ -11,9 +11,13 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'text-embedding-3-small': { input: 0.02, output: 0 },
 }
 
+// A model missing from the table is priced at the most expensive known rate, so a
+// configuration change can never make usage look free to the quota system.
+const FALLBACK_PRICE = { input: 2.5, output: 15 }
+
 function cost(model: string, inputTokens: number, outputTokens: number) {
-  const p = PRICING[model]
-  return p ? (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output : 0
+  const p = PRICING[model] ?? FALLBACK_PRICE
+  return (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output
 }
 
 function toOpenAiInput(input: string | LlmMessage[]): string | OpenAI.Responses.ResponseInput {
@@ -47,11 +51,16 @@ export class OpenAiProvider implements LlmProvider {
     this.apiKey = config.get<string>('OPENAI_API_KEY', '')
     this.model = config.get<string>('OPENAI_MODEL', 'gpt-5.4-mini')
     this.embeddingModel = config.get<string>('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small')
-    this.client = new OpenAI({ apiKey: this.apiKey || 'placeholder' })
+    // Bounded latency and a single SDK retry: AiService owns higher-level retry policy.
+    this.client = new OpenAI({ apiKey: this.apiKey || 'placeholder', timeout: 120_000, maxRetries: 1 })
   }
 
   isConfigured() {
     return !!this.apiKey
+  }
+
+  estimateCostUsd(inputTokens: number, maxOutputTokens: number, embedding = false) {
+    return cost(embedding ? this.embeddingModel : this.model, inputTokens, maxOutputTokens)
   }
 
   async complete(request: LlmCompletionRequest): Promise<LlmCompletion> {

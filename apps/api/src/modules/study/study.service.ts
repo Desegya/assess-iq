@@ -552,14 +552,16 @@ export class StudyService {
             id: q.id,
             type: q.questionType as 'SHORT_ANSWER' | 'THEORY',
             question: q.questionText,
-            modelAnswer: [q.correctAnswer, q.explanation && `Model answer: ${q.explanation}`].filter(Boolean).join('\n'),
+            // Generated written questions store the marking scheme in correctAnswer and an example answer in explanation.
+            markingScheme: q.correctAnswer,
+            teacherNotes: q.explanation || undefined,
             marks: defaultMarks(q.questionType as QuestionType, q.marks),
             studentAnswer: answerFor.get(q.id)?.textAnswer ?? '',
           })),
           `COURSE: ${describeCourse(course)}\nTOPIC: ${topic.name}`,
           { userId: user.id, organizationId: user.organizationId ?? undefined, relatedEntityId: topicId },
         )
-        grades = new Map(graded.map(g => [g.id, g]))
+        grades = new Map(graded.grades.map(g => [g.id, g]))
       } catch (err) {
         gradingFailed = true
         this.logger.warn(`AI grading failed for topic ${topicId}: ${err instanceof Error ? err.message : String(err)}`)

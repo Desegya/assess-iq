@@ -1,3 +1,4 @@
+import { serializable } from '../../common/serializable'
 import {
   BadRequestException,
   ConflictException,
@@ -37,7 +38,7 @@ export class ExamCalendarService {
     fn: (tx: Prisma.TransactionClient) => Promise<{ id: string; result: T }>,
   ) {
     try {
-      return await this.prisma.$transaction(
+      return await serializable(this.prisma, 
         async (tx) => {
           const grant = await tx.nightklassAdmin.findUnique({
             where: { userId: actorId },

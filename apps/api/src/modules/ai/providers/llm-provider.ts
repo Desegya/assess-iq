@@ -34,6 +34,8 @@ export interface LlmEmbedding {
 export interface LlmProvider {
   readonly name: string
   isConfigured(): boolean
+  /** Upper-bound USD cost used to reserve quota before a call; measured usage replaces it afterwards. */
+  estimateCostUsd(inputTokens: number, maxOutputTokens: number, embedding?: boolean): number
   complete(request: LlmCompletionRequest): Promise<LlmCompletion>
   embed(texts: string[]): Promise<LlmEmbedding>
 }

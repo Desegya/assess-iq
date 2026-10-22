@@ -1,3 +1,4 @@
+import { serializable } from '../../common/serializable'
 import {
   BadRequestException,
   ConflictException,
@@ -31,7 +32,7 @@ export class ExamSyllabusService {
     fn: (tx: Prisma.TransactionClient) => Promise<{ id: string; result: T }>,
   ) {
     try {
-      return await this.prisma.$transaction(
+      return await serializable(this.prisma, 
         async (tx) => {
           const grant = await tx.nightklassAdmin.findUnique({
             where: { userId: actorId },
@@ -301,7 +302,7 @@ export class ExamSyllabusService {
     )
       throw new BadRequestException('Objective does not match this exam goal')
     try {
-      return await this.prisma.$transaction(
+      return await serializable(this.prisma, 
         async (tx) => {
           const existing = await tx.examObjectiveStudyLink.findUnique({
             where: { studentId_objectiveId: { studentId: user.id, objectiveId: objective.id } },

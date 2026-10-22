@@ -21,6 +21,8 @@ import { GpaModule } from './modules/gpa/gpa.module'
 import { AdminModule } from './modules/admin/admin.module'
 import { PrismaModule } from './modules/prisma/prisma.module'
 import { EmailModule } from './modules/email/email.module'
+import { OperationsModule } from './modules/operations/operations.module'
+import { RuntimeSettingsModule } from './modules/operations/runtime-settings.module'
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { EmailModule } from './modules/email/email.module'
     // ─── Core infrastructure ─────────────────────────────────────────────────
     PrismaModule,
     EmailModule,
+    RuntimeSettingsModule,
+    OperationsModule,
 
     // ─── Feature modules ─────────────────────────────────────────────────────
     AuthModule,
