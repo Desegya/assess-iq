@@ -261,6 +261,9 @@ model User {
   syllabusStudyLinks ExamObjectiveStudyLink[]
   profileCompletedAt DateTime?
   emailVerifiedAt DateTime?
+  // Which privacy notice the learner acknowledged at sign-up, and when.
+  privacyNoticeVersion String?
+  privacyAcceptedAt DateTime?
   // Incremented to revoke every issued access token (password reset, deletion).
   sessionVersion Int @default(0)
   deletedAt      DateTime?

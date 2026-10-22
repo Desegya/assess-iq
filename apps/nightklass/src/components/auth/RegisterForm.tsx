@@ -1,5 +1,6 @@
 'use client'
 
+import { PRIVACY_NOTICE_VERSION } from '@/lib/privacy'
 import { useState } from 'react'
 import { Icon } from '@/components/product/Icon'
 import { useRouter } from 'next/navigation'
@@ -41,7 +42,12 @@ export function RegisterForm() {
       const res = await fetch(`${API_URL}/auth/register-student`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: form.name, email: form.email, password: form.password }),
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
+        }),
       })
 
       if (!res.ok) {
@@ -161,6 +167,18 @@ export function RegisterForm() {
           <Icon name={showPassword ? 'eyeOff' : 'eye'} className="h-4 w-4" />
           {showPassword ? 'Hide password' : 'Show password'}
         </button>
+
+        <label className="flex items-start gap-3 text-sm text-slate-600">
+          <input type="checkbox" required className="mt-1" name="privacy" />
+          <span>
+            I have read the{' '}
+            <a href="/privacy" target="_blank" className="font-medium text-violet-700 underline">
+              privacy notice
+            </a>
+            , including how AI features use my notes and answers. If I am under 18, a parent or guardian has
+            agreed to me using Nightklass.
+          </span>
+        </label>
 
         <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
           {loading ? 'Creating account…' : 'Create account'}

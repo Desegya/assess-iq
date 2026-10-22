@@ -61,7 +61,10 @@ const NAV_SECTIONS = [
   },
   {
     label: 'Account',
-    items: [{ href: '/onboarding', label: 'Profile', icon: ICONS.profile }],
+    items: [
+      { href: '/onboarding', label: 'Profile', icon: ICONS.profile },
+      { href: '/account', label: 'Account & privacy', icon: ICONS.profile },
+    ],
   },
 ]
 

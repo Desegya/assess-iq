@@ -294,6 +294,9 @@ export class AuthService {
         role: 'STUDENT',
         status: 'ACTIVE',
         organizationId: null,
+        ...(dto.privacyNoticeVersion
+          ? { privacyNoticeVersion: dto.privacyNoticeVersion, privacyAcceptedAt: new Date() }
+          : {}),
       },
     })
     await this.sendVerification(user.id, user.email, user.name)
