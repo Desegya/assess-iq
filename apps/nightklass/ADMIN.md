@@ -116,7 +116,7 @@ Learners open “Teacher notes & reviewed practice” from their subject cards. 
 
 Publish a JAMB mock specification for the intended examination year after checking the rules and recording a source/verification note. The default form fields follow the published baseline: 60 English questions, 40 in each of three other subjects and 120 minutes overall. They are editable configuration, not an automatically verified specification for any future cycle. A full mock requires the configured number of approved questions in every selected subject. Scores are explicitly labelled practice estimates, not official JAMB scoring.
 
-The API finalizes overdue attempts at startup and through a 30-second database-backed sweep. Keep the API running for timely finalization; a read also finalizes an overdue attempt. Confirmed answers survive refresh; unsaved changes require the page to stay open and connectivity to return. The server deadline continues during disconnection. Written WAEC paper mocks are not implemented yet.
+The API finalizes overdue attempts at startup and through a 30-second database-backed sweep. Keep the API running for timely finalization; a read also finalizes an overdue attempt. Confirmed answers survive refresh; unsaved changes require the page to stay open and connectivity to return. The server deadline continues during disconnection. Text-based WAEC paper mocks are configured in the same content workspace; practical/oral interactions are not supported.
 
 Run the dedicated integration suite only against the isolated local database named `nightklass_exam_test`, with committed migrations applied:
 
@@ -125,3 +125,14 @@ DATABASE_URL=<isolated-test-database-url> npm run test:exam:integration --worksp
 ```
 
 The suite starts the actual API, uses real authentication and PostgreSQL, and creates test fixtures. It checks content visibility, uploads, question publication, practice, a full 180-question mock, answer ownership/versioning, concurrent submission and expiry recovery. It does not call paid AI or external storage. Fixtures remain in the disposable test database; core bank fixtures use per-run identities to avoid collisions.
+
+
+### WAEC text-based papers and written marking
+
+Use “WAEC paper specifications” in `/admin/exam-content` to create or edit a subject/year/series/paper. Record a source and verification note; do not treat a sample configuration as an official specification. Each section defines its type (MCQ, short answer or theory), question count, questions to answer, marks per question, and optional exact bank topic. All questions are compulsory when count equals questions to answer. Objective items currently carry one mark; written items must match the section's configured marks.
+
+Publish reviewed WAEC bank questions with model answers and explanation/marking points. For multipart prompts, write labelled subparts in the question and model answer and specify combined marks. The learner currently writes one combined response; marking reports an aggregate question score and feedback. Separate subpart scoring is not implemented. Do not advertise unsupported practical, diagram-dependent or oral papers as complete mocks.
+
+Learners open “WAEC paper mocks” on their exam goal, choose the applicable series and paper, and select optional questions explicitly. Submitted answers are frozen. The API marks objectives immediately and stores pending written work in PostgreSQL. It claims marking work with a lease, processes five answers per batch, saves partial feedback, and retries provider failures after one minute. After three failed provider attempts, unanswered written grading remains visibly ungraded with no invented final percentage. A startup/30-second sweep recovers pending work; keep the API running to process it.
+
+The exam integration suite now includes mixed WAEC objective/essay papers, optional selection enforcement, multipart prompt/combined answer persistence, partial rubric credit, marking recovery, expiry with incomplete selections and retry exhaustion. The marking provider is stubbed for these tests. Calibrate real AI feedback against teacher-marked examples before public launch.
