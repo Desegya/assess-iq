@@ -1,6 +1,26 @@
+import { shuffleOptions } from './exam-sampling'
+
 export interface FrozenMockQuestion {
   id: string; subjectKey: string; subject: string; topic: string; questionText: string
   options: { key: string; text: string }[]; correctAnswer: string; explanation: string; bankRevision: number
+  /** Authored option keys in displayed order when options were shuffled at freeze time. */
+  optionOrder?: string[]
+}
+
+/** Snapshot of a published bank question as shown in one attempt, with MCQ options shuffled when safe. */
+export function freezeQuestion(
+  q: { id: string; subjectKey: string; subject: string; topic: string; questionText: string; options: unknown; correctAnswer: string; explanation: string; revision: number },
+  random: () => number = Math.random,
+): FrozenMockQuestion {
+  const options = (q.options ?? []) as FrozenMockQuestion['options']
+  const shuffled = shuffleOptions(options, q.correctAnswer, random)
+  return {
+    id: q.id, subjectKey: q.subjectKey, subject: q.subject, topic: q.topic, questionText: q.questionText,
+    options: shuffled?.options ?? options,
+    correctAnswer: shuffled?.correctAnswer ?? q.correctAnswer,
+    explanation: q.explanation, bankRevision: q.revision,
+    ...(shuffled ? { optionOrder: shuffled.optionOrder } : {}),
+  }
 }
 export function markMock(questions: FrozenMockQuestion[], answers: Record<string, string>) {
   const keys = [...new Set(questions.map(q => q.subjectKey))]

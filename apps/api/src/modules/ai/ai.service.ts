@@ -242,12 +242,17 @@ DOCUMENT:\n${text}`,
     extractedText: string,
     opts: GenerateOptions,
   ): Promise<RawGeneratedQuestion[]> {
+    return (await this.generateQuestionsWithMeta(extractedText, opts)).questions
+  }
+
+  /** As generateQuestions, plus the model and prompt version so saved items stay traceable. */
+  async generateQuestionsWithMeta(extractedText: string, opts: GenerateOptions) {
     // Take a representative slice of the text (avoid hitting token limits)
     const prompt = this.buildPrompt(extractedText.slice(0, 12000), opts)
-    const output = await this.complete(prompt, 4096, 'GENERATE_QUESTIONS', { ...opts, relatedEntityId: opts.documentId })
+    const { text: output, model } = await this.completeDetailed(prompt, 4096, 'GENERATE_QUESTIONS', { ...opts, relatedEntityId: opts.documentId })
     const questions = this.parseJsonArray<RawGeneratedQuestion>(output)
     this.logger.log(`Generated ${questions.length} questions for ${opts.documentId}`)
-    return questions
+    return { questions, model, promptVersion: GENERATION_PROMPT_VERSION }
   }
 
   // ─── Extract candidate topics from extracted document text ────────────────

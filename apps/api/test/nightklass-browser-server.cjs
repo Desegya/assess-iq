@@ -38,7 +38,7 @@ async function start(){
   require('../dist/configure-app').configureApp(app,['http://127.0.0.1:3102'])
   const ai=app.get(AiService)
   ai.gradeWrittenAnswers=async answers=>({model:'browser-fixture',promptVersion:'browser-fixture',grades:answers.map(a=>({id:a.id,score:a.marks/2,feedback:'Browser fixture: definition is partly correct; develop the explanation.',missingPoints:['Expand accountability']}))})
-  ai.generateQuestions=async(_text,opts)=>Array.from({length:opts.count},(_,i)=>({type:'MCQ',questionText:`Browser generated fixture ${suffix} ${randomUUID()} ${i}: choose the democracy answer.`,options,correctAnswer:'A',explanation:'Representative democracy lets citizens elect their representatives.'}))
+  ai.generateQuestionsWithMeta=async(_text,opts)=>({model:'browser-fixture',promptVersion:'browser-fixture',questions:Array.from({length:opts.count},(_,i)=>({type:'MCQ',questionText:`Browser generated fixture ${suffix} ${randomUUID()} ${i}: choose the democracy answer.`,options,correctAnswer:'A',explanation:'Representative democracy lets citizens elect their representatives.'}))})
   app.getHttpAdapter().get('/__test/fixtures',(_req,res)=>res.json({teacher:owner.email,learner:learner.email,password,jambGoal:goal.id,waecGoal:waecGoal.id,paperTitle:paper.title,objectiveId:syllabus.objectives[0].id,suffix}))
   await app.listen(3101,'127.0.0.1')
   const stop=async()=>{await app.close();await prisma.$disconnect();process.exit(0)}

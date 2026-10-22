@@ -19,7 +19,8 @@ import { WaecSectionDto } from './waec-paper.dto'
 import { chosenWaecQuestions, markWaec, WaecGrade, WaecQuestion } from './waec-paper.rules'
 import { PrismaService } from '../prisma/prisma.service'
 import { MockTemplateDto, SaveMockDto, StartMockDto } from './exam-mock.dto'
-import { FrozenMockQuestion, markMock } from './exam-mock.rules'
+import { freezeQuestion, FrozenMockQuestion, markMock } from './exam-mock.rules'
+import { recordExposures, sampleQuestionIds } from './exam-sampling'
 import { waitUntil } from '../../common/wait-until'
 
 /** Bump when the marking pipeline (batching, validation, aggregation) changes. */
@@ -221,37 +222,20 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
           : a.name.localeCompare(b.name),
     )) {
       const count = subject.subjectKey === 'english' ? template.englishCount : template.otherCount
-      const pool = await this.prisma.examBankQuestion.findMany({
-        where: {
-          exam: 'JAMB',
-          subjectKey: subject.subjectKey,
-          status: 'APPROVED',
-          questionType: 'MCQ',
-        },
-        take: 5000,
-        orderBy: { id: 'asc' },
+      const ids = await sampleQuestionIds(this.prisma, {
+        studentId: user.id,
+        exam: 'JAMB',
+        subjectKey: subject.subjectKey,
+        questionType: 'MCQ',
+        count,
       })
-      if (pool.length < count)
+      if (ids.length < count)
         throw new BadRequestException(
-          `${subject.name} needs ${count} reviewed questions; ${pool.length} are available`,
+          `${subject.name} needs ${count} reviewed questions; ${ids.length} are available`,
         )
-      for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1))
-        ;[pool[i], pool[j]] = [pool[j]!, pool[i]!]
-      }
-      frozen.push(
-        ...pool.slice(0, count).map((q) => ({
-          id: q.id,
-          subjectKey: q.subjectKey,
-          subject: q.subject,
-          topic: q.topic,
-          questionText: q.questionText,
-          options: q.options as unknown as FrozenMockQuestion['options'],
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation,
-          bankRevision: q.revision,
-        })),
-      )
+      const rows = await this.prisma.examBankQuestion.findMany({ where: { id: { in: ids } } })
+      const byId = new Map(rows.map((q) => [q.id, q]))
+      frozen.push(...ids.map((id) => freezeQuestion(byId.get(id)!)))
     }
     try {
       const attempt = await this.prisma.examMockAttempt.create({
@@ -275,6 +259,7 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
           },
         },
       })
+      await recordExposures(this.prisma, user.id, frozen.map((q) => q.id))
       return this.view(attempt)
     } catch (err) {
       if ((err as { code?: string }).code === 'P2002') {
@@ -313,7 +298,7 @@ export class ExamMockService implements OnModuleInit, OnModuleDestroy {
       submissionReason: attempt.submissionReason,
       questions:
         attempt.status === 'IN_PROGRESS'
-          ? questions.map(({ correctAnswer, explanation, ...q }) => q)
+          ? questions.map(({ correctAnswer, explanation, optionOrder, ...q }) => q)
           : questions,
       result: attempt.result,
     }

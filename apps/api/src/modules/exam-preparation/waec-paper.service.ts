@@ -14,6 +14,8 @@ import { ExamAccessService } from '../operations/exam-access'
 import { StartWaecPaperDto, WaecPaperDto, WaecSectionDto } from './waec-paper.dto'
 import { validateSections, WaecQuestion } from './waec-paper.rules'
 import { subjectIdentity } from './exam-content.rules'
+import { freezeQuestion } from './exam-mock.rules'
+import { recordExposures, sampleQuestionIds } from './exam-sampling'
 @Injectable()
 export class WaecPaperService {
   constructor(
@@ -158,38 +160,34 @@ export class WaecPaperService {
     const sections = paper.sections as unknown as WaecSectionDto[]
     const questions: WaecQuestion[] = []
     for (const s of [...sections].sort((a, b) => Number(!!b.topic) - Number(!!a.topic))) {
-      const bank = await this.prisma.examBankQuestion.findMany({
-        where: {
-          exam: 'WAEC',
-          subjectKey: paper.subjectKey,
-          status: 'APPROVED',
-          questionType: s.questionType,
-          marks: s.marks,
-          ...(s.topic ? { topic: { equals: s.topic, mode: 'insensitive' as const } } : {}),
-          id: { notIn: questions.map((q) => q.id) },
-        },
-        orderBy: { id: 'asc' },
-        take: s.count,
+      // Sampled per section (marks, type and optional topic), unseen questions first,
+      // so retakes draw distinct forms while keeping the paper's structure.
+      const ids = await sampleQuestionIds(this.prisma, {
+        studentId: user.id,
+        exam: 'WAEC',
+        subjectKey: paper.subjectKey,
+        questionType: s.questionType,
+        marks: s.marks,
+        topic: s.topic || undefined,
+        excludeIds: questions.map((q) => q.id),
+        count: s.count,
       })
-      if (bank.length < s.count)
+      if (ids.length < s.count)
         throw new BadRequestException(
-          `${s.title} needs ${s.count} reviewed questions carrying ${s.marks} marks each; ${bank.length} available`,
+          `${s.title} needs ${s.count} reviewed questions carrying ${s.marks} marks each; ${ids.length} available`,
         )
+      const rows = await this.prisma.examBankQuestion.findMany({ where: { id: { in: ids } } })
+      const byId = new Map(rows.map((q) => [q.id, q]))
       questions.push(
-        ...bank.map((q) => ({
-          id: q.id,
-          subject: q.subject,
-          subjectKey: q.subjectKey,
-          topic: q.topic,
-          sectionId: s.id,
-          questionType: q.questionType as WaecQuestion['questionType'],
-          marks: q.marks,
-          questionText: q.questionText,
-          options: (q.options ?? []) as unknown as WaecQuestion['options'],
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation,
-          bankRevision: q.revision,
-        })),
+        ...ids.map((id) => {
+          const q = byId.get(id)!
+          return {
+            ...freezeQuestion(q),
+            sectionId: s.id,
+            questionType: q.questionType as WaecQuestion['questionType'],
+            marks: q.marks,
+          }
+        }),
       )
     }
     try {
@@ -218,6 +216,7 @@ export class WaecPaperService {
           },
         },
       })
+      await recordExposures(this.prisma, user.id, questions.map((q) => q.id))
       return this.mocks.read(attempt.id, user)
     } catch (err) {
       if ((err as { code?: string }).code === 'P2002') {

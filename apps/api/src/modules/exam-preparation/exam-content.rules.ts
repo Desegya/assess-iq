@@ -8,8 +8,45 @@ export function subjectIdentity(name: string) {
   if (['math', 'maths', 'general mathematics', 'mathematics'].includes(normalized)) return 'mathematics'
   return normalized
 }
+const normalize = (text: string) => text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim()
+
+/** Version 1 (legacy rows): stem only. Kept to recognise exact copies of older questions. */
 export function questionFingerprint(question: string) {
-  return createHash('sha256').update(question.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim()).digest('hex')
+  return createHash('sha256').update(normalize(question)).digest('hex')
+}
+
+/**
+ * Version 2: stem plus the set of option texts (order-insensitive). Distinct
+ * questions that share a common stem ("Which of the following is a noble
+ * gas?") are no longer rejected as duplicates; identical items still are.
+ */
+export function questionFingerprintV2(question: string, options?: { text: string }[] | null) {
+  const optionTexts = (options ?? []).map((o) => normalize(o.text)).sort()
+  return 'v2:' + createHash('sha256').update([normalize(question), ...optionTexts].join('\n')).digest('hex')
+}
+
+export function sameOptionSet(a?: { text: string }[] | null, b?: { text: string }[] | null) {
+  const norm = (o?: { text: string }[] | null) => (o ?? []).map((x) => normalize(x.text)).sort().join('\n')
+  return norm(a) === norm(b)
+}
+
+const words = (text: string) => new Set(normalize(text).replace(/[^\p{L}\p{N}\s]/gu, ' ').split(' ').filter((w) => w.length > 2))
+
+/**
+ * Jaccard similarity of the content words of two questions (stem and options).
+ * A review signal only: high similarity is shown to reviewers, never used to
+ * reject a question automatically.
+ */
+export function questionSimilarity(
+  a: { questionText: string; options?: { text: string }[] | null },
+  b: { questionText: string; options?: { text: string }[] | null },
+) {
+  const set = (q: typeof a) => words([q.questionText, ...(q.options ?? []).map((o) => o.text)].join(' '))
+  const x = set(a), y = set(b)
+  if (!x.size || !y.size) return 0
+  let shared = 0
+  for (const w of x) if (y.has(w)) shared++
+  return shared / (x.size + y.size - shared)
 }
 export function validateBankQuestion(q: BankQuestionDto) {
   if (!q.questionText.trim() || !q.correctAnswer.trim() || !q.explanation.trim()) throw new BadRequestException('Question, model answer and explanation are required')

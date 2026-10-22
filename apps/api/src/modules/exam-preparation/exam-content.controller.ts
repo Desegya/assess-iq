@@ -78,6 +78,9 @@ export class ExamContentAdminController {
   ) {
     return this.content.mapObjectives(id, dto.objectiveIds, dto.expectedRevision, u.id)
   }
+  @Get('questions/:id/similar') similar(@Param('id') id: string) {
+    return this.content.similar(id)
+  }
   @Get('questions') questions(@Query() q: ContentFilterDto) {
     return this.content.questions(q)
   }

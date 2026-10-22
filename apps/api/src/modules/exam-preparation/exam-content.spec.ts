@@ -32,14 +32,16 @@ describe('Shared exam bank validation', () => {
   })
   it('does not publish invalid generated items and deduplicates valid drafts', async () => {
     const tx = { nightklassAdmin: { findUnique: vi.fn().mockResolvedValue({ user: { status: 'ACTIVE', organizationId: null } }) },
-      examBankQuestion: { createMany: vi.fn().mockResolvedValue({ count: 1 }) }, nightklassAdminAudit: { create: vi.fn() } }
-    const service = new ExamContentService({ $transaction: vi.fn(fn => fn(tx)) } as never, { generateQuestions: vi.fn().mockResolvedValue([
+      examBankQuestion: { createMany: vi.fn().mockResolvedValue({ count: 1 }), findMany: vi.fn().mockResolvedValue([]) }, nightklassAdminAudit: { create: vi.fn() } }
+    const service = new ExamContentService({ $transaction: vi.fn(fn => fn(tx)) } as never, { generateQuestionsWithMeta: vi.fn().mockResolvedValue({ model: 'fixture-model', promptVersion: 'fixture-prompt', questions: [
       { type: 'MCQ', ...question, options: question.options },
       { type: 'MCQ', ...question, correctAnswer: 'Z' },
-    ]) } as never)
+    ] }) } as never)
     const result = await service.generate(plainToInstance(GenerateBankDto, { exam: 'JAMB', subject: 'Government', topic: 'Democracy', count: 2 }), 'teacher')
     expect(result).toEqual({ saved: 1, rejected: 1, duplicates: 0 })
-    expect(tx.examBankQuestion.createMany.mock.calls[0]![0].data[0]).not.toHaveProperty('status', 'APPROVED')
+    const saved = tx.examBankQuestion.createMany.mock.calls[0]![0].data[0]
+    expect(saved).not.toHaveProperty('status', 'APPROVED')
+    expect(saved).toMatchObject({ fingerprintVersion: 2, generatorModel: 'fixture-model', generatorPromptVersion: 'fixture-prompt' })
   })
   it('rechecks revoked admin grants inside a write transaction', async () => {
     const tx = { nightklassAdmin: { findUnique: vi.fn().mockResolvedValue(null) }, examMaterial: { create: vi.fn() } }

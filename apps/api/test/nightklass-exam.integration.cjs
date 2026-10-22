@@ -34,6 +34,8 @@ async function assertSignedDownload(link, keyPattern) {
   assert.equal((await fetch(traversal)).status, 404)
   assert.equal((await fetch(new URL('/uploads/' + url.searchParams.get('key'), url))).status, 404)
 }
+// Options are shuffled per attempt, so learners (and tests) answer by option text.
+const correctKey = q => q.options.find(o => o.text === authored.options.find(x => x.key === authored.correctAnswer).text).key
 const admin = (path, body, method) => call('/admin/nightklass/exam-content/' + path, ownerToken, body, method)
 const authored = { exam: 'JAMB', subject: 'Government', topic: `Democracy ${suffix}`, questionText: `Which choice describes representative democracy? Fixture ${suffix}`, questionType: 'MCQ', options: [{ key: 'A', text: 'Citizens elect representatives' }, { key: 'B', text: 'Power is inherited' }, { key: 'C', text: 'No elections occur' }, { key: 'D', text: 'One official owns all power' }], correctAnswer: 'A', explanation: 'Citizens elect representatives who make decisions on their behalf.', marks: 1, difficulty: 'MEDIUM' }
 before(async () => {
@@ -155,14 +157,18 @@ test('a complete 180-question mock freezes four subjects and idempotent start re
   assert.equal((await call('/exam-preparation/mocks', learnerToken, { goalId: goal.id, requestKey: randomUUID() })).body.id, mock.id)
   assert.equal((await call(`/exam-preparation/mocks/${mock.id}`, otherToken)).status, 404)
 })
+let mockKey
 test('mock answer saves reject forged items and stale updates; resume restores confirmed answers', async () => {
   const path = `/exam-preparation/mocks/${mock.id}/answers`
   assert.equal((await call(path, learnerToken, { expectedVersion: 1, answers: [{ questionId: 'foreign-question', answer: 'A' }], flags: [] }, 'PATCH')).status, 400)
-  const result = await call(path, learnerToken, { expectedVersion: 1, answers: [{ questionId: mock.questions[0].id, answer: 'A' }], flags: [mock.questions[1].id] }, 'PATCH')
+  // Options are shuffled per attempt: read the frozen display key the way the server will mark it.
+  const frozen = (await prisma.examMockAttempt.findUnique({ where: { id: mock.id } })).questions
+  mockKey = frozen[0].correctAnswer
+  const result = await call(path, learnerToken, { expectedVersion: 1, answers: [{ questionId: mock.questions[0].id, answer: mockKey }], flags: [mock.questions[1].id] }, 'PATCH')
   assert.equal(result.status, 200); assert.equal(result.body.version, 2)
   assert.equal((await call(path, learnerToken, { expectedVersion: 1, answers: [], flags: [] }, 'PATCH')).status, 409)
   const resumed = await call(`/exam-preparation/mocks/${mock.id}`, learnerToken)
-  assert.equal(resumed.body.answers[mock.questions[0].id], 'A')
+  assert.equal(resumed.body.answers[mock.questions[0].id], mockKey)
   assert.deepEqual(resumed.body.flags, [mock.questions[1].id])
 })
 test('concurrent mock submissions finalize one stable result and reveal keys only after submission', async () => {
@@ -171,7 +177,7 @@ test('concurrent mock submissions finalize one stable result and reveal keys onl
   assert.deepEqual(results[0].body.result, results[1].body.result)
   assert.equal(results[0].body.status, 'GRADED')
   assert.equal(results[0].body.result.subjects.reduce((sum, s) => sum + s.correct, 0), 1)
-  assert.equal(results[0].body.questions[0].correctAnswer, 'A')
+  assert.equal(results[0].body.questions[0].correctAnswer, mockKey)
   assert.equal((await call(`/exam-preparation/mocks/${mock.id}/answers`, learnerToken, { expectedVersion: 2, answers: [], flags: [] }, 'PATCH')).status, 409)
   assert.equal((await prisma.examMockAttempt.findUnique({ where: { id: mock.id } })).activeKey, null)
 })
@@ -218,7 +224,7 @@ test('WAEC starts frozen paper sections and validates optional choices and writt
   const savePath = `/exam-preparation/mocks/${waecAttempt.id}/answers`
   assert.equal((await call(savePath, learnerToken, { expectedVersion: 1, answers: [], flags: [], selectedQuestions: essays.map(q => q.id) }, 'PATCH')).status, 400)
   const objective = waecAttempt.questions.find(q => q.questionType === 'MCQ')
-  const saved = await call(savePath, learnerToken, { expectedVersion: 1, answers: [{ questionId: objective.id, answer: 'A' }, { questionId: essays[0].id, answer: '(a) People elect representatives. (b) This supports accountability.' }], flags: [essays[0].id], selectedQuestions: [essays[0].id] }, 'PATCH')
+  const saved = await call(savePath, learnerToken, { expectedVersion: 1, answers: [{ questionId: objective.id, answer: correctKey(objective) }, { questionId: essays[0].id, answer: '(a) People elect representatives. (b) This supports accountability.' }], flags: [essays[0].id], selectedQuestions: [essays[0].id] }, 'PATCH')
   assert.equal(saved.status, 200)
   const resumed = await call(`/exam-preparation/mocks/${waecAttempt.id}`, learnerToken)
   assert.match(resumed.body.answers[essays[0].id], /accountability/)
@@ -329,9 +335,17 @@ test('objective study setup is idempotent and reviewed practice feeds objective 
   const grade=await call(`/study/topics/${first.body.topicId}/quiz/submit`,learnerToken,{answers:[{questionId:practiceResult.body.questions[0].id,selectedAnswer:'A'}]})
   assert.equal(grade.body.scorePercent,100)
   const coverage=await call(`/exam-preparation/goals/${goal.id}/subjects/government/coverage`,learnerToken)
-  assert.equal(coverage.body.summary.assessed,1)
-  assert.equal(coverage.body.objectives[0].practiceAccuracy,100)
+  // One answered question is recorded as evidence but is too little to show a percentage.
+  assert.deepEqual(coverage.body.objectives[0].evidence,{distinctQuestions:1,level:'INSUFFICIENT'})
+  assert.equal(coverage.body.objectives[0].practiceAccuracy,null)
+  assert.equal(coverage.body.summary.assessed,0)
   assert.equal(coverage.body.objectives[0].reviewedQuestions,1)
+  assert.equal(coverage.body.evidencePolicy.insufficientBelow,3)
+  // Practising the same question again does not inflate the evidence.
+  const again=await call('/exam-preparation/practice',learnerToken,{goalId:goal.id,subjectKey:'government',objectiveId,count:1})
+  await call(`/study/topics/${first.body.topicId}/quiz/submit`,learnerToken,{answers:[{questionId:again.body.questions[0].id,selectedAnswer:'A'}]})
+  const repeated2=await call(`/exam-preparation/goals/${goal.id}/subjects/government/coverage`,learnerToken)
+  assert.equal(repeated2.body.objectives[0].evidence.distinctQuestions,1)
 })
 test('published corrections preserve historical keys and archive the superseded question atomically',async()=>{
   const corrected=await admin(`questions/${syllabusQuestion.id}/correction`,{status:'APPROVED',expectedRevision:2})
@@ -345,13 +359,15 @@ test('published corrections preserve historical keys and archive the superseded 
   assert.equal(historical.correctAnswer,'A')
   const coverage=await call(`/exam-preparation/goals/${goal.id}/subjects/government/coverage`,learnerToken)
   assert.equal(coverage.body.objectives[0].reviewedQuestions,1)
-  assert.equal(coverage.body.objectives[0].practiceAccuracy,100)
+  // Results on the superseded question (whose key changed) no longer count as evidence.
+  assert.deepEqual(coverage.body.objectives[0].evidence,{distinctQuestions:0,level:'NONE'})
+  assert.equal(coverage.body.objectives[0].practiceAccuracy,null)
 })
 test('generation jobs are idempotent and commit validated drafts plus completion atomically',async()=>{
   const {AiService}=require('../dist/modules/ai/ai.service')
   const {ExamGenerationService}=require('../dist/modules/exam-preparation/exam-generation.service')
-  const ai=app.get(AiService),original=ai.generateQuestions
-  ai.generateQuestions=async()=>[{type:'MCQ',questionText:`Queued question ${suffix}: choose the correct option.`,options:authored.options,correctAnswer:'A',explanation:'This deterministic generated fixture has option A as its answer.'}]
+  const ai=app.get(AiService),original=ai.generateQuestionsWithMeta
+  ai.generateQuestionsWithMeta=async()=>({model:'fixture',promptVersion:'fixture',questions:[{type:'MCQ',questionText:`Queued question ${suffix}: choose the correct option.`,options:authored.options,correctAnswer:'A',explanation:'This deterministic generated fixture has option A as its answer.'}]})
   try{
     const payload={exam:'JAMB',subject:'Government',topic:'Democratic government',count:1,difficulty:'MEDIUM',questionType:'MCQ',objectiveIds:[syllabus.objectives[0].id],requestKey:randomUUID()}
     const queued=await admin('generation-jobs',payload)
@@ -364,7 +380,7 @@ test('generation jobs are idempotent and commit validated drafts plus completion
     const drafts=await prisma.examBankQuestion.findMany({where:{generationJobId:job.id},include:{objectiveLinks:true}})
     assert.equal(drafts.length,1);assert.equal(drafts[0].status,'DRAFT')
     assert.equal(drafts[0].objectiveLinks[0].objectiveId,syllabus.objectives[0].id)
-  }finally{ai.generateQuestions=original}
+  }finally{ai.generateQuestionsWithMeta=original}
 })
 test('mock review handles a small concurrent-read burst without changing saved results',async()=>{
   await new Promise(r=>setTimeout(r,1100))

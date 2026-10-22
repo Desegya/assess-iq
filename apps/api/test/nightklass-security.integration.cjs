@@ -34,6 +34,8 @@ async function account(name, extra = {}) {
   return prisma.user.create({ data: { name, email: `${name}-${suffix}@example.test`, passwordHash: await hash(password, 4), role: 'STUDENT', status: 'ACTIVE', ...extra } })
 }
 async function login(user, pw = password) {
+  // Stay under the real 10-per-second anonymous burst limit instead of loosening it for tests.
+  await sleep(120)
   const r = await call('/auth/login', null, { email: user.email, password: pw })
   assert.equal(r.status, 200, JSON.stringify(r.body))
   return r.body
@@ -349,4 +351,30 @@ test('institutional and administrator accounts cannot self-delete', async () => 
   assert.equal((await call('/users/me/export', token)).status, 403)
   assert.equal((await call('/users/me', token, { password, confirmation: 'DELETE MY ACCOUNT' }, 'DELETE')).status, 403)
   assert.equal((await call('/users/me', ownerToken, { password, confirmation: 'DELETE MY ACCOUNT' }, 'DELETE')).status, 403)
+})
+
+test('WAEC retakes draw unseen questions first and refuse incomplete forms', async () => {
+  const subject = `Literature ${suffix}`, key = subject.toLowerCase(), topic = `Poetry ${suffix}`
+  const user = await account('waec-retake', { studyPathway: 'EXAM_PREPARATION', secondaryStage: 'SS3' })
+  const token = (await login(user)).accessToken
+  const goal = (await call('/exam-preparation/goals', token, { exam: 'WAEC', year: YEAR, series: 'SCHOOL', subjects: [subject] }, 'PUT')).body
+  const options = [{ key: 'A', text: 'Metaphor' }, { key: 'B', text: 'Simile' }, { key: 'C', text: 'Irony' }, { key: 'D', text: 'Alliteration' }]
+  for (let i = 0; i < 4; i++)
+    await prisma.examBankQuestion.create({ data: { exam: 'WAEC', subject, subjectKey: key, topic, questionText: `WAEC retake ${suffix} ${i}: name the device.`, questionType: 'MCQ', options, correctAnswer: 'A', explanation: 'Fixture.', marks: 1, difficulty: 'MEDIUM', status: 'APPROVED', createdById: owner.id, fingerprint: `retake-${suffix}-${i}` } })
+  const paper = await prisma.waecPaperTemplate.create({ data: { year: YEAR, series: 'SCHOOL', subject, subjectKey: key, paperCode: `RT-${suffix}`, title: `Retake fixture ${suffix}`, durationMinutes: 30, instructions: 'Isolated fixture; answer both objective questions.', sourceNote: 'Integration fixture only.', status: 'APPROVED', sections: [{ id: 'obj', title: 'Objectives', questionType: 'MCQ', count: 2, choose: 2, marks: 1, topic }] } })
+  const take = async () => {
+    const started = await call('/exam-preparation/waec-papers/start', token, { goalId: goal.id, paperId: paper.id, requestKey: randomUUID() })
+    assert.equal(started.status, 201, JSON.stringify(started.body))
+    assert.equal((await call(`/exam-preparation/mocks/${started.body.id}/submit`, token, {})).status, 201)
+    return started.body.questions.map(q => q.id)
+  }
+  const first = await take(), second = await take()
+  assert.equal(new Set([...first, ...second]).size, 4, 'second form uses the two unseen questions')
+  const exposures = await prisma.examQuestionExposure.findMany({ where: { studentId: user.id } })
+  assert.equal(exposures.length, 4)
+  // With every question seen once, a third form is still complete (least recently seen first).
+  assert.equal((await take()).length, 2)
+  await prisma.examBankQuestion.updateMany({ where: { subjectKey: key }, data: { status: 'ARCHIVED' } })
+  const refused = await call('/exam-preparation/waec-papers/start', token, { goalId: goal.id, paperId: paper.id, requestKey: randomUUID() })
+  assert.equal(refused.status, 400); assert.match(refused.body.message, /needs 2 reviewed questions/)
 })

@@ -1,3 +1,4 @@
+import { recordExposures, sampleQuestionIds } from './exam-sampling'
 import { serializable } from '../../common/serializable'
 import {
   BadRequestException,
@@ -21,7 +22,14 @@ import {
   EditBankQuestionDto,
   GenerateBankDto,
 } from './exam-content.dto'
-import { questionFingerprint, subjectIdentity, validateBankQuestion } from './exam-content.rules'
+import {
+  questionFingerprint,
+  questionFingerprintV2,
+  questionSimilarity,
+  sameOptionSet,
+  subjectIdentity,
+  validateBankQuestion,
+} from './exam-content.rules'
 
 @Injectable()
 export class ExamContentService {
@@ -115,6 +123,24 @@ export class ExamContentService {
       throw err
     }
   }
+  /** Exact copies of legacy (stem-only fingerprint) questions that the v2 unique index cannot see. */
+  private async legacyDuplicate(
+    tx: Prisma.TransactionClient,
+    q: { exam: string; subject: string; questionText: string; options?: { text: string }[] | null },
+    excludeId?: string,
+  ) {
+    const legacy = await tx.examBankQuestion.findMany({
+      where: {
+        exam: q.exam as 'JAMB' | 'WAEC',
+        subjectKey: subjectIdentity(q.subject),
+        fingerprintVersion: 1,
+        fingerprint: questionFingerprint(q.questionText),
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true, options: true },
+    })
+    return legacy.find((row) => sameOptionSet(row.options as { text: string }[] | null, q.options)) ?? null
+  }
   createMaterial(dto: CreateExamMaterialDto, actorId: string) {
     return this.mutate(actorId, 'exam.material.create', async (tx) => {
       const result = await tx.examMaterial.create({
@@ -195,7 +221,11 @@ export class ExamContentService {
           status: 'DRAFT',
           revision: 1,
           createdById: actorId,
-          fingerprint: questionFingerprint(question.questionText) + ':correction:' + oldId,
+          fingerprint:
+            questionFingerprintV2(question.questionText, question.options as { text: string }[] | null) +
+            ':correction:' +
+            oldId,
+          fingerprintVersion: 2,
           objectiveLinks: {
             create: objectiveLinks.map((link) => ({ objectiveId: link.objectiveId })),
           },
@@ -205,10 +235,43 @@ export class ExamContentService {
       return { id: result.id, result }
     })
   }
+  /**
+   * Review signal for near-duplicates: questions in the same exam and subject
+   * whose content words overlap strongly. Never blocks publication.
+   */
+  async similar(id: string) {
+    const question = await this.prisma.examBankQuestion.findUnique({ where: { id } })
+    if (!question) throw new NotFoundException('Question not found')
+    const candidates = await this.prisma.examBankQuestion.findMany({
+      where: {
+        exam: question.exam,
+        subjectKey: question.subjectKey,
+        id: { not: id },
+        status: { in: ['DRAFT', 'APPROVED'] },
+      },
+      select: { id: true, questionText: true, options: true, status: true, topic: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 2000,
+    })
+    const subject = { questionText: question.questionText, options: question.options as { text: string }[] | null }
+    return candidates
+      .map((c) => ({
+        id: c.id,
+        status: c.status,
+        topic: c.topic,
+        questionText: c.questionText,
+        similarity: Math.round(questionSimilarity(subject, { questionText: c.questionText, options: c.options as { text: string }[] | null }) * 100) / 100,
+      }))
+      .filter((c) => c.similarity >= 0.6)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 10)
+  }
   async createQuestion(dto: BankQuestionDto, actorId: string) {
     validateBankQuestion(dto)
     return this.mutate(actorId, 'exam.question.create', async (tx) => {
       const { objectiveIds, ...fields } = dto
+      if (await this.legacyDuplicate(tx, dto))
+        throw new ConflictException('An identical question already exists in this subject.')
       const links = await this.objectiveLinks(tx, dto.exam, dto.subject, objectiveIds)
       const result = await tx.examBankQuestion.create({
         data: {
@@ -216,7 +279,8 @@ export class ExamContentService {
           objectiveLinks: links,
           options: dto.options as Prisma.InputJsonValue | undefined,
           subjectKey: subjectIdentity(dto.subject),
-          fingerprint: questionFingerprint(dto.questionText),
+          fingerprint: questionFingerprintV2(dto.questionText, dto.options),
+          fingerprintVersion: 2,
           createdById: actorId,
         },
       })
@@ -256,7 +320,7 @@ export class ExamContentService {
       if (!material) throw new NotFoundException('Matching material not found')
       body += '\n\nTEACHER MATERIAL:\n' + material.body
     }
-    const raw = await this.ai.generateQuestions(body, {
+    const generated = await this.ai.generateQuestionsWithMeta(body, {
       count: dto.count,
       types: [dto.questionType],
       difficulty: dto.difficulty,
@@ -265,6 +329,7 @@ export class ExamContentService {
       documentId: dto.materialId ?? 'exam-bank',
       groundedInMaterial: false,
     })
+    const raw = generated.questions
     const accepted: BankQuestionDto[] = []
     let rejected = Math.max(0, raw.length - dto.count)
     for (const item of raw.slice(0, dto.count)) {
@@ -303,14 +368,19 @@ export class ExamContentService {
         throw new ConflictException(
           'Generation lease changed; this batch will be recovered by the worker',
         )
-      const data = accepted.map((q) => ({
+      const fresh = []
+      for (const q of accepted) if (!(await this.legacyDuplicate(tx, q))) fresh.push(q)
+      const data = fresh.map((q) => ({
         ...q,
         options: q.options as Prisma.InputJsonValue | undefined,
         materialId: dto.materialId,
         generationJobId: job?.id,
         subjectKey: subjectIdentity(q.subject),
-        fingerprint: questionFingerprint(q.questionText),
+        fingerprint: questionFingerprintV2(q.questionText, q.options),
+        fingerprintVersion: 2,
         isAiGenerated: true,
+        generatorModel: generated.model,
+        generatorPromptVersion: generated.promptVersion,
         createdById: actorId,
       }))
       const links = await this.objectiveLinks(tx, dto.exam, dto.subject, dto.objectiveIds)
@@ -357,8 +427,10 @@ export class ExamContentService {
         ? await this.objectiveLinks(tx, dto.exam, dto.subject, objectiveIds)
         : undefined
       const fingerprint =
-        questionFingerprint(data.questionText) +
+        questionFingerprintV2(data.questionText, data.options) +
         (current.supersedesId ? ':correction:' + current.supersedesId : '')
+      if (!current.supersedesId && (await this.legacyDuplicate(tx, dto, id)))
+        throw new ConflictException('An identical question already exists in this subject.')
       const updated = await tx.examBankQuestion.updateMany({
         where: { id, revision: expectedRevision, status: 'DRAFT' },
         data: {
@@ -366,6 +438,7 @@ export class ExamContentService {
           options: data.options as Prisma.InputJsonValue | undefined,
           subjectKey: subjectIdentity(data.subject),
           fingerprint,
+          fingerprintVersion: 2,
           revision: { increment: 1 },
         },
       })
@@ -452,28 +525,23 @@ export class ExamContentService {
       : null
     if (dto.objectiveId && !objective)
       throw new NotFoundException('Published objective not found for this goal')
-    const bank = await this.prisma.examBankQuestion.findMany({
-      where: {
-        exam: subject.goal.exam,
-        subjectKey: subject.subjectKey,
-        status: 'APPROVED',
-        ...(objective ? { objectiveLinks: { some: { objectiveId: objective.id } } } : {}),
-        ...(!objective && dto.topic
-          ? { topic: { contains: dto.topic, mode: 'insensitive' as const } }
-          : {}),
-      },
-      take: 1000,
-      orderBy: { id: 'asc' },
+    // Database-side sampling over every published question, least recently seen first.
+    const ids = await sampleQuestionIds(this.prisma, {
+      studentId: user.id,
+      exam: subject.goal.exam as 'JAMB' | 'WAEC',
+      subjectKey: subject.subjectKey,
+      objectiveId: objective?.id,
+      topicContains: !objective && dto.topic ? dto.topic : undefined,
+      count: dto.count,
     })
-    if (!bank.length)
+    if (!ids.length)
       throw new BadRequestException(
         'No reviewed questions match yet. You can generate personal topic practice in your subject workspace.',
       )
-    // Uniform shuffle of the bounded candidate pool; bank growth can replace this with indexed sampling.
-    for (let i = bank.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[bank[i], bank[j]] = [bank[j]!, bank[i]!]
-    }
+    const rows = await this.prisma.examBankQuestion.findMany({ where: { id: { in: ids } } })
+    const byId = new Map(rows.map((q) => [q.id, q]))
+    const bank = ids.map((id) => byId.get(id)!)
+    await recordExposures(this.prisma, user.id, ids)
     return this.prisma.$transaction(async (tx) => {
       const name = objective?.title ?? `${subject.goal.exam} reviewed practice`
       let topic = await tx.topic.findFirst({

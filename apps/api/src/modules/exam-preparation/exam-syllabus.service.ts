@@ -11,6 +11,33 @@ import { Prisma } from '@assessiq/db'
 import { PrismaService } from '../prisma/prisma.service'
 import { ExamSyllabusDto, ObjectiveStudyDto, SyllabusStateDto } from './exam-syllabus.dto'
 import { subjectIdentity } from './exam-content.rules'
+interface ItemResult {
+  earned: number
+  possible: number
+  at: Date
+}
+
+// History read per request; older records are not counted. Documented to learners.
+const EVIDENCE_WINDOW = { quizzes: 500, mocks: 100 }
+
+/**
+ * Evidence thresholds, counted in distinct questions answered for an objective
+ * (latest attempt of each). Chosen for study guidance, not certification: below
+ * 3 items a percentage is mostly noise; 8+ distinct items is enough to compare
+ * objectives with some confidence.
+ */
+export const EVIDENCE_POLICY = {
+  insufficientBelow: 3,
+  establishedFrom: 8,
+  method: 'Latest result for each distinct reviewed question linked to the objective, from your most recent 500 practice quizzes and 100 mocks. Questions replaced by a published correction are excluded.',
+}
+
+export function evidenceLevel(distinct: number): 'NONE' | 'INSUFFICIENT' | 'EMERGING' | 'ESTABLISHED' {
+  if (!distinct) return 'NONE'
+  if (distinct < EVIDENCE_POLICY.insufficientBelow) return 'INSUFFICIENT'
+  return distinct >= EVIDENCE_POLICY.establishedFrom ? 'ESTABLISHED' : 'EMERGING'
+}
+
 @Injectable()
 export class ExamSyllabusService {
   constructor(private readonly prisma: PrismaService) {}
@@ -176,7 +203,11 @@ export class ExamSyllabusService {
         objectives: {
           orderBy: { order: 'asc' },
           include: {
-            questions: { include: { question: { select: { id: true, status: true } } } },
+            questions: {
+              include: {
+                question: { select: { id: true, status: true, correction: { select: { status: true } } } },
+              },
+            },
             studyLinks: { where: { studentId: user.id }, select: { topicId: true } },
           },
         },
@@ -199,14 +230,14 @@ export class ExamSyllabusService {
       this.prisma.selfQuizAttempt.findMany({
         where: { studentId: user.id, courseId: subject.courseId },
         orderBy: { createdAt: 'desc' },
-        take: 500,
-        select: { results: true },
+        take: EVIDENCE_WINDOW.quizzes,
+        select: { results: true, createdAt: true },
       }),
       this.prisma.examMockAttempt.findMany({
         where: { studentId: user.id, goalId, status: { in: ['GRADED', 'SUBMITTED'] } },
         orderBy: { startedAt: 'desc' },
-        take: 100,
-        select: { questions: true, result: true, answers: true },
+        take: EVIDENCE_WINDOW.mocks,
+        select: { questions: true, result: true, answers: true, submittedAt: true, startedAt: true },
       }),
       this.prisma.studySession.findMany({
         where: {
@@ -217,11 +248,12 @@ export class ExamSyllabusService {
         select: { topicId: true },
       }),
     ])
-    const scores = new Map<string, { earned: number; possible: number }>()
-    const add = (id: string, earned: number, possible: number) => {
+    // Latest result per distinct question: repeating one item cannot inflate evidence.
+    const latest = new Map<string, ItemResult>()
+    const record = (id: string, earned: number, possible: number, at: Date) => {
       if (!Number.isFinite(earned) || !Number.isFinite(possible) || possible <= 0) return
-      const previous = scores.get(id) ?? { earned: 0, possible: 0 }
-      scores.set(id, { earned: previous.earned + earned, possible: previous.possible + possible })
+      const previous = latest.get(id)
+      if (!previous || previous.at < at) latest.set(id, { earned, possible, at })
     }
     const copyMap = new Map(copies.map((q) => [q.id, q.sourceExamBankQuestionId!]))
     for (const attempt of quizzes)
@@ -231,30 +263,30 @@ export class ExamSyllabusService {
         maxScore: number
       }[]) {
         const id = copyMap.get(r.questionId)
-        if (id && r.score !== null) add(id, r.score, r.maxScore)
+        if (id && r.score !== null) record(id, r.score, r.maxScore, attempt.createdAt)
       }
     for (const attempt of mocks) {
+      const at = attempt.submittedAt ?? attempt.startedAt
       const result = attempt.result as {
         exam?: string
         results?: { questionId: string; score: number | null; maxScore: number }[]
       } | null
       if (result?.exam === 'WAEC') {
         for (const r of result.results ?? [])
-          if (r.score !== null) add(r.questionId, r.score, r.maxScore)
+          if (r.score !== null) record(r.questionId, r.score, r.maxScore, at)
       } else {
         for (const q of attempt.questions as { id: string; correctAnswer: string }[])
-          add(
-            q.id,
-            (attempt.answers as Record<string, string>)[q.id] === q.correctAnswer ? 1 : 0,
-            1,
-          )
+          record(q.id, (attempt.answers as Record<string, string>)[q.id] === q.correctAnswer ? 1 : 0, 1, at)
       }
     }
     const completed = new Set(masteries.map((s) => s.topicId))
     const objectives = syllabus.objectives.map((o) => {
+      // A superseded question's key may have been wrong, so its results are not evidence.
       const evidence = o.questions
-        .map((l) => scores.get(l.questionId))
-        .filter((x): x is { earned: number; possible: number } => !!x)
+        .filter((l) => !l.question.correction || l.question.correction.status !== 'APPROVED')
+        .map((l) => latest.get(l.questionId))
+        .filter((x): x is ItemResult => !!x)
+      const level = evidenceLevel(evidence.length)
       const possible = evidence.reduce((sum, e) => sum + e.possible, 0)
       return {
         id: o.id,
@@ -264,9 +296,12 @@ export class ExamSyllabusService {
         reviewedQuestions: o.questions.filter((l) => l.question.status === 'APPROVED').length,
         topicId: o.studyLinks[0]?.topicId ?? null,
         studied: o.studyLinks.some((l) => completed.has(l.topicId)),
-        practiceAccuracy: possible
-          ? Math.round((evidence.reduce((sum, e) => sum + e.earned, 0) / possible) * 100)
-          : null,
+        evidence: { distinctQuestions: evidence.length, level },
+        // Withheld until there is at least emerging evidence, so one answer never reads as 0% or 100%.
+        practiceAccuracy:
+          possible && level !== 'NONE' && level !== 'INSUFFICIENT'
+            ? Math.round((evidence.reduce((sum, e) => sum + e.earned, 0) / possible) * 100)
+            : null,
       }
     })
     return {
@@ -285,6 +320,7 @@ export class ExamSyllabusService {
         studied: objectives.filter((o) => o.studied).length,
         assessed: objectives.filter((o) => o.practiceAccuracy !== null).length,
       },
+      evidencePolicy: EVIDENCE_POLICY,
       note: 'Practice accuracy reflects recent recorded practice, not a prediction of your official exam result.',
     }
   }
