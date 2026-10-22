@@ -19,6 +19,20 @@ async function call(path, token, body, method = body ? 'POST' : 'GET') {
   const response = await fetch(base + path, { method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
   return { status: response.status, body: await response.json() }
 }
+// Private files are reachable only through short-lived signed links: the link
+// works, while a tampered signature, an expired link or a guessed key does not.
+async function assertSignedDownload(link, keyPattern) {
+  const url = new URL(link)
+  assert.match(url.searchParams.get('key'), keyPattern)
+  assert.equal((await fetch(url)).status, 200)
+  const tampered = new URL(url); tampered.searchParams.set('sig', '0'.repeat(64))
+  assert.equal((await fetch(tampered)).status, 404)
+  const expired = new URL(url); expired.searchParams.set('expires', String(Math.floor(Date.now() / 1000) - 1))
+  assert.equal((await fetch(expired)).status, 404)
+  const traversal = new URL(url); traversal.searchParams.set('key', '../package.json')
+  assert.equal((await fetch(traversal)).status, 404)
+  assert.equal((await fetch(new URL('/uploads/' + url.searchParams.get('key'), url))).status, 404)
+}
 const admin = (path, body, method) => call('/admin/nightklass/exam-content/' + path, ownerToken, body, method)
 const authored = { exam: 'JAMB', subject: 'Government', topic: `Democracy ${suffix}`, questionText: `Which choice describes representative democracy? Fixture ${suffix}`, questionType: 'MCQ', options: [{ key: 'A', text: 'Citizens elect representatives' }, { key: 'B', text: 'Power is inherited' }, { key: 'C', text: 'No elections occur' }, { key: 'D', text: 'One official owns all power' }], correctAnswer: 'A', explanation: 'Citizens elect representatives who make decisions on their behalf.', marks: 1, difficulty: 'MEDIUM' }
 before(async () => {
@@ -33,6 +47,8 @@ before(async () => {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, transformOptions: { enableImplicitConversion: true } }))
   await app.listen(0, '127.0.0.1')
   base = `http://127.0.0.1:${app.getHttpServer().address().port}/api/v1`
+  // Local signed download links point back at this test server.
+  process.env.API_URL = `http://127.0.0.1:${app.getHttpServer().address().port}`
   for (const [user, assign] of [[owner, t => ownerToken = t], [learner, t => learnerToken = t], [other, t => otherToken = t]]) {
     const result = await call('/auth/login', null, { email: user.email, password })
     assert.equal(result.status, 200); assign(result.body.accessToken)
@@ -387,7 +403,7 @@ test('WAEC CSV upload imports draft rows and publication filters papers to selec
   assert.ok(published.body.papers.every(p=>p.subject==='Government'))
   assert.equal(published.body.deadlines[0].date,'2027-05-20')
   assert.equal(published.body.deadlines[0].source,'PAPER_DATE')
-  assert.match(published.body.calendar.fileUrl,/exam-timetables\/.+\.csv/)
+  await assertSignedDownload(published.body.calendar.fileUrl,/exam-timetables\/.+\.csv/)
   assert.match(published.body.note,/Africa\/Lagos/)
   assert.equal((await admin('calendars',{id:calendarDraft.id,exam:'WAEC',year:2027,series:'SCHOOL',version:calendarDraft.version,title:calendarDraft.title,startDate:'2027-05-02',endDate:'2027-06-30',sourceNote:calendarDraft.sourceNote,entries:[],expectedRevision:calendarDraft.revision+1})).status,409)
 })
@@ -452,6 +468,6 @@ test('WAEC PDF uploads retain the original timetable for admin review', async()=
   assert.equal(failedExtraction.status,'DRAFT')
 
   const source=await admin(`calendars/${created.body.id}/file`,undefined,'GET')
-  assert.equal(source.status,200);assert.match(source.body.url,/exam-timetables\/.+\.pdf/)
+  assert.equal(source.status,200);await assertSignedDownload(source.body.url,/exam-timetables\/.+\.pdf/)
   assert.equal((await call(`/admin/nightklass/exam-content/calendars/${created.body.id}/file`,learnerToken)).status,403)
 })
