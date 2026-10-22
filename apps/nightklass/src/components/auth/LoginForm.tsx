@@ -116,6 +116,9 @@ export function LoginForm() {
           <Icon name={showPassword ? 'eyeOff' : 'eye'} className="h-4 w-4" />
           {showPassword ? 'Hide password' : 'Show password'}
         </button>
+        <a href="/forgot-password" className="ml-4 inline-flex min-h-11 items-center text-xs font-medium text-violet-600 hover:text-violet-700">
+          Forgot password?
+        </a>
 
         <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
           {loading ? 'Signing in…' : 'Sign in'}
