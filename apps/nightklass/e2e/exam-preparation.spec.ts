@@ -111,6 +111,10 @@ test('teacher publishes a curated syllabus and queues generation', async ({ page
   await page.getByLabel('Topic (optional)', { exact: true }).fill('Democratic government')
   await page.getByRole('button', { name: 'Generate questions', exact: true }).click()
   await expect(page.getByText('Generating 5 questions', { exact: false })).toBeVisible()
+  // One progress summary for the request, then straight to the drafts to review.
+  await expect(page.getByText(/5 of 5 questions ready to review/)).toBeVisible({ timeout: 45000 })
+  await page.getByRole('button', { name: 'Review drafts', exact: true }).click()
+  await expect(page.getByLabel('Show questions', { exact: true })).toHaveValue('DRAFT')
   const rejected = await page.request.post('/api/admin/exam-content/generation-jobs', {
     headers: { origin: 'https://untrusted.example' },
     data: {},
