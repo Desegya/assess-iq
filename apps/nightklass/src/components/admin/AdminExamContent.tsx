@@ -35,6 +35,79 @@ type Question = {
 }
 const OTHER_SUBJECT = '__other__'
 
+interface GenerationJob {
+  id: string
+  status: string
+  attempts: number
+  error: string | null
+  payload: { subject: string; topic?: string; count: number } & Record<string, unknown>
+  result: { saved: number; rejected: number; duplicates: number } | null
+}
+const JOB_LABEL: Record<string, string> = {
+  QUEUED: 'Waiting',
+  RUNNING: 'Generating',
+  SUCCEEDED: 'Done',
+  FAILED: 'Failed',
+}
+
+/** One summary for a generate request, however many 10-question batches it became. */
+function GenerationProgress({
+  jobs,
+  onReview,
+  onRetry,
+}: {
+  jobs: GenerationJob[]
+  onReview: () => void
+  onRetry: () => void
+}) {
+  const asked = jobs.reduce((n, j) => n + (j.payload.count ?? 0), 0)
+  const saved = jobs.reduce((n, j) => n + (j.result?.saved ?? 0), 0)
+  const failed = jobs.filter((j) => j.status === 'FAILED')
+  const done = jobs.filter((j) => j.status === 'SUCCEEDED' || j.status === 'FAILED').length
+  const complete = done === jobs.length
+  const skipped = jobs.reduce(
+    (n, j) => n + (j.result ? j.result.duplicates + j.result.rejected : 0),
+    0,
+  )
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="space-y-3 rounded-xl border border-violet-200 bg-violet-50 p-4"
+    >
+      <p className="font-medium">
+        {complete
+          ? `${saved} of ${asked} questions ready to review`
+          : `Generating ${asked} questions… ${saved} ready so far`}
+      </p>
+      <div className="h-2 overflow-hidden rounded-full bg-violet-100" aria-hidden>
+        <div
+          className="h-full bg-violet-600 transition-all"
+          style={{ width: `${Math.round((done / jobs.length) * 100)}%` }}
+        />
+      </div>
+      {complete && (skipped > 0 || failed.length > 0) && (
+        <p className="text-sm text-slate-600">
+          {skipped > 0 && `${skipped} skipped as duplicates or unusable. `}
+          {failed.length > 0 && `${failed.length} batch${failed.length === 1 ? '' : 'es'} failed.`}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {saved > 0 && (
+          <button type="button" className="btn-primary" onClick={onReview}>
+            Review drafts
+          </button>
+        )}
+        {complete && failed.length > 0 && (
+          <button type="button" className="btn-secondary" onClick={onRetry}>
+            Retry failed
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function AdminExamContent() {
   const [exam, setExam] = useState('JAMB')
   const [subject, setSubject] = useState('')
@@ -79,22 +152,32 @@ export function AdminExamContent() {
   const materials = useAdminData<{ items: Material[]; total: number }>(
     `exam-content/materials?${query}`,
   )
+  const [statusFilter, setStatusFilter] = useState('')
   const questions = useAdminData<{ items: Question[]; total: number }>(
-    `exam-content/questions?${query}&page=${page}`,
+    `exam-content/questions?${query}&page=${page}${statusFilter ? `&status=${statusFilter}` : ''}`,
   )
-  const jobs = useAdminData<
-    {
-      id: string
-      status: string
-      attempts: number
-      error: string | null
-      result: { saved: number; rejected: number; duplicates: number } | null
-    }[]
-  >('exam-content/generation-jobs')
+  const jobs = useAdminData<GenerationJob[]>('exam-content/generation-jobs')
+  // Jobs queued by the latest "Generate" click, summarised as one progress card.
+  const [runIds, setRunIds] = useState<string[]>([])
+  const runJobs = (jobs.data ?? []).filter((j) => runIds.includes(j.id))
+  const active = (jobs.data ?? []).some((j) => j.status === 'QUEUED' || j.status === 'RUNNING')
+  const finished = runJobs.filter((j) => j.status === 'SUCCEEDED' || j.status === 'FAILED').length
+  // Poll only while something is generating, and refresh the bank as batches land.
   useEffect(() => {
-    const timer = setInterval(() => jobs.reload(), 7000)
+    if (!active) return
+    const timer = setInterval(() => jobs.reload(), 4000)
     return () => clearInterval(timer)
-  }, [jobs.reload])
+  }, [active, jobs.reload])
+  useEffect(() => {
+    if (finished) questions.reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished])
+  // Feedback appears pinned to the bottom of the screen, wherever the teacher has scrolled.
+  useEffect(() => {
+    if (!message) return
+    const timer = setTimeout(() => setMessage(''), 6000)
+    return () => clearTimeout(timer)
+  }, [message])
   async function run(work: () => Promise<string>) {
     setBusy(true)
     setError('')
@@ -151,15 +234,25 @@ export function AdminExamContent() {
         Pick a subject, generate questions, skim them and approve. Notes, syllabuses, dates and mock
         settings are optional and live further down.
       </p>
-      {(error || materials.error || questions.error) && (
-        <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">
-          {error || materials.error || questions.error}
-        </p>
-      )}
-      {message && (
-        <p role="status" className="rounded-xl bg-green-50 p-4 text-green-800">
-          {message}
-        </p>
+      {(error || materials.error || questions.error || message) && (
+        <div className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-xl">
+          <div
+            role={error || materials.error || questions.error ? 'alert' : 'status'}
+            className={`flex items-start gap-3 rounded-xl p-4 text-sm shadow-lg ${error || materials.error || questions.error ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'}`}
+          >
+            <p className="flex-1">{error || materials.error || questions.error || message}</p>
+            <button
+              className="text-white/80 hover:text-white"
+              aria-label="Dismiss"
+              onClick={() => {
+                setError('')
+                setMessage('')
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
       )}
       <section className="card space-y-4 border-violet-200 p-5">
         <h2 className="text-lg font-semibold">Generate questions with AI</h2>
@@ -260,8 +353,9 @@ export function AdminExamContent() {
             void run(async () => {
               // The server generates up to 10 questions per batch; larger requests become several batches.
               const batches = Math.ceil(count / 10)
-              for (let i = 0; i < batches; i++)
-                await adminRequest('exam-content/generation-jobs', {
+              const ids: string[] = []
+              for (let i = 0; i < batches; i++) {
+                const job = await adminRequest<{ id: string }>('exam-content/generation-jobs', {
                   method: 'POST',
                   body: JSON.stringify({
                     exam,
@@ -275,8 +369,11 @@ export function AdminExamContent() {
                     ...(materialId ? { materialId } : {}),
                   }),
                 })
+                ids.push(job.id)
+              }
+              setRunIds(ids)
               jobs.reload()
-              return `Generating ${count} questions${batches > 1 ? ` in ${batches} batches` : ''}. They appear below as drafts within a minute or two — you can leave this page.`
+              return `Generating ${count} questions. Progress is shown below; you can leave this page.`
             })
           }}
         >
@@ -335,37 +432,73 @@ export function AdminExamContent() {
             </button>
           </fieldset>
         </form>
-        <section className="space-y-3">
-          <h3 className="font-semibold">Recent generation batches</h3>
-          {jobs.error && <p role="alert">{jobs.error}</p>}
-          {jobs.data?.map((job) => (
-            <div key={job.id} className="rounded-xl border p-3 text-sm">
-              <p>
-                {job.status} · {job.attempts} processing attempts
-              </p>
-              {job.result && (
-                <p>
-                  {job.result.saved} drafts saved · {job.result.duplicates} duplicates skipped ·{' '}
-                  {job.result.rejected} invalid items rejected
-                </p>
-              )}
-              {job.error && <p className="text-red-700">{job.error}</p>}
-            </div>
-          ))}
-          <button
-            className="btn-secondary"
-            onClick={() => {
-              jobs.reload()
-              questions.reload()
+        {runJobs.length > 0 && (
+          <GenerationProgress
+            jobs={runJobs}
+            onReview={() => {
+              setStatusFilter('DRAFT')
+              setPage(1)
+              document.getElementById('question-bank')?.scrollIntoView({ behavior: 'smooth' })
             }}
-          >
-            Refresh batches and question bank
-          </button>
-        </section>
+            onRetry={() =>
+              void run(async () => {
+                const failed = runJobs.filter((j) => j.status === 'FAILED')
+                const ids = runIds.filter((id) => !failed.some((j) => j.id === id))
+                for (const j of failed) {
+                  const job = await adminRequest<{ id: string }>('exam-content/generation-jobs', {
+                    method: 'POST',
+                    body: JSON.stringify({ ...j.payload, requestKey: crypto.randomUUID() }),
+                  })
+                  ids.push(job.id)
+                }
+                setRunIds(ids)
+                jobs.reload()
+                return `Retrying ${failed.length} batch${failed.length === 1 ? '' : 'es'}.`
+              })
+            }
+          />
+        )}
+        {(jobs.data?.length ?? 0) > 0 && (
+          <details className="text-sm">
+            <summary className="cursor-pointer text-slate-600">Batch history</summary>
+            <ul className="mt-2 space-y-1">
+              {jobs.data!.slice(0, 15).map((job) => (
+                <li key={job.id} className="flex flex-wrap gap-2 text-slate-600">
+                  <span className="font-medium">{JOB_LABEL[job.status] ?? job.status}</span>
+                  <span>
+                    {job.payload.subject}
+                    {job.payload.topic ? ` · ${job.payload.topic}` : ''} · {job.payload.count} asked
+                  </span>
+                  {job.result && <span>· {job.result.saved} saved</span>}
+                  {job.error && job.status === 'FAILED' && (
+                    <span className="text-red-700">· {job.error}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </section>
-      <section className="space-y-4">
-        <div className="flex justify-between">
+      <section id="question-bank" className="scroll-mt-24 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Question bank ({questions.data?.total ?? 0})</h2>
+          <label className="text-sm">
+            <span className="sr-only">Show</span>
+            <select
+              className="input-base"
+              aria-label="Show questions"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value)
+                setPage(1)
+              }}
+            >
+              <option value="">All questions</option>
+              <option value="DRAFT">Drafts to review</option>
+              <option value="APPROVED">Published</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          </label>
           <button
             className="btn-secondary"
             disabled={busy}

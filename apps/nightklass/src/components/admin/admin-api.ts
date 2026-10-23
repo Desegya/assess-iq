@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export class AdminApiError extends Error {
   constructor(
@@ -31,18 +31,26 @@ export function useAdminData<T>(path: string | null) {
   const [loading, setLoading] = useState(true)
   const [version, setVersion] = useState(0)
   const reload = useCallback(() => setVersion((v) => v + 1), [])
+  const loadedPath = useRef<string | null>(null)
   useEffect(() => {
     let current = true
-    setLoading(true)
     setError('')
-    setData(null)
+    // Refreshing the same list keeps what is on screen until new data arrives, so the
+    // page does not collapse and jump while a teacher is scrolled down working.
+    if (loadedPath.current !== path) {
+      setLoading(true)
+      setData(null)
+    }
     if (!path) {
       setLoading(false)
       return
     }
     adminRequest<T>(path)
       .then((value) => {
-        if (current) setData(value)
+        if (current) {
+          setData(value)
+          loadedPath.current = path
+        }
       })
       .catch((err) => {
         if (current) setError(err instanceof Error ? err.message : 'Unable to load this page')
