@@ -1,5 +1,6 @@
 'use client'
 
+import { MathText } from '@/components/product/MathText'
 import { useState, use as usePromise, useEffect } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/product/PageHeader'
@@ -294,7 +295,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
             <div key={q.id} className="card p-6">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <p className="text-base font-medium leading-relaxed text-slate-800 whitespace-pre-wrap">
-                  {i + 1}. {q.questionText}
+                  {i + 1}. <MathText>{q.questionText}</MathText>
                 </p>
                 {q.questionType === 'THEORY' && q.marks && (
                   <span className="badge bg-slate-100 text-slate-600 flex-shrink-0">
@@ -334,7 +335,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                         onChange={() => setAnswers((a) => ({ ...a, [q.id]: opt.key }))}
                       />
                       <span>
-                        {opt.key}. {opt.text}
+                        {opt.key}. <MathText>{opt.text}</MathText>
                       </span>
                     </label>
                   ))}
@@ -434,7 +435,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
               <div key={q.id} className="card p-6">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <p className="text-base font-medium leading-relaxed text-slate-800 whitespace-pre-wrap">
-                    {i + 1}. {q.questionText}
+                    {i + 1}. <MathText>{q.questionText}</MathText>
                   </p>
                   {r?.score != null && r.maxScore != null && isWritten(q.questionType) && (
                     <span
@@ -483,7 +484,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                       </p>
                       {r?.explanation && (
                         <p className="whitespace-pre-wrap text-xs text-slate-600 mt-2">
-                          {r.explanation}
+                          <MathText>{r.explanation}</MathText>
                         </p>
                       )}
                     </details>
@@ -498,7 +499,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                         : `Incorrect. Correct answer: ${r?.correctAnswer ?? '—'}${correctText ? `. ${correctText.text}` : ''}`}
                     </p>
                     {r?.explanation && (
-                      <p className="text-xs text-slate-500 mt-2">{r.explanation}</p>
+                      <p className="text-xs text-slate-500 mt-2"><MathText>{r.explanation}</MathText></p>
                     )}
                   </>
                 )}

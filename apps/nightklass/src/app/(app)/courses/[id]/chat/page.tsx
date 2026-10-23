@@ -1,5 +1,6 @@
 'use client'
 
+import { MathText } from '@/components/product/MathText'
 import { useEffect, useRef, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/product/Icon'
@@ -133,7 +134,9 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
                   From general knowledge, not your notes
                 </p>
               )}
-              <p className="whitespace-pre-wrap break-words leading-relaxed">{m.content}</p>
+              <p className="break-words leading-relaxed">
+                <MathText>{m.content}</MathText>
+              </p>
             </div>
           </div>
         ))}

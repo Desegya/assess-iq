@@ -3,6 +3,8 @@
 import { useEffect, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { Icon } from '@/components/product/Icon'
 import { StudyArtwork } from '@/components/product/StudyArtwork'
 import { useApi } from '@/hooks/use-api'
@@ -80,6 +82,8 @@ function withCitationLinks(text: string) {
 function Md({ children }: { children: string }) {
   return (
     <ReactMarkdown
+      remarkPlugins={[remarkMath]}
+      rehypePlugins={[[rehypeKatex, { throwOnError: false, trust: false, strict: 'ignore' }]]}
       components={{
         p: (props) => <p className="mb-3 last:mb-0" {...props} />,
         ul: (props) => <ul className="list-disc pl-5 mb-3 space-y-1" {...props} />,

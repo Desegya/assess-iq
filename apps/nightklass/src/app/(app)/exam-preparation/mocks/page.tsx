@@ -1,4 +1,5 @@
 'use client'
+import { hasMath, MathText } from '@/components/product/MathText'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -93,7 +94,9 @@ function FormatNotice({ format, compact }: { format?: FormatDisclosure; compact?
   if (compact)
     return (
       <details className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-        <summary className="cursor-pointer font-medium">Text-only practice: what this mock leaves out</summary>
+        <summary className="cursor-pointer font-medium">
+          Text-only practice: what this mock leaves out
+        </summary>
         <p className="mt-2">{format.summary}</p>
         <ul className="mt-2 list-disc pl-5">
           {format.notIncluded.map((item) => (
@@ -159,7 +162,8 @@ function MockScreen() {
         initial: value,
         storage: typeof window === 'undefined' ? null : window.localStorage,
         transport: {
-          save: (body) => api.patch<{ version: number }>(`/exam-preparation/mocks/${value.id}/answers`, body),
+          save: (body) =>
+            api.patch<{ version: number }>(`/exam-preparation/mocks/${value.id}/answers`, body),
           reload: () => api.get<Attempt>(`/exam-preparation/mocks/${value.id}`),
         },
         onStatus: setSaveStatus,
@@ -181,7 +185,11 @@ function MockScreen() {
       setAnswers(saver.answers)
       setFlags(saver.currentFlags)
       setSelected(saver.currentSelected)
-      setSaveStatus(saver.unsavedCount() ? { kind: 'unsaved', unsaved: saver.unsavedCount() } : { kind: 'saved', at: new Date() })
+      setSaveStatus(
+        saver.unsavedCount()
+          ? { kind: 'unsaved', unsaved: saver.unsavedCount() }
+          : { kind: 'saved', at: new Date() },
+      )
       if (saver.unsavedCount()) void saver.flush()
     } else {
       setAnswers(value.answers)
@@ -257,7 +265,9 @@ function MockScreen() {
           })
           .catch(() => {
             finishing = false
-            setError('Time ended. Reconnect to see your result; your saved answers are safe on the server.')
+            setError(
+              'Time ended. Reconnect to see your result; your saved answers are safe on the server.',
+            )
           })
       }
     }
@@ -329,7 +339,12 @@ function MockScreen() {
   }
   async function reportQuestion(questionId: string, reason: string, details: string) {
     try {
-      await api.post('/exam-preparation/question-reports', { questionId, attemptId: attempt?.id, reason, details })
+      await api.post('/exam-preparation/question-reports', {
+        questionId,
+        attemptId: attempt?.id,
+        reason,
+        details,
+      })
       setReporting(null)
       setError('')
       return true
@@ -578,18 +593,30 @@ function MockScreen() {
             <p className="text-sm text-slate-500">
               {q.subject} · question {current + 1} of {attempt.questions.length}
             </p>
-            <h2 className="whitespace-pre-wrap font-semibold">{q.questionText}</h2>
-            <fieldset disabled={busy || seconds <= 0 || saveStatus?.kind === 'ended' || !selectable}>
+            <h2 className="font-semibold">
+              <MathText>{q.questionText}</MathText>
+            </h2>
+            <fieldset
+              disabled={busy || seconds <= 0 || saveStatus?.kind === 'ended' || !selectable}
+            >
               <legend className="sr-only">Choose your answer</legend>
               {q.questionType && q.questionType !== 'MCQ' ? (
-                <textarea
-                  className="input-base min-h-52"
-                  aria-label="Written answer including working and labelled subparts"
-                  maxLength={6000}
-                  value={answers[q.id] ?? ''}
-                  onChange={(e) => answer(q.id, e.target.value)}
-                  placeholder="Write your answer here. Include your working and label each subpart."
-                />
+                <>
+                  <textarea
+                    className="input-base min-h-52"
+                    aria-label="Written answer including working and labelled subparts"
+                    maxLength={6000}
+                    value={answers[q.id] ?? ''}
+                    onChange={(e) => answer(q.id, e.target.value)}
+                    placeholder="Write your answer here. Include your working and label each subpart. Type formulas like $x^2 + 3x$ or $\frac{a}{b}$."
+                  />
+                  {hasMath(answers[q.id]) && (
+                    <div className="mt-2 rounded-xl border bg-slate-50 p-3 text-sm">
+                      <p className="mb-1 text-xs text-slate-500">Formula preview</p>
+                      <MathText>{answers[q.id]}</MathText>
+                    </div>
+                  )}
+                </>
               ) : (
                 q.options.map((o) => (
                   <label key={o.key} className="mb-2 flex gap-3 rounded-xl border p-3">
@@ -600,7 +627,7 @@ function MockScreen() {
                       onChange={() => answer(q.id, o.key)}
                     />
                     <span>
-                      {o.key}. {o.text}
+                      {o.key}. <MathText>{o.text}</MathText>
                     </span>
                   </label>
                 ))
@@ -679,8 +706,8 @@ function MockScreen() {
               {unsavedAtSubmit > 0 && (
                 <div role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
                   {unsavedAtSubmit} change{unsavedAtSubmit === 1 ? ' is' : 's are'} not saved yet
-                  (connection or server busy). Retry to keep {unsavedAtSubmit === 1 ? 'it' : 'them'}, or
-                  submit now and only saved answers will be marked.
+                  (connection or server busy). Retry to keep {unsavedAtSubmit === 1 ? 'it' : 'them'}
+                  , or submit now and only saved answers will be marked.
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button className="btn-secondary" disabled={busy} onClick={() => submit()}>
                       Retry saving and submit
@@ -739,13 +766,15 @@ function MockScreen() {
           {attempt.questions.map((item, i) => (
             <details className="card p-4" key={item.id}>
               <summary className="cursor-pointer">
-                {i + 1}. {item.questionText}
+                {i + 1}. <MathText>{item.questionText}</MathText>
               </summary>
               <p className="mt-3 text-sm">
                 Your answer: {answers[item.id] || 'Unanswered'} · Correct answer:{' '}
-                {item.correctAnswer}
+                <MathText>{item.correctAnswer}</MathText>
               </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm">{item.explanation}</p>
+              <p className="mt-2 text-sm">
+                <MathText>{item.explanation}</MathText>
+              </p>
               <ReportQuestion
                 open={reporting === item.id}
                 onOpen={() => setReporting(item.id)}
@@ -783,17 +812,19 @@ function MockScreen() {
             return (
               <details className="card p-4" key={item.id}>
                 <summary className="cursor-pointer">
-                  {i + 1}. {item.questionText}
+                  {i + 1}. <MathText>{item.questionText}</MathText>
                   {!marked ? ' · not selected' : ''}
                 </summary>
                 <p className="mt-3 whitespace-pre-wrap text-sm">
                   Your answer: {answers[item.id] || 'Unanswered'}
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm">
-                  {item.questionType === 'MCQ' ? 'Correct answer' : 'Marking scheme'}: {item.correctAnswer}
+                  {item.questionType === 'MCQ' ? 'Correct answer' : 'Marking scheme'}:{' '}
+                  <MathText>{item.correctAnswer}</MathText>
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm">
-                  {item.questionType === 'MCQ' ? 'Explanation' : 'Teacher notes'}: {item.explanation}
+                  {item.questionType === 'MCQ' ? 'Explanation' : 'Teacher notes'}:{' '}
+                  <MathText>{item.explanation}</MathText>
                 </p>
                 {marked && (
                   <>
@@ -844,7 +875,10 @@ function ReportQuestion({
   const [reason, setReason] = useState<string>('WRONG_ANSWER')
   const [details, setDetails] = useState('')
   const [sent, setSent] = useState(false)
-  if (sent) return <p className="mt-3 text-sm text-emerald-700">Thanks — a teacher will review this question.</p>
+  if (sent)
+    return (
+      <p className="mt-3 text-sm text-emerald-700">Thanks — a teacher will review this question.</p>
+    )
   if (!open)
     return (
       <button className="mt-3 text-sm text-violet-700 underline" onClick={onOpen}>
@@ -861,7 +895,11 @@ function ReportQuestion({
     >
       <label className="block text-sm">
         What is wrong?
-        <select className="input-base mt-1" value={reason} onChange={(e) => setReason(e.target.value)}>
+        <select
+          className="input-base mt-1"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        >
           {REPORT_REASONS.map(([value, label]) => (
             <option key={value} value={value}>
               {label}

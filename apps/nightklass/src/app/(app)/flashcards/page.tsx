@@ -1,5 +1,6 @@
 'use client'
 
+import { MathText } from '@/components/product/MathText'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/product/Icon'
@@ -157,7 +158,7 @@ export default function FlashcardsPage() {
             className="flip-face card w-full h-full p-6 sm:p-10 overflow-y-auto flex items-center justify-center text-center absolute inset-0"
           >
             <p className="max-h-full text-lg font-medium leading-relaxed text-slate-900">
-              {card.front}
+              <MathText>{card.front}</MathText>
             </p>
           </div>
           <div
@@ -165,7 +166,7 @@ export default function FlashcardsPage() {
             className="flip-face flip-face-back card w-full h-full p-6 sm:p-10 overflow-y-auto flex items-center justify-center text-center !bg-[#f7f2ff]"
           >
             <p className="max-h-full text-lg font-medium leading-relaxed text-slate-900">
-              {card.back}
+              <MathText>{card.back}</MathText>
             </p>
           </div>
         </div>

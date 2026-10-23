@@ -1,5 +1,6 @@
 'use client'
 
+import { MathText } from '@/components/product/MathText'
 import { AdminExamCalendars } from './AdminExamCalendars'
 import { AdminExamSyllabuses, type Syllabus } from './AdminExamSyllabuses'
 import { AdminWaecPapers } from './AdminWaecPapers'
@@ -565,16 +566,20 @@ export function AdminExamContent() {
               {q.subject} / {q.topic} · {q.status} · revision {q.revision} ·{' '}
               {q.isAiGenerated ? 'AI-assisted' : 'Teacher-authored'}
             </p>
-            <p className="whitespace-pre-wrap font-medium">{q.questionText}</p>
+            <p className="font-medium">
+              <MathText>{q.questionText}</MathText>
+            </p>
             {q.options?.map((o) => (
               <p key={o.key}>
-                {o.key}. {o.text}
+                {o.key}. <MathText>{o.text}</MathText>
               </p>
             ))}
             <p className="text-sm">
-              <strong>Answer:</strong> {q.correctAnswer}
+              <strong>Answer:</strong> <MathText>{q.correctAnswer}</MathText>
             </p>
-            <p className="whitespace-pre-wrap text-sm text-slate-600">{q.explanation}</p>
+            <p className="text-sm text-slate-600">
+              <MathText>{q.explanation}</MathText>
+            </p>
             <div className="flex gap-2">
               {q.status === 'DRAFT' && (
                 <>
@@ -707,10 +712,8 @@ export function AdminExamContent() {
                 />
               </label>
               <label className="block text-sm">
-                Source and permission to share
+                Source and permission to share (optional)
                 <input
-                  required
-                  minLength={5}
                   maxLength={1000}
                   className="input-base mt-1"
                   value={sourceNote}

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { SITE_URL, SITE_DESCRIPTION } from '@/lib/seo'
 import { Inter, Space_Grotesk } from 'next/font/google'
 import { Providers } from '@/components/providers'
+import 'katex/dist/katex.min.css'
 import '../styles/globals.css'
 
 const inter = Inter({

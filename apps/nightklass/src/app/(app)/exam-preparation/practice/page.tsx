@@ -1,4 +1,5 @@
 'use client'
+import { MathText } from '@/components/product/MathText'
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -71,11 +72,11 @@ function PracticeScreen() {
         {result && <div className="card p-5"><h2 className="text-xl font-semibold">{result.scorePercent === null ? 'Awaiting marking' : `${result.scorePercent}% on graded questions`}</h2>{result.gradingFailed && <p className="mt-2 text-sm">Some written answers could not be marked. Compare with the model answers below; this score excludes ungraded answers.</p>}
           {result.attemptId && <button className="btn-secondary mt-3" disabled={busy} onClick={async () => { setBusy(true); try { await api.post(`/study/quiz-attempts/${result.attemptId}/flashcards`, {}); setMessage('Revision cards created from your mistakes.') } catch (err) { setError(err instanceof Error ? err.message : 'Could not create cards') } finally { setBusy(false) } }}>Create revision cards from mistakes</button>}</div>}
         {practice.questions.map((q, index) => { const marked = result?.results.find(r => r.questionId === q.id); return <article key={q.id} className="card space-y-3 p-5">
-          <h2 className="whitespace-pre-wrap font-semibold">{index + 1}. {q.questionText}</h2>
+          <h2 className="whitespace-pre-wrap font-semibold">{index + 1}. <MathText>{q.questionText}</MathText></h2>
           <fieldset disabled={busy || !!result}><legend className="sr-only">Your answer to question {index + 1}</legend>
-            {['MCQ', 'TRUE_FALSE'].includes(q.questionType) ? (q.questionType === 'TRUE_FALSE' ? [{ key: 'true', text: 'True' }, { key: 'false', text: 'False' }] : q.options ?? []).map(o => <label key={o.key} className="mb-2 flex cursor-pointer items-start gap-3 rounded-xl border p-3"><input type="radio" name={q.id} checked={answers[q.id] === o.key} onChange={() => setAnswers(a => ({ ...a, [q.id]: o.key }))} /><span>{o.key}. {o.text}</span></label>) : <textarea aria-label={`Written answer to question ${index + 1}`} className="input-base min-h-36" maxLength={6000} value={answers[q.id] ?? ''} onChange={e => setAnswers(a => ({ ...a, [q.id]: e.target.value }))} />}
+            {['MCQ', 'TRUE_FALSE'].includes(q.questionType) ? (q.questionType === 'TRUE_FALSE' ? [{ key: 'true', text: 'True' }, { key: 'false', text: 'False' }] : q.options ?? []).map(o => <label key={o.key} className="mb-2 flex cursor-pointer items-start gap-3 rounded-xl border p-3"><input type="radio" name={q.id} checked={answers[q.id] === o.key} onChange={() => setAnswers(a => ({ ...a, [q.id]: o.key }))} /><span>{o.key}. <MathText>{o.text}</MathText></span></label>) : <textarea aria-label={`Written answer to question ${index + 1}`} className="input-base min-h-36" maxLength={6000} value={answers[q.id] ?? ''} onChange={e => setAnswers(a => ({ ...a, [q.id]: e.target.value }))} />}
           </fieldset>
-          {marked && <div className="space-y-2 rounded-xl bg-violet-50 p-4 text-sm"><p>{marked.score === null ? 'Ungraded' : `${marked.score}/${marked.maxScore}`}</p><p><strong>Model answer:</strong> {marked.correctAnswer}</p><p className="whitespace-pre-wrap">{marked.explanation}</p>{marked.feedback && <p>{marked.feedback}</p>}{marked.missingPoints?.map(point => <p key={point}>• {point}</p>)}</div>}
+          {marked && <div className="space-y-2 rounded-xl bg-violet-50 p-4 text-sm"><p>{marked.score === null ? 'Ungraded' : `${marked.score}/${marked.maxScore}`}</p><p><strong>Model answer:</strong> <MathText>{marked.correctAnswer}</MathText></p><p><MathText>{marked.explanation}</MathText></p>{marked.feedback && <p>{marked.feedback}</p>}{marked.missingPoints?.map(point => <p key={point}>• {point}</p>)}</div>}
         </article> })}
         {!result && <div className="space-y-3"><p className="text-sm text-slate-500">{Object.values(answers).filter(a => a.trim()).length} of {practice.questions.length} answered. Blank answers are submitted as blank.</p><button className="btn-primary" disabled={busy} onClick={submit}>{busy ? 'Marking…' : 'Submit practice'}</button></div>}
       </section>}
