@@ -4,6 +4,7 @@ import { ExamCalendarCard } from './ExamCalendarCard'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useApi } from '@/hooks/use-api'
+import { EXAM_SUBJECTS } from '@/lib/exam-subjects'
 import { PageHeader } from '@/components/product/PageHeader'
 
 type Exam = 'JAMB' | 'WAEC'
@@ -15,26 +16,7 @@ interface Goal {
   subjects: { name: string; subjectKey: string; courseId: string }[]
 }
 // Suggestions are shortcuts, not an official subject catalogue or admission eligibility advice.
-const SUGGESTIONS = [
-  'Mathematics',
-  'Biology',
-  'Chemistry',
-  'Physics',
-  'Literature in English',
-  'Government',
-  'Economics',
-  'Commerce',
-  'Financial Accounting',
-  'Geography',
-  'History',
-  'Christian Religious Studies',
-  'Islamic Studies',
-  'Agricultural Science',
-  'French',
-  'Yoruba',
-  'Igbo',
-  'Hausa',
-]
+const SUGGESTIONS = EXAM_SUBJECTS
 
 export function ExamPreparationWorkspace() {
   const api = useApi()
@@ -54,7 +36,9 @@ export function ExamPreparationWorkspace() {
       .get<{ available: boolean; message: string | null }>('/exam-preparation/access')
       .then((access) => {
         if (!access.available) {
-          setUnavailable(access.message ?? 'WAEC and JAMB preparation is not available on your account yet.')
+          setUnavailable(
+            access.message ?? 'WAEC and JAMB preparation is not available on your account yet.',
+          )
           return
         }
         return api.get<Goal[]>('/exam-preparation/goals').then(setGoals)

@@ -103,7 +103,11 @@ test('teacher publishes a curated syllabus and queues generation', async ({ page
   await expect(syllabusCard).toContainText('APPROVED')
   // Generation sits at the top and needs only a subject; the topic is optional.
   const subjectScope = page.getByLabel('Subject', { exact: true }).first()
-  await subjectScope.fill('Government')
+  // Uncommon subjects can be typed in; common ones are picked from the list.
+  await subjectScope.selectOption({ label: 'Other subject…' })
+  await expect(page.getByLabel('Subject name', { exact: true })).toBeVisible()
+  await subjectScope.selectOption('Government')
+  await expect(page.getByLabel('Subject name', { exact: true })).toHaveCount(0)
   await page.getByLabel('Topic (optional)', { exact: true }).fill('Democratic government')
   await page.getByRole('button', { name: 'Generate questions', exact: true }).click()
   await expect(page.getByText('Generating 5 questions', { exact: false })).toBeVisible()

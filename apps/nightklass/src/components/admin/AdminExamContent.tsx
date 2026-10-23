@@ -5,6 +5,7 @@ import { AdminExamSyllabuses, type Syllabus } from './AdminExamSyllabuses'
 import { AdminWaecPapers } from './AdminWaecPapers'
 import { AdminMockTemplates } from './AdminMockTemplates'
 import { useEffect, useState } from 'react'
+import { ADMIN_EXAM_SUBJECTS } from '@/lib/exam-subjects'
 import { adminRequest, useAdminData } from './admin-api'
 
 type Material = {
@@ -32,9 +33,13 @@ type Question = {
   difficulty: string
   isAiGenerated: boolean
 }
+const OTHER_SUBJECT = '__other__'
+
 export function AdminExamContent() {
   const [exam, setExam] = useState('JAMB')
   const [subject, setSubject] = useState('')
+  // A subject outside the standard list is typed in instead of chosen.
+  const [customSubject, setCustomSubject] = useState(false)
   const [topic, setTopic] = useState('')
   const [title, setTitle] = useState('')
   const [sourceNote, setSourceNote] = useState('')
@@ -176,21 +181,46 @@ export function AdminExamContent() {
               <option>WAEC</option>
             </select>
           </label>
-          <label className="text-sm">
-            Subject
-            <input
+          <div className="text-sm">
+            <label htmlFor="generation-subject">Subject</label>
+            <select
+              id="generation-subject"
               className="input-base mt-2"
-              maxLength={100}
-              value={subject}
+              value={customSubject ? OTHER_SUBJECT : subject}
               onChange={(e) => {
-                setSubject(e.target.value)
+                const other = e.target.value === OTHER_SUBJECT
+                setCustomSubject(other)
+                setSubject(other ? '' : e.target.value)
                 setMaterialId('')
                 setObjectiveIds([])
                 setPage(1)
               }}
-              placeholder="Any science, arts or commercial subject"
-            />
-          </label>
+            >
+              <option value="">Choose a subject</option>
+              {ADMIN_EXAM_SUBJECTS.map((name) => (
+                <option key={name}>{name}</option>
+              ))}
+              <option value={OTHER_SUBJECT}>Other subject…</option>
+            </select>
+          </div>
+          {customSubject && (
+            <label className="text-sm">
+              Subject name
+              <input
+                className="input-base mt-2"
+                maxLength={100}
+                autoFocus
+                value={subject}
+                onChange={(e) => {
+                  setSubject(e.target.value)
+                  setMaterialId('')
+                  setObjectiveIds([])
+                  setPage(1)
+                }}
+                placeholder="Type the subject"
+              />
+            </label>
+          )}
           <label className="text-sm">
             Topic (optional)
             <input
