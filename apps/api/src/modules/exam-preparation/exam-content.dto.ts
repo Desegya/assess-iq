@@ -16,6 +16,8 @@ import {
 } from 'class-validator'
 import { ExamFamily, QuestionDifficulty, QuestionType } from '@assessiq/types'
 
+const NOT_RECORDED = 'Not recorded'
+
 export class ContentFilterDto {
   @IsOptional() @IsEnum(ExamFamily) exam?: ExamFamily
   @IsOptional() @IsString() @MaxLength(100) subject?: string
@@ -39,11 +41,21 @@ export class ContentScopeDto {
 export class CreateExamMaterialDto extends ContentScopeDto {
   @IsString() @MinLength(2) @MaxLength(150) title!: string
   @IsString() @MinLength(20) @MaxLength(50000) body!: string
-  @IsString() @MinLength(5) @MaxLength(1000) sourceNote!: string
+  // Optional: blank notes are recorded as "Not recorded".
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : NOT_RECORDED))
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  sourceNote: string = NOT_RECORDED
 }
 export class UploadExamMaterialDto extends ContentScopeDto {
   @IsString() @MinLength(2) @MaxLength(150) title!: string
-  @IsString() @MinLength(5) @MaxLength(1000) sourceNote!: string
+  // Optional: blank notes are recorded as "Not recorded".
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : NOT_RECORDED))
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  sourceNote: string = NOT_RECORDED
 }
 /** Only exam and subject are required: without a topic the AI covers the syllabus broadly. */
 export class GenerateBankDto {

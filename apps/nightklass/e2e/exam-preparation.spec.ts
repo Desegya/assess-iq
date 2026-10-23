@@ -86,9 +86,7 @@ test('teacher publishes a curated syllabus and queues generation', async ({ page
     .getByLabel('Subject', { exact: true })
     .fill(`History ${testInfo.project.name} ${fixture.suffix}`)
   await form.getByLabel('Title', { exact: true }).fill(title)
-  await form
-    .getByLabel('Source, applicability and verification note', { exact: true })
-    .fill('Teacher-curated isolated browser fixture, permission granted.')
+  // The source note is optional; leaving it blank must not block saving.
   await form
     .getByLabel('Objectives: one per line as code | topic title | what the student should learn', {
       exact: true,

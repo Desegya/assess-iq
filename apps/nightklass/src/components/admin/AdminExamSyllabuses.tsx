@@ -263,10 +263,8 @@ export function AdminExamSyllabuses({ onChange }: { onChange?: () => void }) {
               />
             </label>
             <label className="block text-sm">
-              Source, applicability and verification note
+              Source, applicability and verification note (optional)
               <input
-                required
-                minLength={10}
                 maxLength={2000}
                 className="input-base mt-1"
                 value={form.sourceNote}

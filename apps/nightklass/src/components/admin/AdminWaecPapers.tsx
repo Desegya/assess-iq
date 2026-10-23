@@ -230,11 +230,9 @@ export function AdminWaecPapers() {
               />
             </label>
             <label className="block text-sm">
-              Source and rule verification note
+              Source and rule verification note (optional)
               <input
                 className="input-base mt-1"
-                required
-                minLength={10}
                 maxLength={1000}
                 value={form.sourceNote}
                 onChange={(e) => field('sourceNote', e.target.value)}

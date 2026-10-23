@@ -14,6 +14,8 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator'
+const NOT_RECORDED = 'Not recorded'
+
 export class WaecSectionDto {
   @IsString() @MinLength(1) @MaxLength(50) id!: string
   @IsString() @MinLength(2) @MaxLength(150) title!: string
@@ -36,7 +38,12 @@ export class WaecPaperDto {
   @IsString() @MinLength(5) @MaxLength(150) title!: string
   @IsInt() @Min(1) @Max(300) durationMinutes!: number
   @IsString() @MinLength(20) @MaxLength(10000) instructions!: string
-  @IsString() @MinLength(10) @MaxLength(1000) sourceNote!: string
+  // Optional: blank notes are recorded as "Not recorded".
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : NOT_RECORDED))
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  sourceNote: string = NOT_RECORDED
   @IsIn(['DRAFT', 'APPROVED', 'ARCHIVED']) status!: 'DRAFT' | 'APPROVED' | 'ARCHIVED'
   @IsArray()
   @ArrayMinSize(1)

@@ -454,3 +454,13 @@ test('AI generation needs only a subject, and drafts can be approved in bulk', a
     assert.equal(await prisma.examBankQuestion.count({ where: { subject, status: 'APPROVED' } }), 3)
   } finally { ai.generateQuestionsWithMeta = original }
 })
+
+test('source and verification notes are optional on teacher content', async () => {
+  const material = await call('/admin/nightklass/exam-content/materials', ownerToken, { exam: 'WAEC', subject: `Notes optional ${suffix}`, topic: 'Topic', title: 'Quick notes', body: 'Twenty or more characters of teaching notes.' })
+  assert.equal(material.status, 201, JSON.stringify(material.body)); assert.equal(material.body.sourceNote, 'Not recorded')
+  const blank = await call('/admin/nightklass/exam-content/materials', ownerToken, { exam: 'WAEC', subject: `Notes optional ${suffix}`, topic: 'Topic', title: 'Blank note', body: 'Twenty or more characters of teaching notes.', sourceNote: '   ' })
+  assert.equal(blank.status, 201); assert.equal(blank.body.sourceNote, 'Not recorded')
+  await prisma.examMockTemplate.deleteMany({ where: { year: 2094 } })
+  const template = await call('/admin/nightklass/exam-content/mock-templates', ownerToken, { year: 2094, title: 'Optional note template', durationMinutes: 60, englishCount: 1, otherCount: 1, instructions: 'Answer every question in the time allowed.', status: 'DRAFT', expectedRevision: 0 })
+  assert.equal(template.status, 201, JSON.stringify(template.body)); assert.equal(template.body.sourceNote, 'Not recorded')
+})

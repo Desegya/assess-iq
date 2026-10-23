@@ -16,6 +16,8 @@ import {
   ValidateNested,
 } from 'class-validator'
 import { ExamFamily } from '@assessiq/types'
+const NOT_RECORDED = 'Not recorded'
+
 export class SyllabusObjectiveDto {
   @IsString() @MinLength(1) @MaxLength(60) code!: string
   @IsString() @MinLength(2) @MaxLength(150) title!: string
@@ -37,7 +39,12 @@ export class ExamSyllabusDto {
   @IsUrl({ protocols: ['https'], require_protocol: true })
   @MaxLength(2000)
   sourceUrl?: string
-  @IsString() @MinLength(10) @MaxLength(2000) sourceNote!: string
+  // Optional: blank notes are recorded as "Not recorded".
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : NOT_RECORDED))
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  sourceNote: string = NOT_RECORDED
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(300)
