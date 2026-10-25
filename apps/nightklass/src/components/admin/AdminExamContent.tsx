@@ -16,6 +16,7 @@ type Material = {
   topic: string
   status: string
   sourceNote: string
+  classLevel?: string | null
 }
 type Question = {
   objectiveLinks?: { objectiveId: string }[]
@@ -118,7 +119,14 @@ export function AdminExamContent() {
   const [title, setTitle] = useState('')
   const [sourceNote, setSourceNote] = useState('')
   const [body, setBody] = useState('')
-  const [file, setFile] = useState<File | null>(null)
+  // Several files can be uploaded at once; each becomes its own draft note.
+  const [files, setFiles] = useState<File[]>([])
+  const [notesClass, setNotesClass] = useState('')
+  const [uploadProgress, setUploadProgress] = useState<{
+    done: number
+    total: number
+    failed: { name: string; reason: string }[]
+  } | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   // Teaching-notes scope, defaulting to whatever the generation card has selected.
   const [notesExam, setNotesExam] = useState('')
@@ -204,8 +212,10 @@ export function AdminExamContent() {
   const notesTopicValue = notesTopic.trim() || topic.trim() || 'General notes'
   const notesMissing = [
     ...(notesSubjectValue.trim().length < 2 ? ['a subject'] : []),
-    ...(title.trim().length < 2 ? ['a title'] : []),
-    ...(!file && body.trim().length < 20 ? ['a file or at least 20 characters of notes'] : []),
+    ...(!files.length && title.trim().length < 2 ? ['a title'] : []),
+    ...(!files.length && body.trim().length < 20
+      ? ['files to upload or at least 20 characters of notes']
+      : []),
   ]
   function edit(q: Question) {
     setEditing(q)
@@ -692,33 +702,56 @@ export function AdminExamContent() {
             onSubmit={(e) => {
               e.preventDefault()
               void run(async () => {
-                if (file) {
-                  if (file.size > 5 * 1024 * 1024) throw new Error('Maximum upload size is 5 MB')
-                  const data = new FormData()
-                  data.set('file', file)
-                  data.set('exam', notesExamValue)
-                  data.set('subject', notesSubjectValue)
-                  data.set('topic', notesTopicValue)
-                  data.set('title', title)
-                  data.set('sourceNote', sourceNote)
-                  await adminRequest('exam-content/upload', { method: 'POST', body: data })
-                } else
+                const scope = {
+                  exam: notesExamValue,
+                  subject: notesSubjectValue,
+                  topic: notesTopicValue,
+                  sourceNote,
+                  ...(notesClass ? { classLevel: notesClass } : {}),
+                }
+                if (!files.length) {
                   await adminRequest('exam-content/materials', {
                     method: 'POST',
-                    body: JSON.stringify({
-                      exam: notesExamValue,
-                      subject: notesSubjectValue,
-                      topic: notesTopicValue,
-                      title,
-                      body,
-                      sourceNote,
-                    }),
+                    body: JSON.stringify({ ...scope, title, body }),
                   })
-                setBody('')
+                  setBody('')
+                  setTitle('')
+                  return 'Notes saved as a draft. Publish when ready to share with learners.'
+                }
+                // One request per file, so a bad file is reported without stopping the rest.
+                const failed: { name: string; reason: string }[] = []
+                setUploadProgress({ done: 0, total: files.length, failed })
+                for (const [i, f] of files.entries()) {
+                  try {
+                    if (f.size > 5 * 1024 * 1024) throw new Error('larger than 5 MB')
+                    const data = new FormData()
+                    data.set('file', f)
+                    for (const [key, value] of Object.entries(scope)) data.set(key, value)
+                    const name = f.name
+                      .replace(/\.[^.]+$/, '')
+                      .replace(/[_-]+/g, ' ')
+                      .trim()
+                    data.set(
+                      'title',
+                      (files.length === 1 && title.trim()) || name.slice(0, 150) || 'Notes',
+                    )
+                    await adminRequest('exam-content/upload', { method: 'POST', body: data })
+                  } catch (err) {
+                    failed.push({
+                      name: f.name,
+                      reason: err instanceof Error ? err.message : 'failed',
+                    })
+                  }
+                  setUploadProgress({ done: i + 1, total: files.length, failed: [...failed] })
+                }
+                const saved = files.length - failed.length
+                setFiles([])
                 setTitle('')
-                setFile(null)
                 if (fileInput.current) fileInput.current.value = ''
-                return 'Material saved as a draft. Publish when ready to share with learners.'
+                if (!failed.length) setUploadProgress(null)
+                return failed.length
+                  ? `${saved} of ${files.length} files saved as drafts; ${failed.length} could not be read (listed in the form).`
+                  : `${saved} file${saved === 1 ? '' : 's'} saved as draft notes. Publish when ready to share with learners.`
               })
             }}
           >
@@ -786,10 +819,23 @@ export function AdminExamContent() {
                 </label>
               )}
               <label className="block text-sm">
-                Title
+                Class (optional)
+                <select
+                  className="input-base mt-1"
+                  value={notesClass}
+                  onChange={(e) => setNotesClass(e.target.value)}
+                >
+                  <option value="">Any class</option>
+                  <option value="SS1">SS1</option>
+                  <option value="SS2">SS2</option>
+                  <option value="SS3">SS3</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                {files.length > 1 ? 'Title (not needed: each file uses its own name)' : 'Title'}
                 <input
-                  required
-                  minLength={2}
+                  required={!files.length}
+                  disabled={files.length > 1}
                   maxLength={150}
                   className="input-base mt-1"
                   value={title}
@@ -807,24 +853,48 @@ export function AdminExamContent() {
                 />
               </label>
               <label className="block text-sm">
-                Upload PDF, DOCX, PPTX or TXT (up to 5 MB)
+                Upload PDF, DOCX, PPTX or TXT files (up to 5 MB each; choose several at once)
                 <input
                   className="mt-2 block w-full"
                   ref={fileInput}
                   type="file"
+                  multiple
                   accept=".pdf,.docx,.pptx,.txt"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => {
+                    setFiles(Array.from(e.target.files ?? []))
+                    setUploadProgress(null)
+                  }}
                 />
               </label>
+              {files.length > 1 && (
+                <p className="text-sm text-slate-600">
+                  {files.length} files selected. Each becomes its own draft note named after the
+                  file.
+                </p>
+              )}
+              {uploadProgress && (
+                <div role="status" className="space-y-1 rounded-xl border bg-slate-50 p-3 text-sm">
+                  <p>
+                    {uploadProgress.done < uploadProgress.total
+                      ? `Uploading ${uploadProgress.done + 1} of ${uploadProgress.total}…`
+                      : `Finished: ${uploadProgress.total - uploadProgress.failed.length} of ${uploadProgress.total} saved.`}
+                  </p>
+                  {uploadProgress.failed.map((f) => (
+                    <p key={f.name} className="text-red-700">
+                      {f.name}: {f.reason}
+                    </p>
+                  ))}
+                </div>
+              )}
               <label className="block text-sm">
                 Or paste notes
                 <textarea
                   className="input-base mt-1 min-h-36"
-                  required={!file}
+                  required={!files.length}
                   minLength={20}
                   maxLength={50000}
                   value={body}
-                  disabled={!!file}
+                  disabled={files.length > 0}
                   onChange={(e) => setBody(e.target.value)}
                 />
               </label>
@@ -851,7 +921,8 @@ export function AdminExamContent() {
                     {m.title} · {m.status}
                   </p>
                   <p className="text-sm text-slate-500">
-                    {m.subject} / {m.topic} · {m.sourceNote}
+                    {m.subject} / {m.topic}
+                    {m.classLevel ? ` · ${m.classLevel}` : ''} · {m.sourceNote}
                   </p>
                 </div>
                 <div className="flex gap-2">

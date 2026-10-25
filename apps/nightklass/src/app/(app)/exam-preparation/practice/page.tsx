@@ -9,7 +9,7 @@ interface Goal { id: string; exam: string; year: number; subjects: { subjectKey:
 interface Question { id: string; questionText: string; questionType: string; options?: { key: string; text: string }[]; marks: number }
 interface Practice { topicId: string; actualCount: number; requestedCount: number; questions: Question[] }
 interface Result { scorePercent: number | null; gradingFailed: boolean; attemptId: string | null; results: { questionId: string; score: number | null; maxScore: number; correctAnswer: string; explanation: string; feedback?: string; missingPoints?: string[] }[] }
-interface Material { id: string; title: string; topic: string; body: string; sourceNote: string }
+interface Material { id: string; title: string; topic: string; body: string; sourceNote: string; classLevel?: string | null }
 function PracticeScreen() {
   const api = useApi()
   const params = useSearchParams()
@@ -80,7 +80,7 @@ function PracticeScreen() {
         </article> })}
         {!result && <div className="space-y-3"><p className="text-sm text-slate-500">{Object.values(answers).filter(a => a.trim()).length} of {practice.questions.length} answered. Blank answers are submitted as blank.</p><button className="btn-primary" disabled={busy} onClick={submit}>{busy ? 'Marking…' : 'Submit practice'}</button></div>}
       </section>}
-      <section className="space-y-3"><h2 className="text-lg font-semibold">Teacher notes</h2>{materials.length === 0 && <p className="text-sm text-slate-500">No shared notes published yet. You can upload your own notes in the subject workspace.</p>}{materials.map(m => <details className="card p-5" key={m.id}><summary className="cursor-pointer font-semibold">{m.title} · {m.topic}</summary><p className="mt-2 text-xs text-slate-500">Source: {m.sourceNote}</p><div className="mt-4 whitespace-pre-wrap text-sm leading-relaxed">{m.body}</div></details>)}</section>
+      <section className="space-y-3"><h2 className="text-lg font-semibold">Teacher notes</h2>{materials.length === 0 && <p className="text-sm text-slate-500">No shared notes published yet. You can upload your own notes in the subject workspace.</p>}{materials.map(m => <details className="card p-5" key={m.id}><summary className="cursor-pointer font-semibold">{m.title} · {m.topic}{m.classLevel ? ` · ${m.classLevel}` : ''}</summary><p className="mt-2 text-xs text-slate-500">Source: {m.sourceNote}</p><div className="mt-4 whitespace-pre-wrap text-sm leading-relaxed">{m.body}</div></details>)}</section>
     </>}
   </div>
 }

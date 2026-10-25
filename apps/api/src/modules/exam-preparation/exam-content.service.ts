@@ -63,6 +63,7 @@ export class ExamContentService {
           topic: true,
           title: true,
           sourceNote: true,
+          classLevel: true,
           status: true,
           createdAt: true,
         },
@@ -532,7 +533,7 @@ export class ExamContentService {
     if (!subject) throw new NotFoundException('Exam subject not found')
     return this.prisma.examMaterial.findMany({
       where: { exam: subject.goal.exam, subjectKey, status: 'APPROVED' },
-      select: { id: true, title: true, topic: true, body: true, sourceNote: true },
+      select: { id: true, title: true, topic: true, body: true, sourceNote: true, classLevel: true },
       orderBy: { createdAt: 'desc' },
       take: 30,
     })

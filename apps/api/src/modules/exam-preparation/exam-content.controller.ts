@@ -49,7 +49,7 @@ export class ExamContentAdminController {
   }
   @Post('upload')
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 6 } }),
+    FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 8 } }),
   )
   async upload(
     @UploadedFile() file: Express.Multer.File,

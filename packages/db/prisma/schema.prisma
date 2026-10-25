@@ -968,6 +968,8 @@ model ExamMaterial {
   title        String
   body         String @db.Text
   sourceNote   String
+  // Optional class the notes are written for (SS1–SS3); shown as a label, not used to hide notes.
+  classLevel   SecondaryStage?
   status       QuestionStatus @default(DRAFT)
   createdById  String
   createdAt    DateTime @default(now())

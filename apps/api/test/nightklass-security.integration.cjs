@@ -464,3 +464,17 @@ test('source and verification notes are optional on teacher content', async () =
   const template = await call('/admin/nightklass/exam-content/mock-templates', ownerToken, { year: 2094, title: 'Optional note template', durationMinutes: 60, englishCount: 1, otherCount: 1, instructions: 'Answer every question in the time allowed.', status: 'DRAFT', expectedRevision: 0 })
   assert.equal(template.status, 201, JSON.stringify(template.body)); assert.equal(template.body.sourceNote, 'Not recorded')
 })
+
+test('notes can be tagged with a class, uploaded as files, and are shown with that class', async () => {
+  const subject = `Class notes ${suffix}`
+  const tagged = await call('/admin/nightklass/exam-content/materials', ownerToken, { exam: 'WAEC', subject, topic: 'Topic', title: 'SS2 notes', body: 'Twenty or more characters of teaching notes.', classLevel: 'SS2' })
+  assert.equal(tagged.status, 201); assert.equal(tagged.body.classLevel, 'SS2')
+  assert.equal((await call('/admin/nightklass/exam-content/materials', ownerToken, { exam: 'WAEC', subject, topic: 'Topic', title: 'Bad class', body: 'Twenty or more characters of teaching notes.', classLevel: 'JSS1' })).status, 400)
+  const form = new FormData()
+  for (const [k, v] of Object.entries({ exam: 'WAEC', subject, topic: 'Topic', title: 'Uploaded', classLevel: 'SS3' })) form.set(k, v)
+  form.set('file', new Blob(['Uploaded teaching notes with enough characters to save.'], { type: 'text/plain' }), 'notes.txt')
+  const uploaded = await fetch(base + '/admin/nightklass/exam-content/upload', { method: 'POST', headers: { Authorization: `Bearer ${ownerToken}` }, body: form })
+  assert.equal(uploaded.status, 201); assert.equal((await uploaded.json()).classLevel, 'SS3')
+  const list = await call(`/admin/nightklass/exam-content/materials?exam=WAEC&subject=${encodeURIComponent(subject)}`, ownerToken)
+  assert.deepEqual(list.body.items.map(m => m.classLevel).sort(), ['SS2', 'SS3'])
+})
