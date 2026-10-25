@@ -5,7 +5,7 @@ import { AdminExamCalendars } from './AdminExamCalendars'
 import { AdminExamSyllabuses, type Syllabus } from './AdminExamSyllabuses'
 import { AdminWaecPapers } from './AdminWaecPapers'
 import { AdminMockTemplates } from './AdminMockTemplates'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ADMIN_EXAM_SUBJECTS } from '@/lib/exam-subjects'
 import { adminRequest, useAdminData } from './admin-api'
 
@@ -119,6 +119,12 @@ export function AdminExamContent() {
   const [sourceNote, setSourceNote] = useState('')
   const [body, setBody] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+  // Teaching-notes scope, defaulting to whatever the generation card has selected.
+  const [notesExam, setNotesExam] = useState('')
+  const [notesSubject, setNotesSubject] = useState('')
+  const [notesCustom, setNotesCustom] = useState(false)
+  const [notesTopic, setNotesTopic] = useState('')
   const [objectiveIds, setObjectiveIds] = useState<string[]>([])
   const syllabusData = useAdminData<Syllabus[]>('exam-content/syllabuses')
   const matchingObjectives =
@@ -193,6 +199,14 @@ export function AdminExamContent() {
       setBusy(false)
     }
   }
+  const notesExamValue = notesExam || exam
+  const notesSubjectValue = notesCustom ? notesSubject : notesSubject || subject
+  const notesTopicValue = notesTopic.trim() || topic.trim() || 'General notes'
+  const notesMissing = [
+    ...(notesSubjectValue.trim().length < 2 ? ['a subject'] : []),
+    ...(title.trim().length < 2 ? ['a title'] : []),
+    ...(!file && body.trim().length < 20 ? ['a file or at least 20 characters of notes'] : []),
+  ]
   function edit(q: Question) {
     setEditing(q)
     setManual(false)
@@ -682,24 +696,95 @@ export function AdminExamContent() {
                   if (file.size > 5 * 1024 * 1024) throw new Error('Maximum upload size is 5 MB')
                   const data = new FormData()
                   data.set('file', file)
-                  data.set('exam', exam)
-                  data.set('subject', subject)
-                  data.set('topic', topic)
+                  data.set('exam', notesExamValue)
+                  data.set('subject', notesSubjectValue)
+                  data.set('topic', notesTopicValue)
                   data.set('title', title)
                   data.set('sourceNote', sourceNote)
                   await adminRequest('exam-content/upload', { method: 'POST', body: data })
                 } else
                   await adminRequest('exam-content/materials', {
                     method: 'POST',
-                    body: JSON.stringify({ exam, subject, topic, title, body, sourceNote }),
+                    body: JSON.stringify({
+                      exam: notesExamValue,
+                      subject: notesSubjectValue,
+                      topic: notesTopicValue,
+                      title,
+                      body,
+                      sourceNote,
+                    }),
                   })
                 setBody('')
+                setTitle('')
+                setFile(null)
+                if (fileInput.current) fileInput.current.value = ''
                 return 'Material saved as a draft. Publish when ready to share with learners.'
               })
             }}
           >
             <h3 className="font-semibold">Add notes</h3>
             <fieldset disabled={busy} className="space-y-3">
+              {/* The notes form has its own exam, subject and topic: the generation card's
+                  fields are far above and its topic is optional. */}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="block text-sm">
+                  Exam
+                  <select
+                    className="input-base mt-1"
+                    value={notesExamValue}
+                    onChange={(e) => setNotesExam(e.target.value)}
+                  >
+                    <option>JAMB</option>
+                    <option>WAEC</option>
+                  </select>
+                </label>
+                <div className="text-sm">
+                  <label htmlFor="notes-subject">Subject</label>
+                  <select
+                    id="notes-subject"
+                    className="input-base mt-1"
+                    value={notesCustom ? OTHER_SUBJECT : notesSubjectValue}
+                    onChange={(e) => {
+                      const other = e.target.value === OTHER_SUBJECT
+                      setNotesCustom(other)
+                      setNotesSubject(other ? '' : e.target.value)
+                    }}
+                  >
+                    <option value="">Choose a subject</option>
+                    {ADMIN_EXAM_SUBJECTS.map((name) => (
+                      <option key={name}>{name}</option>
+                    ))}
+                    {!notesCustom &&
+                      notesSubjectValue &&
+                      !ADMIN_EXAM_SUBJECTS.includes(notesSubjectValue) && (
+                        <option>{notesSubjectValue}</option>
+                      )}
+                    <option value={OTHER_SUBJECT}>Other subject…</option>
+                  </select>
+                </div>
+                <label className="block text-sm">
+                  Topic (optional)
+                  <input
+                    className="input-base mt-1"
+                    maxLength={150}
+                    value={notesTopic}
+                    onChange={(e) => setNotesTopic(e.target.value)}
+                    placeholder="e.g. Separation of powers"
+                  />
+                </label>
+              </div>
+              {notesCustom && (
+                <label className="block text-sm">
+                  Subject name
+                  <input
+                    className="input-base mt-1"
+                    maxLength={100}
+                    autoFocus
+                    value={notesSubject}
+                    onChange={(e) => setNotesSubject(e.target.value)}
+                  />
+                </label>
+              )}
               <label className="block text-sm">
                 Title
                 <input
@@ -725,6 +810,7 @@ export function AdminExamContent() {
                 Upload PDF, DOCX, PPTX or TXT (up to 5 MB)
                 <input
                   className="mt-2 block w-full"
+                  ref={fileInput}
                   type="file"
                   accept=".pdf,.docx,.pptx,.txt"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -742,12 +828,14 @@ export function AdminExamContent() {
                   onChange={(e) => setBody(e.target.value)}
                 />
               </label>
-              <button
-                className="btn-primary"
-                disabled={subject.trim().length < 2 || topic.trim().length < 2}
-              >
-                Save notes
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button className="btn-primary" disabled={notesMissing.length > 0}>
+                  Save notes
+                </button>
+                {notesMissing.length > 0 && (
+                  <p className="text-sm text-slate-500">Still needed: {notesMissing.join(', ')}</p>
+                )}
+              </div>
             </fieldset>
           </form>
           <section className="card space-y-3 p-5">

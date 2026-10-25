@@ -214,3 +214,21 @@ test('teacher publishes a WAEC timetable and learners see their subject papers',
     true,
   )
 })
+
+test('teacher uploads notes after choosing a subject; the form says what is missing', async ({ page }, testInfo) => {
+  await login(page, true)
+  await page.goto('/admin/exam-content')
+  await page.waitForLoadState('networkidle')
+  await page.getByText(/^Teaching notes/).click()
+  const save = page.getByRole('button', { name: 'Save notes', exact: true })
+  await page.getByLabel('Title', { exact: true }).first().fill(`Notes ${testInfo.project.name} ${fixture.suffix}`)
+  await page
+    .getByLabel('Upload PDF, DOCX, PPTX or TXT (up to 5 MB)', { exact: true })
+    .setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Separation of powers divides government into the legislature, executive and judiciary.') })
+  await expect(save).toBeDisabled()
+  await expect(page.getByText('Still needed: a subject')).toBeVisible()
+  await page.locator('#notes-subject').selectOption('Government')
+  await expect(save).toBeEnabled()
+  await save.click()
+  await expect(page.getByText('Material saved as a draft', { exact: false })).toBeVisible()
+})
