@@ -44,7 +44,12 @@ export class CreateExamMaterialDto extends ContentScopeDto {
   @IsOptional()
   @IsIn(['SS1', 'SS2', 'SS3'])
   classLevel?: 'SS1' | 'SS2' | 'SS3'
-  @IsString() @MinLength(2) @MaxLength(150) title!: string
+  // Optional: whole-subject notes need only a subject; a title is derived when blank.
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : undefined))
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  title?: string
   @IsString() @MinLength(20) @MaxLength(50000) body!: string
   // Optional: blank notes are recorded as "Not recorded".
   @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : NOT_RECORDED))
@@ -59,7 +64,12 @@ export class UploadExamMaterialDto extends ContentScopeDto {
   @IsOptional()
   @IsIn(['SS1', 'SS2', 'SS3'])
   classLevel?: 'SS1' | 'SS2' | 'SS3'
-  @IsString() @MinLength(2) @MaxLength(150) title!: string
+  // Optional: whole-subject notes need only a subject; a title is derived when blank.
+  @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : undefined))
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  title?: string
   // Optional: blank notes are recorded as "Not recorded".
   @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : NOT_RECORDED))
   @IsOptional()

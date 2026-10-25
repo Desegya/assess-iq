@@ -478,3 +478,14 @@ test('notes can be tagged with a class, uploaded as files, and are shown with th
   const list = await call(`/admin/nightklass/exam-content/materials?exam=WAEC&subject=${encodeURIComponent(subject)}`, ownerToken)
   assert.deepEqual(list.body.items.map(m => m.classLevel).sort(), ['SS2', 'SS3'])
 })
+
+test('whole-subject notes need only a subject: untitled notes are named for you', async () => {
+  const subject = `Untitled notes ${suffix}`
+  const pasted = await call('/admin/nightklass/exam-content/materials', ownerToken, { exam: 'WAEC', subject, topic: 'General notes', body: 'All topics for the subject in one long document of notes.' })
+  assert.equal(pasted.status, 201, JSON.stringify(pasted.body)); assert.equal(pasted.body.title, `${subject} notes`)
+  const form = new FormData()
+  for (const [k, v] of Object.entries({ exam: 'WAEC', subject, topic: 'General notes' })) form.set(k, v)
+  form.set('file', new Blob(['Uploaded whole-syllabus notes with enough characters.'], { type: 'text/plain' }), 'Full_syllabus-notes.txt')
+  const uploaded = await fetch(base + '/admin/nightklass/exam-content/upload', { method: 'POST', headers: { Authorization: `Bearer ${ownerToken}` }, body: form })
+  assert.equal(uploaded.status, 201); assert.equal((await uploaded.json()).title, 'Full syllabus notes')
+})

@@ -147,7 +147,13 @@ export class ExamContentService {
   createMaterial(dto: CreateExamMaterialDto, actorId: string) {
     return this.mutate(actorId, 'exam.material.create', async (tx) => {
       const result = await tx.examMaterial.create({
-        data: { ...dto, subjectKey: subjectIdentity(dto.subject), createdById: actorId },
+        data: {
+          ...dto,
+          // Untitled notes are named after their subject (and topic, when one was given).
+          title: dto.title || (dto.topic && dto.topic !== 'General notes' ? `${dto.subject}: ${dto.topic}` : `${dto.subject} notes`).slice(0, 150),
+          subjectKey: subjectIdentity(dto.subject),
+          createdById: actorId,
+        },
       })
       return { result, id: result.id }
     })

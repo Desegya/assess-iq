@@ -212,7 +212,6 @@ export function AdminExamContent() {
   const notesTopicValue = notesTopic.trim() || topic.trim() || 'General notes'
   const notesMissing = [
     ...(notesSubjectValue.trim().length < 2 ? ['a subject'] : []),
-    ...(!files.length && title.trim().length < 2 ? ['a title'] : []),
     ...(!files.length && body.trim().length < 20
       ? ['files to upload or at least 20 characters of notes']
       : []),
@@ -712,7 +711,7 @@ export function AdminExamContent() {
                 if (!files.length) {
                   await adminRequest('exam-content/materials', {
                     method: 'POST',
-                    body: JSON.stringify({ ...scope, title, body }),
+                    body: JSON.stringify({ ...scope, ...(title.trim() ? { title } : {}), body }),
                   })
                   setBody('')
                   setTitle('')
@@ -832,14 +831,16 @@ export function AdminExamContent() {
                 </select>
               </label>
               <label className="block text-sm">
-                {files.length > 1 ? 'Title (not needed: each file uses its own name)' : 'Title'}
+                {files.length > 1
+                  ? 'Title (not needed: each file uses its own name)'
+                  : 'Title (optional)'}
                 <input
-                  required={!files.length}
                   disabled={files.length > 1}
                   maxLength={150}
                   className="input-base mt-1"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Leave blank to name it after the file or subject"
                 />
               </label>
               <label className="block text-sm">

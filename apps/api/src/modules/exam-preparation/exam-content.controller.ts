@@ -56,7 +56,11 @@ export class ExamContentAdminController {
     @Body() dto: UploadExamMaterialDto,
     @CurrentUser() u: AuthUser,
   ) {
-    return this.content.createMaterial({ ...dto, body: await extractExamMaterial(file) }, u.id)
+    const fromFile = file?.originalname.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim().slice(0, 150)
+    return this.content.createMaterial(
+      { ...dto, title: dto.title || fromFile || undefined, body: await extractExamMaterial(file) },
+      u.id,
+    )
   }
   @Patch('materials/:id') materialState(
     @Param('id') id: string,
