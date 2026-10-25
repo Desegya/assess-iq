@@ -23,10 +23,12 @@ import {
   GenerateBankDto,
 } from './exam-content.dto'
 import {
+  materialExcerpt,
   questionFingerprint,
   questionFingerprintV2,
   questionSimilarity,
   sameOptionSet,
+  splitMaterial,
   subjectIdentity,
   validateBankQuestion,
 } from './exam-content.rules'
@@ -146,15 +148,29 @@ export class ExamContentService {
   }
   createMaterial(dto: CreateExamMaterialDto, actorId: string) {
     return this.mutate(actorId, 'exam.material.create', async (tx) => {
-      const result = await tx.examMaterial.create({
-        data: {
-          ...dto,
-          // Untitled notes are named after their subject (and topic, when one was given).
-          title: dto.title || (dto.topic && dto.topic !== 'General notes' ? `${dto.subject}: ${dto.topic}` : `${dto.subject} notes`).slice(0, 150),
-          subjectKey: subjectIdentity(dto.subject),
-          createdById: actorId,
-        },
-      })
+      // Untitled notes are named after their subject (and topic, when one was given).
+      const title = (
+        dto.title ||
+        (dto.topic && dto.topic !== 'General notes' ? `${dto.subject}: ${dto.topic}` : `${dto.subject} notes`)
+      ).slice(0, 150)
+      // Whole-subject documents are saved as numbered parts so each stays a usable size.
+      const parts = splitMaterial(dto.body)
+      const created = []
+      for (const [i, body] of parts.entries()) {
+        created.push(
+          await tx.examMaterial.create({
+            data: {
+              ...dto,
+              body,
+              title:
+                parts.length === 1 ? title : `${title.slice(0, 130)} (part ${i + 1} of ${parts.length})`,
+              subjectKey: subjectIdentity(dto.subject),
+              createdById: actorId,
+            },
+          }),
+        )
+      }
+      const result = { ...created[0]!, parts: created.length }
       return { result, id: result.id }
     })
   }
@@ -332,7 +348,8 @@ export class ExamContentService {
         },
       })
       if (!material) throw new NotFoundException('Matching material not found')
-      body += '\n\nTEACHER MATERIAL:\n' + material.body
+      // The AI reads ~12,000 characters of prompt, so long notes contribute a varying excerpt.
+      body += '\n\nTEACHER MATERIAL:\n' + materialExcerpt(material.body, Math.max(2_000, 12_000 - body.length - 30))
     }
     const generated = await this.ai.generateQuestionsWithMeta(body, {
       count: dto.count,

@@ -709,16 +709,19 @@ export function AdminExamContent() {
                   ...(notesClass ? { classLevel: notesClass } : {}),
                 }
                 if (!files.length) {
-                  await adminRequest('exam-content/materials', {
+                  const saved = await adminRequest<{ parts?: number }>('exam-content/materials', {
                     method: 'POST',
                     body: JSON.stringify({ ...scope, ...(title.trim() ? { title } : {}), body }),
                   })
                   setBody('')
                   setTitle('')
-                  return 'Notes saved as a draft. Publish when ready to share with learners.'
+                  return (saved.parts ?? 1) > 1
+                    ? `Long notes saved as ${saved.parts} draft parts. Publish when ready to share with learners.`
+                    : 'Notes saved as a draft. Publish when ready to share with learners.'
                 }
                 // One request per file, so a bad file is reported without stopping the rest.
                 const failed: { name: string; reason: string }[] = []
+                let split = 0
                 setUploadProgress({ done: 0, total: files.length, failed })
                 for (const [i, f] of files.entries()) {
                   try {
@@ -734,7 +737,11 @@ export function AdminExamContent() {
                       'title',
                       (files.length === 1 && title.trim()) || name.slice(0, 150) || 'Notes',
                     )
-                    await adminRequest('exam-content/upload', { method: 'POST', body: data })
+                    const res = await adminRequest<{ parts?: number }>('exam-content/upload', {
+                      method: 'POST',
+                      body: data,
+                    })
+                    if ((res.parts ?? 1) > 1) split += 1
                   } catch (err) {
                     failed.push({
                       name: f.name,
@@ -744,13 +751,16 @@ export function AdminExamContent() {
                   setUploadProgress({ done: i + 1, total: files.length, failed: [...failed] })
                 }
                 const saved = files.length - failed.length
+                const splitNote = split
+                  ? ` ${split === 1 ? 'One long file was' : `${split} long files were`} saved in numbered parts.`
+                  : ''
                 setFiles([])
                 setTitle('')
                 if (fileInput.current) fileInput.current.value = ''
                 if (!failed.length) setUploadProgress(null)
                 return failed.length
                   ? `${saved} of ${files.length} files saved as drafts; ${failed.length} could not be read (listed in the form).`
-                  : `${saved} file${saved === 1 ? '' : 's'} saved as draft notes. Publish when ready to share with learners.`
+                  : `${saved} file${saved === 1 ? '' : 's'} saved as draft notes.${splitNote} Publish when ready to share with learners.`
               })
             }}
           >
@@ -893,7 +903,7 @@ export function AdminExamContent() {
                   className="input-base mt-1 min-h-36"
                   required={!files.length}
                   minLength={20}
-                  maxLength={50000}
+                  maxLength={500000}
                   value={body}
                   disabled={files.length > 0}
                   onChange={(e) => setBody(e.target.value)}

@@ -50,7 +50,8 @@ export class CreateExamMaterialDto extends ContentScopeDto {
   @IsString()
   @MaxLength(150)
   title?: string
-  @IsString() @MinLength(20) @MaxLength(50000) body!: string
+  // Long notes are split into parts on save (see splitMaterial).
+  @IsString() @MinLength(20) @MaxLength(500000) body!: string
   // Optional: blank notes are recorded as "Not recorded".
   @Transform(({ value }) => (typeof value === 'string' && value.trim() ? value.trim() : NOT_RECORDED))
   @IsOptional()

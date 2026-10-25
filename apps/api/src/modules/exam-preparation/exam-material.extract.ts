@@ -3,6 +3,7 @@ import { extractPdfText } from '../../common/pdf-text'
 import mammoth from 'mammoth'
 import JSZip from 'jszip'
 import { DocumentFileValidator } from '../documents/document-file.validator'
+import { MATERIAL_MAX_CHARS } from './exam-content.rules'
 
 export async function extractExamMaterial(file: Express.Multer.File) {
   if (!file || file.size > 5 * 1024 * 1024 || !(await new DocumentFileValidator().isValid(file))) throw new BadRequestException('Upload a readable PDF, DOCX, PPTX or text file up to 5 MB')
@@ -25,6 +26,7 @@ export async function extractExamMaterial(file: Express.Multer.File) {
     }
   } catch { throw new BadRequestException('Could not extract readable text. Use a text-based PDF, DOCX, PPTX or paste the notes.') }
   body = body.trim()
-  if (body.length < 20 || body.length > 50000) throw new BadRequestException('Material must contain between 20 and 50,000 characters. Split long notes into topics; scanned PDFs need text extraction first.')
+  if (body.length < 20) throw new BadRequestException('Could not find readable text in this file. Scanned PDFs need text extraction first.')
+  if (body.length > MATERIAL_MAX_CHARS) throw new BadRequestException('This file has more than 500,000 characters of text. Upload it as two or more files.')
   return body
 }

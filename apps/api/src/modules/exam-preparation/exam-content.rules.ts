@@ -104,3 +104,41 @@ export function validateBankQuestion(q: BankQuestionDto) {
   if (q.exam === 'JAMB' && q.questionType !== 'MCQ') throw new BadRequestException('JAMB bank questions must be multiple choice')
   if (!Number.isInteger(q.marks) || q.marks < 1 || q.marks > 100) throw new BadRequestException('Marks must be between 1 and 100')
 }
+
+/** Longest single teaching note; longer documents are saved as numbered parts. */
+export const MATERIAL_PART_CHARS = 40_000
+/** Longest notes accepted in one upload or paste (roughly 250 pages of text). */
+export const MATERIAL_MAX_CHARS = 500_000
+
+/**
+ * Splits long notes into parts of at most `max` characters, preferring to break
+ * between paragraphs, then between lines, so a topic is rarely cut mid-sentence.
+ */
+export function splitMaterial(body: string, max = MATERIAL_PART_CHARS) {
+  const parts: string[] = []
+  let rest = body.trim()
+  while (rest.length > max) {
+    const window = rest.slice(0, max)
+    let cut = window.lastIndexOf('\n\n')
+    if (cut < max / 2) cut = window.lastIndexOf('\n')
+    if (cut < max / 2) cut = window.lastIndexOf(' ')
+    if (cut < max / 2) cut = max
+    parts.push(rest.slice(0, cut).trim())
+    rest = rest.slice(cut).trim()
+  }
+  if (rest) parts.push(rest)
+  return parts
+}
+
+/**
+ * A paragraph-aligned excerpt of long notes for one generation request. The
+ * start is random, so repeated batches cover the whole note rather than only
+ * its opening pages.
+ */
+export function materialExcerpt(body: string, max: number, random = Math.random) {
+  if (body.length <= max) return body
+  let start = Math.floor(random() * (body.length - max))
+  const paragraph = body.lastIndexOf('\n\n', start)
+  if (paragraph >= 0 && start - paragraph < max / 4) start = paragraph + 2
+  return body.slice(start, start + max).trim()
+}

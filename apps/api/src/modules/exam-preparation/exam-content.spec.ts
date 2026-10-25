@@ -4,7 +4,7 @@ import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 import { ExamContentService } from './exam-content.service'
 import { BankQuestionDto, GenerateBankDto } from './exam-content.dto'
-import { questionFingerprint, subjectIdentity, validateBankQuestion } from './exam-content.rules'
+import { materialExcerpt, questionFingerprint, splitMaterial, subjectIdentity, validateBankQuestion } from './exam-content.rules'
 
 const question = { exam: 'JAMB', subject: 'Government', topic: 'Democracy', questionText: 'Which option describes democracy?', questionType: 'MCQ', options: ['A','B','C','D'].map(key => ({ key, text: `Option ${key}` })), correctAnswer: 'A', explanation: 'Citizens participate in choosing their government.', marks: 1, difficulty: 'MEDIUM' }
 describe('Shared exam bank validation', () => {
@@ -48,5 +48,33 @@ describe('Shared exam bank validation', () => {
     const service = new ExamContentService({ $transaction: vi.fn(fn => fn(tx)) } as never, {} as never)
     await expect(service.createMaterial({} as never, 'revoked')).rejects.toThrow('administrator')
     expect(tx.examMaterial.create).not.toHaveBeenCalled()
+  })
+})
+
+describe('Long teaching notes', () => {
+  it('splits whole-subject notes into parts at paragraph breaks', () => {
+    const paragraph = 'Photosynthesis converts light energy into chemical energy. '.repeat(20).trim()
+    const body = Array.from({ length: 60 }, (_, i) => `Topic ${i + 1}\n${paragraph}`).join('\n\n')
+    const parts = splitMaterial(body, 10_000)
+    expect(parts.length).toBeGreaterThan(1)
+    expect(parts.every((p) => p.length <= 10_000)).toBe(true)
+    expect(parts.every((p) => p.startsWith('Topic '))).toBe(true)
+    expect(parts.join('').replace(/\s/g, '')).toBe(body.replace(/\s/g, ''))
+    expect(splitMaterial('Short notes on democracy.')).toEqual(['Short notes on democracy.'])
+  })
+  it('splits text with no line breaks without losing any of it', () => {
+    const body = 'x'.repeat(25_000)
+    const parts = splitMaterial(body, 10_000)
+    expect(parts.map((p) => p.length)).toEqual([10_000, 10_000, 5_000])
+  })
+  it('takes bounded excerpts from varying positions in long notes', () => {
+    const body = Array.from({ length: 200 }, (_, i) => `Paragraph ${i} `.repeat(10)).join('\n\n')
+    const first = materialExcerpt(body, 2_000, () => 0)
+    const later = materialExcerpt(body, 2_000, () => 0.9)
+    expect(first.length).toBeLessThanOrEqual(2_000)
+    expect(later.length).toBeLessThanOrEqual(2_000)
+    expect(first).not.toBe(later)
+    expect(later.startsWith('Paragraph ')).toBe(true)
+    expect(materialExcerpt('short', 2_000)).toBe('short')
   })
 })
