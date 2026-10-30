@@ -167,7 +167,7 @@
   font-weight: 600;
 }
 .nk-product .lesson-section > div {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.9;
 }
 .nk-product .lesson-section pre {
@@ -225,4 +225,45 @@
 }
 .nk-product .text-red-500 {
   color: #b91c1c;
+}
+
+/* Long study content uses a reading measure and type size, independently of compact UI labels. */
+.nk-product .reading-text {
+  width: 100%;
+  max-width: 70ch;
+  margin-inline: auto;
+  font-size: var(--reading-font-size, 1rem);
+  line-height: 1.85;
+  color: #334155;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+.nk-product .study-prose p {
+  margin-bottom: 1em;
+}
+.nk-product .study-prose :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: 1.5em;
+  margin-bottom: 0.6em;
+  font-size: 1.15em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.nk-product .study-prose li + li {
+  margin-top: 0.5em;
+}
+.nk-product .study-prose blockquote {
+  margin-block: 1.25em;
+  border-left: 3px solid #c4b5fd;
+  padding-left: 1em;
+  color: #475569;
+}
+.nk-product .study-prose pre,
+.nk-product .reading-text .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.25em;
+}
+.source-reader::backdrop {
+  background: rgb(15 23 42 / 55%);
 }

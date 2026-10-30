@@ -1,5 +1,6 @@
 'use client'
 
+import { ReadingText } from '@/components/product/ReadingText'
 import { MathText } from '@/components/product/MathText'
 import { AdminExamCalendars } from './AdminExamCalendars'
 import { AdminExamSyllabuses, type Syllabus } from './AdminExamSyllabuses'
@@ -984,7 +985,7 @@ export function AdminExamContent() {
           {preview && (
             <section className="card space-y-3 p-5">
               <h2 className="font-semibold">{preview.title}</h2>
-              <p className="max-h-96 overflow-auto whitespace-pre-wrap text-sm">{preview.body}</p>
+              <ReadingText>{preview.body}</ReadingText>
               <button className="btn-secondary" onClick={() => setPreview(null)}>
                 Close preview
               </button>

@@ -36,7 +36,7 @@ export class LessonsService {
     const chunks = lesson.sourceChunkIds.length
       ? await this.prisma.documentChunk.findMany({
           where: { id: { in: lesson.sourceChunkIds } },
-          select: { id: true, text: true, document: { select: { fileName: true } } },
+          select: { id: true, text: true, documentId: true, document: { select: { fileName: true } } },
         })
       : []
     const byId = new Map(chunks.map(c => [c.id, c]))
@@ -46,6 +46,7 @@ export class LessonsService {
       // Index i corresponds to citation marker S{i+1}; passages deleted since generation show as unavailable
       sources: lesson.sourceChunkIds.map((id, i) => ({
         marker: `S${i + 1}`,
+        documentId: byId.get(id)?.documentId ?? null,
         documentName: byId.get(id)?.document.fileName ?? 'Removed document',
         excerpt: byId.get(id)?.text ?? null,
       })),

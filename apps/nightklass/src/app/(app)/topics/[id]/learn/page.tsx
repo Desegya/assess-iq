@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, use as usePromise } from 'react'
+import { useEffect, useId, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
+import { SourceReader, type LessonSource } from '@/components/product/SourceReader'
 import type { LessonVisual as Visual } from '@assessiq/types'
 import { LessonVisual } from '@/components/product/LessonVisual'
 import { MathText } from '@/components/product/MathText'
@@ -34,7 +35,7 @@ interface Lesson {
   mode: Mode
   content: LessonContent
   createdAt: string
-  sources: { marker: string; documentName: string; excerpt: string | null }[]
+  sources: LessonSource[]
 }
 
 interface LessonResponse {
@@ -83,37 +84,54 @@ function withCitationLinks(text: string) {
   return text.replace(/\[(S\d+)\]/g, '[$1](#source-$1)')
 }
 
-function Md({ children }: { children: string }) {
+function Md({
+  children,
+  onCitation: openSource,
+}: {
+  children: string
+  onCitation?: (marker: string, triggerId: string) => void
+}) {
+  const citationScope = useId()
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkMath]}
-      rehypePlugins={[[rehypeKatex, { throwOnError: false, trust: false, strict: 'ignore' }]]}
-      components={{
-        p: (props) => <p className="mb-3 last:mb-0" {...props} />,
-        ul: (props) => <ul className="list-disc pl-5 mb-3 space-y-1" {...props} />,
-        ol: (props) => <ol className="list-decimal pl-5 mb-3 space-y-1" {...props} />,
-        strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
-        h3: (props) => <h4 className="font-semibold text-slate-900 mt-3 mb-1" {...props} />,
-        code: (props) => (
-          <code className="bg-slate-100 rounded px-1 py-0.5 text-[13px]" {...props} />
-        ),
-        a: ({ href, children: label }) =>
-          href?.startsWith('#source-') ? (
-            <a
-              href={href}
-              className="inline-block align-super text-[10px] font-bold text-emerald-700 bg-emerald-50 rounded px-1 mx-0.5 no-underline hover:bg-emerald-100"
-            >
-              {label}
-            </a>
-          ) : (
-            <a href={href} className="text-violet-600 underline" target="_blank" rel="noreferrer">
-              {label}
-            </a>
+    <div className="reading-text study-prose">
+      <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[[rehypeKatex, { throwOnError: false, trust: false, strict: 'ignore' }]]}
+        components={{
+          p: (props) => <p className="mb-3 last:mb-0" {...props} />,
+          ul: (props) => <ul className="list-disc pl-5 mb-3 space-y-1" {...props} />,
+          ol: (props) => <ol className="list-decimal pl-5 mb-3 space-y-1" {...props} />,
+          strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
+          h3: (props) => <h4 className="font-semibold text-slate-900 mt-3 mb-1" {...props} />,
+          code: (props) => (
+            <code className="bg-slate-100 rounded px-1 py-0.5 text-[13px]" {...props} />
           ),
-      }}
-    >
-      {withCitationLinks(children)}
-    </ReactMarkdown>
+          a: ({ href, children: label, node }) =>
+            href?.startsWith('#source-') ? (
+              <a
+                href={href}
+                id={`${citationScope}-${node?.position?.start.offset ?? href}`}
+                onClick={(event) => {
+                  if (openSource) {
+                    event.preventDefault()
+                    openSource(href.slice('#source-'.length), event.currentTarget.id)
+                  }
+                }}
+                aria-label={`Read reference ${href.slice('#source-'.length)}`}
+                className="inline-flex min-h-8 min-w-8 items-center justify-center align-middle text-xs font-bold text-emerald-700 bg-emerald-50 rounded px-1 mx-0.5 no-underline hover:bg-emerald-100"
+              >
+                {label}
+              </a>
+            ) : (
+              <a href={href} className="text-violet-600 underline" target="_blank" rel="noreferrer">
+                {label}
+              </a>
+            ),
+        }}
+      >
+        {withCitationLinks(children)}
+      </ReactMarkdown>
+    </div>
   )
 }
 
@@ -135,6 +153,12 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
 
   const [data, setData] = useState<LessonResponse | null>(null)
   const [lesson, setLesson] = useState<Lesson | null>(null)
+  const [sourceTriggerId, setSourceTriggerId] = useState('')
+  const openSource = (marker: string, triggerId: string) => {
+    setSourceTriggerId(triggerId)
+    setSourceMarker(marker)
+  }
+  const [sourceMarker, setSourceMarker] = useState<string | null>(null)
   const [resources, setResources] = useState<Resources | null>(null)
   const [mode, setMode] = useState<Mode>('COMBINED')
   const [feedback, setFeedback] = useState('')
@@ -366,19 +390,25 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
               <ul className="list-disc pl-5 space-y-1 mb-4">
                 {c.objectives.map((o, i) => (
                   <li key={i}>
-                    <Md>{o}</Md>
+                    <Md onCitation={openSource}>{o}</Md>
                   </li>
                 ))}
               </ul>
-              <Md>{c.introduction}</Md>
+              <Md onCitation={openSource}>{c.introduction}</Md>
             </Card>
 
             {c.sections.map((s, i) => (
               <Card key={i} title={`${i + 1}. ${s.heading}`}>
-                <Md>{s.body}</Md>
-                {c.visuals?.filter(visual => visual.sectionIndex === i).map((visual, index) => (
-                  <LessonVisual key={`${lesson.id}-${i}-${index}`} visual={visual} lessonId={lesson.id} />
-                ))}
+                <Md onCitation={openSource}>{s.body}</Md>
+                {c.visuals
+                  ?.filter((visual) => visual.sectionIndex === i)
+                  .map((visual, index) => (
+                    <LessonVisual
+                      key={`${lesson.id}-${i}-${index}`}
+                      visual={visual}
+                      lessonId={lesson.id}
+                    />
+                  ))}
               </Card>
             ))}
 
@@ -389,16 +419,18 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
                     <div key={i} className="rounded-xl bg-slate-50 p-4">
                       <p className="font-semibold text-slate-900">{w.title}</p>
                       <div className="mt-1">
-                        <Md>{w.problem}</Md>
+                        <Md onCitation={openSource}>{w.problem}</Md>
                       </div>
                       <ol className="list-decimal pl-5 mt-2 space-y-1">
                         {w.steps.map((step, j) => (
                           <li key={j}>
-                            <Md>{step}</Md>
+                            <Md onCitation={openSource}>{step}</Md>
                           </li>
                         ))}
                       </ol>
-                      <p className="mt-2 font-semibold text-emerald-700">Answer: <MathText>{w.answer}</MathText></p>
+                      <p className="mt-2 font-semibold text-emerald-700">
+                        Answer: <MathText>{w.answer}</MathText>
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -410,9 +442,11 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
                 <dl className="space-y-2">
                   {c.keyTerms.map((k, i) => (
                     <div key={i}>
-                      <dt className="font-semibold text-slate-900"><MathText>{k.term}</MathText></dt>
+                      <dt className="font-semibold text-slate-900">
+                        <MathText>{k.term}</MathText>
+                      </dt>
                       <dd className="text-slate-600">
-                        <Md>{k.definition}</Md>
+                        <Md onCitation={openSource}>{k.definition}</Md>
                       </dd>
                     </div>
                   ))}
@@ -426,7 +460,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
                   <ul className="list-disc pl-5 space-y-1">
                     {c.applications.map((a, i) => (
                       <li key={i}>
-                        <Md>{a}</Md>
+                        <Md onCitation={openSource}>{a}</Md>
                       </li>
                     ))}
                   </ul>
@@ -450,7 +484,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
               <ul className="list-disc pl-5 space-y-1">
                 {c.summary.map((s, i) => (
                   <li key={i}>
-                    <Md>{s}</Md>
+                    <Md onCitation={openSource}>{s}</Md>
                   </li>
                 ))}
               </ul>
@@ -461,7 +495,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
                 <ol className="list-decimal pl-5 space-y-2">
                   {c.examQuestions.map((q, i) => (
                     <li key={i}>
-                      <Md>{q.question}</Md>
+                      <Md onCitation={openSource}>{q.question}</Md>
                       <span className="badge bg-slate-100 text-slate-500 !text-[10px] mt-1">
                         {QUESTION_TYPE_LABEL[q.type]}
                       </span>
@@ -476,23 +510,20 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
                 <ul className="space-y-3">
                   {lesson.sources.map((s) => (
                     <li key={s.marker} id={`source-${s.marker}`} className="scroll-mt-24">
-                      <p className="text-xs font-semibold text-emerald-700">
-                        [{s.marker}] {s.documentName}
-                      </p>
-                      {s.excerpt ? (
-                        <details className="mt-1">
-                          <summary className="text-xs text-slate-500 cursor-pointer">
-                            Show passage
-                          </summary>
-                          <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap bg-slate-50 rounded-lg p-3">
-                            {s.excerpt}
-                          </p>
-                        </details>
-                      ) : (
-                        <p className="text-xs text-slate-400 mt-1">
-                          This document has since been removed.
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50/30 p-4">
+                        <p className="min-w-0 flex-1 break-words text-sm font-semibold text-emerald-800">
+                          [{s.marker}] {s.documentName}
                         </p>
-                      )}
+                        <button
+                          type="button"
+                          id={`source-button-${s.marker}`}
+                          onClick={(event) => openSource(s.marker, event.currentTarget.id)}
+                          aria-label={`Read reference ${s.marker}: ${s.documentName}`}
+                          className="btn-secondary min-h-11 text-sm"
+                        >
+                          Read reference
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -619,6 +650,14 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
             ))}
           </div>
         </section>
+      )}
+      {sourceMarker && lesson?.sources.find((source) => source.marker === sourceMarker) && (
+        <SourceReader
+          key={`${lesson.id}-${sourceMarker}`}
+          source={lesson.sources.find((source) => source.marker === sourceMarker)!}
+          returnFocusId={sourceTriggerId}
+          onClose={() => setSourceMarker(null)}
+        />
       )}
     </div>
   )

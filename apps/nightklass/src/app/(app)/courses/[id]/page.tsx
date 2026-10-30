@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/product/Icon'
+import { ReadingText } from '@/components/product/ReadingText'
 import { HelpTip } from '@/components/product/HelpTip'
 import { nextStudyDate } from '@/lib/study-date'
 import { useApi } from '@/hooks/use-api'
@@ -540,9 +541,7 @@ function CourseDetail({ id }: { id: string }) {
                 <p className="text-[11px] text-emerald-700 mb-2">
                   Kept exactly as you provided it. AI never edits this.
                 </p>
-                <pre className="whitespace-pre-wrap font-sans text-xs text-slate-700 max-h-80 overflow-y-auto">
-                  {course.outlineText}
-                </pre>
+                <ReadingText>{course.outlineText}</ReadingText>
               </div>
             )}
           </div>
