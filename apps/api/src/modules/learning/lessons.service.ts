@@ -7,6 +7,7 @@ import { AuthUser } from '@assessiq/types'
 import { RetrievalService } from './retrieval.service'
 import { GenerateLessonDto } from './dto/lesson.dto'
 import { sanitizeLesson } from './lesson-content'
+import { LessonVisualsService } from './lesson-visuals.service'
 
 @Injectable()
 export class LessonsService {
@@ -17,6 +18,7 @@ export class LessonsService {
     private readonly ai: AiService,
     private readonly coursesService: CoursesService,
     private readonly retrieval: RetrievalService,
+    private readonly visuals: LessonVisualsService,
   ) {}
 
   private async loadTopic(topicId: string, user: AuthUser) {
@@ -30,7 +32,7 @@ export class LessonsService {
   }
 
   // Attach the source passages (with document names) that a lesson cites
-  private async withSources<T extends { sourceChunkIds: string[] }>(lesson: T) {
+  private async withSources<T extends { sourceChunkIds: string[]; content: unknown }>(lesson: T) {
     const chunks = lesson.sourceChunkIds.length
       ? await this.prisma.documentChunk.findMany({
           where: { id: { in: lesson.sourceChunkIds } },
@@ -40,6 +42,7 @@ export class LessonsService {
     const byId = new Map(chunks.map(c => [c.id, c]))
     return {
       ...lesson,
+      content: await this.visuals.forRead(lesson.content as Record<string, unknown>),
       // Index i corresponds to citation marker S{i+1}; passages deleted since generation show as unavailable
       sources: lesson.sourceChunkIds.map((id, i) => ({
         marker: `S${i + 1}`,
@@ -114,6 +117,7 @@ export class LessonsService {
           relatedEntityId: topic.id,
           mode,
           feedback: dto.feedback,
+          visualsEnabled: this.visuals.canGenerate(user.id),
         },
       )
       content = sanitizeLesson(raw, new Set(excerpts.map(e => e.id)))
@@ -125,23 +129,35 @@ export class LessonsService {
       throw new BadRequestException("The lesson came back empty — try again in a moment")
     }
 
-    const last = await this.prisma.topicLesson.findFirst({ where: { topicId }, orderBy: { version: 'desc' } })
-    const lesson = await this.prisma.topicLesson.create({
-      data: {
-        topicId,
-        version: (last?.version ?? 0) + 1,
-        mode,
-        content: content as object,
-        sourceChunkIds: chunkIds,
-        sourceDocumentIds: [...new Set((await this.prisma.documentChunk.findMany({
-          where: { id: { in: chunkIds } },
-          select: { documentId: true },
-        })).map(c => c.documentId))],
-        feedback: dto.feedback ?? null,
-        createdById: user.id,
-      },
+    content.visuals = await this.visuals.create(content, {
+      userId: user.id, organizationId: user.organizationId ?? undefined, relatedEntityId: topic.id,
     })
-    return this.withSources(lesson)
+    delete content.visualPlans
+
+    let persisted = false
+    try {
+      const last = await this.prisma.topicLesson.findFirst({ where: { topicId }, orderBy: { version: 'desc' } })
+      const lesson = await this.prisma.topicLesson.create({
+        data: {
+          topicId,
+          version: (last?.version ?? 0) + 1,
+          mode,
+          content: content as object,
+          sourceChunkIds: chunkIds,
+          sourceDocumentIds: [...new Set((await this.prisma.documentChunk.findMany({
+            where: { id: { in: chunkIds } },
+            select: { documentId: true },
+          })).map(c => c.documentId))],
+          feedback: dto.feedback ?? null,
+          createdById: user.id,
+        },
+      })
+      persisted = true
+      return this.withSources(lesson)
+    } catch (err) {
+      if (!persisted) await this.visuals.discard(content.visuals ?? [])
+      throw err
+    }
   }
 
   async report(lessonId: string, reason: string, user: AuthUser) {

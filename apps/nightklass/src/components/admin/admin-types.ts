@@ -1,3 +1,4 @@
+import type { LessonVisual } from '@assessiq/types'
 import type { PageResult } from './admin-api'
 export interface SummaryCourse {
   id: string
@@ -51,6 +52,7 @@ export interface AdminLesson {
     sections: { heading: string; body: string }[]
     summary: string[]
     objectives?: string[]
+    visuals?: LessonVisual[]
   }
 }
 export interface AdminQuestion {

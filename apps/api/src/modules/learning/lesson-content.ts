@@ -1,4 +1,5 @@
 import type { LessonContent } from '../ai/ai.service'
+import { sanitizeVisualPlans } from './lesson-visuals'
 
 const CITATION = /\[(S\d+)\]/g
 
@@ -13,10 +14,11 @@ export function sanitizeLesson(raw: LessonContent, allowedIds: Set<string>): Les
   const list = <T>(value: unknown, map: (item: Record<string, unknown>) => T | null): T[] =>
     Array.isArray(value) ? value.map(v => (v && typeof v === 'object' ? map(v as Record<string, unknown>) : null)).filter((v): v is T => !!v) : []
 
+  const sections = list(raw.sections, s => (s.heading && s.body ? { heading: clean(s.heading), body: clean(s.body) } : null))
   return {
     objectives: strings(raw.objectives).map(clean),
     introduction: clean(raw.introduction),
-    sections: list(raw.sections, s => (s.heading && s.body ? { heading: clean(s.heading), body: clean(s.body) } : null)),
+    sections,
     keyTerms: list(raw.keyTerms, k => (k.term && k.definition ? { term: clean(k.term), definition: clean(k.definition) } : null)),
     workedExamples: list(raw.workedExamples, w =>
       w.title && w.problem
@@ -25,6 +27,7 @@ export function sanitizeLesson(raw: LessonContent, allowedIds: Set<string>): Les
     ),
     applications: strings(raw.applications).map(clean),
     diagramIdeas: strings(raw.diagramIdeas).map(clean),
+    visualPlans: sanitizeVisualPlans(Array.isArray(raw.sections) && sections.length === raw.sections.length ? raw.visualPlans : [], sections.length, clean),
     summary: strings(raw.summary).map(clean),
     examQuestions: list(raw.examQuestions, q =>
       q.question

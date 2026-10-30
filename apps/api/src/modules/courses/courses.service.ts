@@ -1,4 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common'
+import { Logger } from '@nestjs/common'
+import { StorageService } from '../storage/storage.service'
+import { lessonVisualKeys } from '../../common/lesson-visual-keys'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { CreateCourseDto } from './dto/create-course.dto'
@@ -6,7 +9,7 @@ import { UpdateCourseDto } from './dto/update-course.dto'
 
 @Injectable()
 export class CoursesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly storage?: StorageService) {}
 
   async create(dto: CreateCourseDto, user: AuthUser) {
     // A student with no organisation creates a personally-owned course
@@ -134,7 +137,10 @@ export class CoursesService {
     if (await this.prisma.examGoalSubject.count({ where: { courseId: id } })) {
       throw new ConflictException('This subject is part of an exam goal. Remove it from your exam subject choices before deleting its study workspace.')
     }
+    const lessons = await this.prisma.topicLesson.findMany({ where: { topic: { courseId: id } }, select: { content: true } })
     await this.prisma.course.delete({ where: { id } })
+    for (const key of new Set(lessons.flatMap(lesson => lessonVisualKeys(lesson.content))))
+      await this.storage?.delete(key).catch(() => new Logger(CoursesService.name).error('event=lesson_visual_delete_failed'))
     return { message: 'Course deleted' }
   }
 }

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common'
 import { Prisma } from '@assessiq/db'
 import { AuthUser, UserRole } from '@assessiq/types'
+import { LessonVisualsService } from '../learning/lesson-visuals.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { CoursesService } from '../courses/courses.service'
 import { TopicsService } from '../topics/topics.service'
@@ -71,7 +72,7 @@ export function validateQuestion(dto: AdminQuestionDto) {
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly visuals: LessonVisualsService) {}
 
   private page(q: AdminQueryDto) {
     return { skip: (q.page - 1) * q.limit, take: q.limit }
@@ -524,7 +525,7 @@ export class AdminService {
       include: { topic: { select: { id: true, name: true, courseId: true } } },
     })
     if (!lesson) throw new NotFoundException('Nightklass lesson not found')
-    return lesson
+    return { ...lesson, content: await this.visuals.forRead(lesson.content as Record<string, unknown>) }
   }
   async updateLesson(id: string, dto: AdminLessonDto, actorId: string) {
     if (
@@ -555,6 +556,9 @@ export class AdminService {
             introduction: dto.introduction,
             sections: dto.sections.map((s) => ({ heading: s.heading, body: s.body })),
             summary: dto.summary,
+            // A correction can change the concept or section order. Earlier versions retain their media.
+            visuals: [],
+            visualPlans: [],
           } as Prisma.InputJsonObject,
           sourceChunkIds: lesson.sourceChunkIds,
           sourceDocumentIds: lesson.sourceDocumentIds,

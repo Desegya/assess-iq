@@ -3,6 +3,8 @@
 import { useEffect, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
+import type { LessonVisual as Visual } from '@assessiq/types'
+import { LessonVisual } from '@/components/product/LessonVisual'
 import { MathText } from '@/components/product/MathText'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -21,6 +23,7 @@ interface LessonContent {
   workedExamples: { title: string; problem: string; steps: string[]; answer: string }[]
   applications: string[]
   diagramIdeas: string[]
+  visuals?: Visual[]
   summary: string[]
   examQuestions: { question: string; type: 'short' | 'structured' | 'essay' | 'calculation' }[]
 }
@@ -297,7 +300,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
           )}
           {data.hasMaterial && <div className="mb-4">{modePicker}</div>}
           <button onClick={() => void generate()} disabled={generating} className="btn-primary">
-            {generating ? 'Writing your lesson… (about 10 seconds)' : 'Generate lesson'}
+            {generating ? 'Writing your lesson and preparing helpful visuals…' : 'Generate lesson'}
           </button>
         </section>
       )}
@@ -373,6 +376,9 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
             {c.sections.map((s, i) => (
               <Card key={i} title={`${i + 1}. ${s.heading}`}>
                 <Md>{s.body}</Md>
+                {c.visuals?.filter(visual => visual.sectionIndex === i).map((visual, index) => (
+                  <LessonVisual key={`${lesson.id}-${i}-${index}`} visual={visual} lessonId={lesson.id} />
+                ))}
               </Card>
             ))}
 
