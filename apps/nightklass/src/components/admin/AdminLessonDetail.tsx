@@ -1,4 +1,5 @@
 'use client'
+import { LessonVisual } from '@/components/product/LessonVisual'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -53,6 +54,10 @@ export function AdminLessonDetail({ id }: { id: string }) {
                 <section key={i} className="lesson-section">
                   <h2>{s.heading}</h2>
                   <p className="mt-4 whitespace-pre-wrap text-sm leading-loose">{s.body}</p>
+                  {d.content.visuals?.filter(v => v.sectionIndex === i).map((visual, index) => (
+                    <LessonVisual key={`${d.id}-${index}`} visual={visual} lessonId={d.id}
+                      reloadVisuals={async () => (await adminRequest<AdminLesson>(`lessons/${d.id}`)).content.visuals ?? []} />
+                  ))}
                 </section>
               ))}
               <h2 className="mt-7 text-lg font-semibold">Summary</h2>

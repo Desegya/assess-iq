@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { AuthUser } from '@assessiq/types'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
+import { lessonVisualKeys } from '../../common/lesson-visual-keys'
 
 // Exports are complete for realistic accounts; the cap only protects the API
 // from pathological sizes and is reported when reached.
@@ -96,6 +97,8 @@ export class AccountDataService {
       throw new ForbiddenException('Remove your Nightklass administrator access before deleting this account.')
     const id = user.id
     const files = await this.prisma.document.findMany({ where: { uploadedById: id }, select: { fileUrl: true } })
+    const lessons = await this.prisma.topicLesson.findMany({ where: { topic: { course: { ownerId: id } } }, select: { content: true } })
+    files.push(...lessons.flatMap(lesson => lessonVisualKeys(lesson.content).map(fileUrl => ({ fileUrl }))))
     await this.prisma.$transaction(
       async (tx) => {
         // Exam records first: attempts restrict goal deletion; goal subjects restrict course deletion.

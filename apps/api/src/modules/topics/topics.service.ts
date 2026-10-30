@@ -1,4 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common'
+import { Logger } from '@nestjs/common'
+import { StorageService } from '../storage/storage.service'
+import { lessonVisualKeys } from '../../common/lesson-visual-keys'
 import { PrismaService } from '../prisma/prisma.service'
 import { CoursesService } from '../courses/courses.service'
 import { AuthUser, UserRole, TopicSource } from '@assessiq/types'
@@ -14,6 +17,7 @@ export class TopicsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly coursesService: CoursesService,
+    private readonly storage?: StorageService,
   ) {}
 
   // Throws NotFoundException if the course doesn't exist or isn't accessible to this user.
@@ -146,10 +150,13 @@ export class TopicsService {
     if (hasProgress) {
       await this.prisma.topic.updateMany({ where: { id: { in: ids } }, data: { archivedAt: new Date() } })
     } else {
+      const lessons = await this.prisma.topicLesson.findMany({ where: { topicId: { in: ids } }, select: { content: true } })
       await this.prisma.$transaction([
         this.prisma.topic.deleteMany({ where: { parentTopicId: id } }),
         this.prisma.topic.delete({ where: { id } }),
       ])
+      for (const key of new Set(lessons.flatMap(lesson => lessonVisualKeys(lesson.content))))
+        await this.storage?.delete(key).catch(() => new Logger(TopicsService.name).error('event=lesson_visual_delete_failed'))
     }
 
     await this.recordRevision(topic.courseId, user.id, `${hasProgress ? 'Archived' : 'Removed'} "${topic.name}"`)
