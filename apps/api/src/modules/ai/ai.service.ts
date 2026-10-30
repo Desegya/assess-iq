@@ -27,12 +27,12 @@ export interface WrittenAnswerToGrade {
 }
 
 /** Bump whenever grading instructions or input structure change, so results stay traceable. */
-export const GRADING_PROMPT_VERSION = 'written-grading/2026-10-23.1'
+export const GRADING_PROMPT_VERSION = 'written-grading/2026-10-30.1'
 /** Bump whenever question-generation instructions change. */
-export const GENERATION_PROMPT_VERSION = 'question-generation/2026-10-23.1'
+export const GENERATION_PROMPT_VERSION = 'question-generation/2026-10-30.1'
 
 // Learner-facing text is rendered with KaTeX, so formulas must use LaTeX delimiters.
-const MATH_NOTATION = `Write every mathematical, chemical or physical formula in LaTeX: inline as $...$ (for example $x^2 + 3x - 4 = 0$, $\\frac{a}{b}$, $\\mathrm{H_2SO_4}$) and standalone equations as $$...$$. Do not use $ for money; write amounts like ₦500 or 500 naira. Inside JSON strings, escape each backslash (write \\\\frac, not \\frac).`
+const MATH_NOTATION = `Write every mathematical, chemical or physical formula in LaTeX: inline as $...$ (for example $x^2 + 3x - 4 = 0$, $\\frac{a}{b}$, $\\mathrm{H_2SO_4}$) and standalone equations as $$...$$. For pronunciation and English sounds, use Unicode IPA as ordinary text, for example /ʃ/, /ə/, /tʃ/ and /ˈtiːtʃə/. Preserve phonemic slashes /…/, phonetic brackets […], stress marks, length marks and combining diacritics. Never wrap IPA in math delimiters or replace it with approximate English spelling. Do not use $ for money; write amounts like ₦500 or 500 naira. Inside JSON strings, escape each backslash (write \\\\frac, not \\frac).`
 const MATH_ACTIONS: AiAction[] = ['GENERATE_QUESTIONS', 'GENERATE_FLASHCARDS', 'GENERATE_SUMMARY', 'ANSWER_QUESTION', 'GRADE_ANSWERS']
 
 const GRADING_INSTRUCTIONS = `You are a fair, consistent examiner marking practice answers.
@@ -475,7 +475,8 @@ CONTENT:
         ? `EXACTLY ${topic.subtopics.length} sections, one per subtopic listed above, in that order, each headed with the subtopic name`
         : '3-6 sections in a logical learning order'
     }. Each section is a detailed explanation in Markdown (paragraphs, bullet points, step-by-step reasoning,
-  formulas where relevant), 150-350 words. Write formulas in plain text (e.g. s² = Σ(x − x̄)² / (n − 1)), not LaTeX
+  formulas where relevant), 150-350 words.
+${MATH_NOTATION}
 - keyTerms: the essential definitions
 - workedExamples: 1-3 worked examples with numbered steps where the topic involves calculation or method; use an
   empty array for purely descriptive topics

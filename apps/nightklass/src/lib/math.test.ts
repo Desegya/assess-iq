@@ -21,3 +21,17 @@ test('keeps the surrounding text intact and in order', () => {
   const parts = splitMath('If $a=2$, find a.')
   assert.deepEqual(parts.map((p) => p.value), ['If ', 'a=2', ', find a.'])
 })
+
+
+test('preserves IPA delimiters, stress, length and combining diacritics verbatim', () => {
+  const text = 'Sounds: /ʃ/, /ə/, /tʃ/, /ˈtiːtʃə/ and [n̩], [tʰ], [ã].'
+  assert.deepEqual(splitMath(text), [{ kind: 'text', value: text }])
+})
+
+test('preserves IPA alongside a mathematical formula', () => {
+  assert.deepEqual(splitMath('Compare /ʃ/ and [s̪] with $f=1/T$.'), [
+    { kind: 'text', value: 'Compare /ʃ/ and [s̪] with ' },
+    { kind: 'math', value: 'f=1/T', display: false },
+    { kind: 'text', value: '.' },
+  ])
+})

@@ -1,4 +1,5 @@
 'use client'
+import { MathText } from '@/components/product/MathText'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -21,6 +22,7 @@ export function AdminQuestionDetail({ id }: { id: string }) {
   const topics = useAdminData<AdminCourse>(
     isNew && courseId ? `courses/${courseId}?limit=50&page=${topicPage}` : null,
   )
+  const [questionText, setQuestionText] = useState('')
   const [type, setType] = useState('MCQ')
   const [options, setOptions] = useState([
     { key: 'A', text: '' },
@@ -34,6 +36,7 @@ export function AdminQuestionDetail({ id }: { id: string }) {
   const [notice, setNotice] = useState('')
   useEffect(() => {
     if (question.data) {
+      setQuestionText(question.data.questionText)
       setType(question.data.questionType)
       setOptions(question.data.options ?? [])
       setAnswer(question.data.correctAnswer)
@@ -189,9 +192,18 @@ export function AdminQuestionDetail({ id }: { id: string }) {
               maxLength={10000}
               rows={4}
               className="input-base"
-              defaultValue={question.data?.questionText ?? ''}
+              value={questionText}
+              onChange={(e) => setQuestionText(e.target.value)}
             />
           </label>
+          <section aria-label="Question display preview" className="space-y-3 rounded-xl border bg-slate-50 p-4">
+            <h2 className="text-sm font-semibold">Question display preview</h2>
+            <p className="text-xs text-slate-500">Use $…$ for inline formulas and $$…$$ for equations. Type pronunciation symbols directly, for example /ʃ/ or /ə/.</p>
+            <p><MathText>{questionText}</MathText></p>
+            {type === 'MCQ' && options.map((option) => (
+              <p key={option.key}>{option.key}. <MathText>{option.text}</MathText></p>
+            ))}
+          </section>
           <div className="grid gap-4 sm:grid-cols-2">
             <label>
               Question format

@@ -460,7 +460,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                     </p>
                     {r?.feedback && (
                       <p className="text-slate-700">
-                        <span className="font-semibold">Feedback:</span> {r.feedback}
+                        <span className="font-semibold">Feedback:</span> <MathText>{r.feedback}</MathText>
                       </p>
                     )}
                     {r?.missingPoints && r.missingPoints.length > 0 && (
@@ -468,7 +468,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                         <p className="text-xs font-semibold text-slate-500">You missed</p>
                         <ul className="list-disc pl-5 text-slate-600">
                           {r.missingPoints.map((m, j) => (
-                            <li key={j}>{m}</li>
+                            <li key={j}><MathText>{m}</MathText></li>
                           ))}
                         </ul>
                       </div>
@@ -480,7 +480,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                           : 'Model answer'}
                       </summary>
                       <p className="whitespace-pre-wrap text-xs text-slate-600 mt-2">
-                        {r?.correctAnswer}
+                        <MathText>{r?.correctAnswer}</MathText>
                       </p>
                       {r?.explanation && (
                         <p className="whitespace-pre-wrap text-xs text-slate-600 mt-2">
@@ -494,9 +494,9 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                     <p
                       className={`text-sm font-semibold ${r?.isCorrect ? 'text-emerald-600' : 'text-red-600'}`}
                     >
-                      {r?.isCorrect
+                      <MathText>{r?.isCorrect
                         ? 'Correct'
-                        : `Incorrect. Correct answer: ${r?.correctAnswer ?? '—'}${correctText ? `. ${correctText.text}` : ''}`}
+                        : `Incorrect. Correct answer: ${r?.correctAnswer ?? '—'}${correctText ? `. ${correctText.text}` : ''}`}</MathText>
                     </p>
                     {r?.explanation && (
                       <p className="text-xs text-slate-500 mt-2"><MathText>{r.explanation}</MathText></p>

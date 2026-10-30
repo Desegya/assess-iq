@@ -1,4 +1,5 @@
 'use client'
+import { MathText } from '@/components/product/MathText'
 import { useState } from 'react'
 import { adminRequest, useAdminData } from './admin-api'
 
@@ -178,7 +179,7 @@ export function AdminOperations() {
             <p className="font-medium">
               {r.reason.replaceAll('_', ' ')} · {r.question.exam} {r.question.subject} · {r.question.topic}
             </p>
-            <p className="whitespace-pre-wrap text-slate-700">{r.question.questionText}</p>
+            <p className="whitespace-pre-wrap text-slate-700"><MathText>{r.question.questionText}</MathText></p>
             <p className="whitespace-pre-wrap">Learner: {r.details}</p>
             <div className="flex flex-wrap gap-2">
               <a className="btn-secondary" href={`/admin/exam-content?question=${r.question.id}`}>

@@ -3,6 +3,7 @@
 import { useEffect, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
+import { MathText } from '@/components/product/MathText'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { Icon } from '@/components/product/Icon'
@@ -391,7 +392,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
                           </li>
                         ))}
                       </ol>
-                      <p className="mt-2 font-semibold text-emerald-700">Answer: {w.answer}</p>
+                      <p className="mt-2 font-semibold text-emerald-700">Answer: <MathText>{w.answer}</MathText></p>
                     </div>
                   ))}
                 </div>
@@ -403,7 +404,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
                 <dl className="space-y-2">
                   {c.keyTerms.map((k, i) => (
                     <div key={i}>
-                      <dt className="font-semibold text-slate-900">{k.term}</dt>
+                      <dt className="font-semibold text-slate-900"><MathText>{k.term}</MathText></dt>
                       <dd className="text-slate-600">
                         <Md>{k.definition}</Md>
                       </dd>
