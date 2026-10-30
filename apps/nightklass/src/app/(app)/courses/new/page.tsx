@@ -125,6 +125,8 @@ export default function NewCoursePage() {
           semester: c.semester ?? undefined,
           creditUnits: c.creditUnits,
         })
+        // A later failure must not recreate courses that were already saved on retry.
+        setSelected(previous => new Set([...previous].filter(index => index !== i)))
       }
       router.push('/courses')
     } catch (err) {
