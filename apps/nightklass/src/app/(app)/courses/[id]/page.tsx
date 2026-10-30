@@ -10,6 +10,8 @@ import { SkeletonCard } from '@/components/ui/Skeleton'
 import { OutlineEditor } from '@/components/courses/OutlineEditor'
 import { OutlineInput } from '@/components/courses/OutlineInput'
 import { ProposalReview } from '@/components/courses/ProposalReview'
+import { useCourses } from '@/hooks/use-courses'
+import { DeleteCourseButton } from '@/components/courses/DeleteCourseButton'
 import { EditCourseForm } from '@/components/courses/EditCourseForm'
 import type { ProposalSet, Topic, TopicProposal } from '@/components/courses/outline-types'
 
@@ -81,8 +83,13 @@ interface DaySlot {
 
 export default function CourseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = usePromise(params)
+  return <CourseDetail key={id} id={id} />
+}
+
+function CourseDetail({ id }: { id: string }) {
   const api = useApi()
   const router = useRouter()
+  const { courses: allCourses } = useCourses()
 
   const [course, setCourse] = useState<Course | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -122,6 +129,9 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
   }
 
   useEffect(() => {
+    setCourse(null)
+    setError(null)
+    setEditing(new URLSearchParams(window.location.search).get('edit') === '1')
     load()
     api
       .get<Readiness>(`/study/courses/${id}/readiness`)
@@ -307,6 +317,14 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
         <Icon name="back" className="h-4 w-4" />
         My courses
       </Link>
+      {allCourses && allCourses.length > 1 && (
+        <div className="max-w-md">
+          <label htmlFor="course-switcher" className="mb-1.5 block text-sm font-medium text-slate-700">Your courses ({allCourses.length})</label>
+          <select id="course-switcher" value={id} onChange={e => router.push(`/courses/${e.target.value}`)} className="input-base">
+            {allCourses.map(c => <option key={c.id} value={c.id}>{c.courseCode ? `${c.courseCode} · ` : ''}{c.title}</option>)}
+          </select>
+        </div>
+      )}
       {editing ? (
         <EditCourseForm
           course={course}
@@ -359,7 +377,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
               </Link>
             )}
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <DeleteCourseButton course={course} onDeleted={() => router.push('/courses')} />
             <button onClick={() => setEditing(true)} className="btn-secondary">
               <Icon name="edit" className="h-4 w-4" />
               Edit course

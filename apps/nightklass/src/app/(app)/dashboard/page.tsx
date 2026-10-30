@@ -3,6 +3,7 @@
 import { ExamPreparationWorkspace } from '@/components/exams/ExamPreparationWorkspace'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useCourses } from '@/hooks/use-courses'
 import { useApi } from '@/hooks/use-api'
 import { useAuth } from '@/contexts/auth-context'
 import { Icon, type IconName } from '@/components/product/Icon'
@@ -70,23 +71,19 @@ function StatTile({
 export default function DashboardPage() {
   const api = useApi()
   const { user } = useAuth()
-  const [courses, setCourses] = useState<Course[] | null>(null)
+  const { courses, error: courseError, remove: removeCourse } = useCourses()
   const [progress, setProgress] = useState<Progress | null>(null)
   const [today, setToday] = useState<Session[] | null>(null)
   const [dueCount, setDueCount] = useState(0)
   const [weakCount, setWeakCount] = useState(0)
   const [profile, setProfile] = useState<AcademicProfile | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const error = courseError
 
   useEffect(() => {
     api
       .get<AcademicProfile>('/users/me/profile')
       .then(setProfile)
       .catch(() => undefined)
-    api
-      .get<Course[]>('/courses')
-      .then(setCourses)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load courses'))
     api
       .get<Progress>('/study/progress')
       .then(setProgress)
@@ -315,7 +312,7 @@ export default function DashboardPage() {
       {courses && courses.length > 0 && (
         <div>
           <h2 className="product-section-title mb-4">Your courses</h2>
-          <CourseGrid courses={courses} progressByCourse={progressByCourse} />
+          <CourseGrid courses={courses} progressByCourse={progressByCourse} onDeleted={removeCourse} />
         </div>
       )}
     </div>

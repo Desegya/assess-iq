@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/product/PageHeader'
 import { Icon } from '@/components/product/Icon'
+import { useCourses } from '@/hooks/use-courses'
 import { useApi } from '@/hooks/use-api'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -11,15 +12,11 @@ import { CourseGrid, type Course, type CourseProgress } from '@/components/cours
 
 export default function CoursesPage() {
   const api = useApi()
-  const [courses, setCourses] = useState<Course[] | null>(null)
+  const { courses, error: courseError, reload: reloadCourses, remove: removeCourse } = useCourses()
   const [progress, setProgress] = useState<CourseProgress[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const error = courseError
 
   useEffect(() => {
-    api
-      .get<Course[]>('/courses')
-      .then(setCourses)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load courses'))
     api
       .get<{ courses: CourseProgress[] }>('/study/progress')
       .then((p) => setProgress(p.courses))
@@ -50,6 +47,7 @@ export default function CoursesPage() {
           className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3"
         >
           {error}
+          <button type="button" onClick={() => void reloadCourses()} className="ml-3 min-h-11 underline">Try again</button>
         </div>
       )}
 
@@ -74,7 +72,7 @@ export default function CoursesPage() {
       )}
 
       {courses && courses.length > 0 && (
-        <CourseGrid courses={courses} progressByCourse={progressByCourse} />
+        <CourseGrid courses={courses} progressByCourse={progressByCourse} onDeleted={removeCourse} />
       )}
     </div>
   )

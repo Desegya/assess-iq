@@ -10,7 +10,8 @@
     "type-check": "tsc --noEmit",
     "test:unit": "node --test src/lib/*.test.ts",
     "test:e2e": "playwright test",
-    "test:e2e:lessons": "playwright test --config=playwright.lessons.config.ts"
+    "test:e2e:lessons": "playwright test --config=playwright.lessons.config.ts",
+    "test:e2e:courses": "playwright test --config=playwright.courses.config.ts"
   },
   "dependencies": {
     "@assessiq/types": "*",
