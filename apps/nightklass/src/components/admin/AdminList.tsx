@@ -1,4 +1,5 @@
 'use client'
+import { MathText } from '@/components/product/MathText'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -89,7 +90,7 @@ export function AdminList({ section }: { section: string }) {
   const state = useAdminData<PageResult<AdminRecord>>(`${section}?${qs}`)
   const [notice, setNotice] = useState('')
   function cells(r: AdminRecord): React.ReactNode[] {
-    const primary = (text: string | undefined, href?: string, detail?: string) => (
+    const primary = (text: string | undefined, href?: string, detail?: string, notation = false) => (
       <div className="max-w-[350px]">
         <p className="font-medium">
           {href ? (
@@ -97,7 +98,7 @@ export function AdminList({ section }: { section: string }) {
               className="inline-flex min-h-11 items-center text-violet-800 hover:underline"
               href={href}
             >
-              {text}
+              {notation ? <MathText>{text}</MathText> : text}
             </Link>
           ) : (
             text
@@ -139,7 +140,7 @@ export function AdminList({ section }: { section: string }) {
       ]
     if (section === 'questions')
       return [
-        primary(r.questionText, `/admin/questions/${r.id}`, r.difficulty),
+        primary(r.questionText, `/admin/questions/${r.id}`, r.difficulty, true),
         r.course?.title,
         r.questionType?.replaceAll('_', ' '),
         <Badge key="status" value={r.status!} />,
