@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/product/Icon'
+import { HelpTip } from '@/components/product/HelpTip'
+import { nextStudyDate } from '@/lib/study-date'
 import { useApi } from '@/hooks/use-api'
 import { getSubjectColor } from '@/lib/subject-color'
 import { SkeletonCard } from '@/components/ui/Skeleton'
@@ -25,6 +27,7 @@ interface Course {
   semester: 'FIRST' | 'SECOND' | null
   creditUnits: number | null
   isCarryover: boolean
+  targetExamDate?: string | null
   outlineText: string | null
   outlineSource: 'UPLOAD' | 'PASTE' | 'PHOTO' | null
   topics: Topic[]
@@ -124,7 +127,17 @@ function CourseDetail({ id }: { id: string }) {
   function load() {
     api
       .get<Course>(`/courses/${id}`)
-      .then(setCourse)
+      .then(loaded => {
+        setCourse(loaded)
+        const date = loaded.targetExamDate?.slice(0, 10)
+        if (date && date >= nextStudyDate()) {
+          setExamDate(date)
+          setPlanLength('exam')
+        } else {
+          setExamDate('')
+          setPlanLength('semester')
+        }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load course'))
   }
 
@@ -687,8 +700,10 @@ function CourseDetail({ id }: { id: string }) {
             Study setup
           </h2>
           <p className="text-slate-400 text-sm mb-4">
-            Set when you can study and your exam date, then generate a plan.
+            Choose when you can study. An exam date is optional: you can plan for a semester or a number of weeks instead.
           </p>
+
+          <HelpTip label="What does a study plan do?">It schedules your reviewed topics into the study times you choose below. First add or accept your topics, then choose at least one study slot. Sessions appear in Today after you generate the plan.</HelpTip>
 
           <form onSubmit={handleGeneratePlan} className="space-y-4">
             {planError && (
@@ -770,6 +785,7 @@ function CourseDetail({ id }: { id: string }) {
                   <input
                     id="examDate"
                     type="date"
+                    min={nextStudyDate()}
                     value={examDate}
                     onChange={(e) => setExamDate(e.target.value)}
                     className="input-base w-48"

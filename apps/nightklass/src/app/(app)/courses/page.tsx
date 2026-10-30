@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/product/PageHeader'
 import { Icon } from '@/components/product/Icon'
+import { CourseSetupGuide } from '@/components/courses/CourseSetupGuide'
 import { useCourses } from '@/hooks/use-courses'
 import { useApi } from '@/hooks/use-api'
 import { SkeletonCard } from '@/components/ui/Skeleton'
@@ -40,6 +41,8 @@ export default function CoursesPage() {
           </Link>
         }
       />
+
+      {courses !== null && <CourseSetupGuide defaultOpen={courses.length === 0} />}
 
       {error && (
         <div

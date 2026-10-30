@@ -341,6 +341,7 @@ model Course {
   semester       Semester?
   creditUnits    Int?
   isCarryover    Boolean      @default(false)
+  targetExamDate DateTime?    @db.Date
   examSubjectKey String?
   examGoalSubjects ExamGoalSubject[]
   // The original course outline exactly as provided (uploaded, pasted or photographed), never modified by AI

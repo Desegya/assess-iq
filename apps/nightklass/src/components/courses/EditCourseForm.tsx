@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Icon } from '@/components/product/Icon'
 import { useRouter } from 'next/navigation'
 import { useApi } from '@/hooks/use-api'
+import { nextStudyDate } from '@/lib/study-date'
 import { LEVELS } from '@/lib/profile'
 
 export interface EditableCourse {
@@ -14,6 +15,7 @@ export interface EditableCourse {
   semester: 'FIRST' | 'SECOND' | null
   creditUnits: number | null
   isCarryover: boolean
+  targetExamDate?: string | null
 }
 
 export function EditCourseForm({
@@ -34,12 +36,15 @@ export function EditCourseForm({
     semester: course.semester ?? '',
     creditUnits: course.creditUnits != null ? String(course.creditUnits) : '',
     isCarryover: course.isCarryover,
+    targetExamDate: course.targetExamDate?.slice(0, 10) ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function set(field: 'courseCode' | 'title' | 'level' | 'semester' | 'creditUnits') {
+  function set(
+    field: 'courseCode' | 'title' | 'level' | 'semester' | 'creditUnits' | 'targetExamDate',
+  ) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }))
   }
@@ -57,6 +62,7 @@ export function EditCourseForm({
         semester: form.semester || null,
         creditUnits: form.creditUnits ? Number(form.creditUnits) : null,
         isCarryover: form.isCarryover,
+        targetExamDate: form.targetExamDate || null,
       })
       onSaved()
     } catch (err) {
@@ -180,6 +186,28 @@ export function EditCourseForm({
         </div>
       </div>
 
+      <div>
+        <label htmlFor="targetExamDate" className="mb-1.5 block text-sm font-medium text-slate-700">
+          Exam date (optional)
+        </label>
+        <input
+          id="targetExamDate"
+          type="date"
+          min={
+            form.targetExamDate === course.targetExamDate?.slice(0, 10)
+              ? undefined
+              : nextStudyDate()
+          }
+          value={form.targetExamDate}
+          onChange={set('targetExamDate')}
+          disabled={saving || deleting}
+          className="input-base"
+        />
+        <p className="mt-1.5 text-xs text-slate-500">
+          This sets the suggested date for a new plan. To reschedule an existing plan, change its
+          date on the plan page.
+        </p>
+      </div>
       <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
         <input
           type="checkbox"

@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/product/Icon'
 import { PageHeader } from '@/components/product/PageHeader'
+import { CourseSetupGuide } from '@/components/courses/CourseSetupGuide'
+import { HelpTip } from '@/components/product/HelpTip'
+import { nextStudyDate } from '@/lib/study-date'
 import { useApi } from '@/hooks/use-api'
 import { LEVELS, profileSummary, type AcademicProfile } from '@/lib/profile'
 
@@ -52,6 +55,7 @@ export default function NewCoursePage() {
   const [path, setPath] = useState<Path | null>(null)
   const [profile, setProfile] = useState<AcademicProfile | null>(null)
   const [form, setForm] = useState({ course: '', level: '', semester: '', creditUnits: '' })
+  const [targetExamDate, setTargetExamDate] = useState('')
   const [generateOutline, setGenerateOutline] = useState(true)
   const [isCarryover, setIsCarryover] = useState(false)
   const [suggestions, setSuggestions] = useState<SuggestedCourse[] | null>(null)
@@ -79,6 +83,16 @@ export default function NewCoursePage() {
     if (initial === 'programme' || initial === 'manual' || initial === 'outline') setPath(initial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  function useExample() {
+    setPath('manual')
+    setForm((previous) => ({
+      ...previous,
+      course: 'BIO 101 Introduction to Biology',
+      level: previous.level || '100',
+      semester: previous.semester || 'FIRST',
+    }))
+  }
 
   const hasProfile = !!profile?.profileCompletedAt
 
@@ -126,7 +140,7 @@ export default function NewCoursePage() {
           creditUnits: c.creditUnits,
         })
         // A later failure must not recreate courses that were already saved on retry.
-        setSelected(previous => new Set([...previous].filter(index => index !== i)))
+        setSelected((previous) => new Set([...previous].filter((index) => index !== i)))
       }
       router.push('/courses')
     } catch (err) {
@@ -158,6 +172,7 @@ export default function NewCoursePage() {
         semester: form.semester,
         creditUnits: form.creditUnits ? Number(form.creditUnits) : undefined,
         isCarryover: levelMismatch && isCarryover,
+        targetExamDate: targetExamDate || undefined,
       })
 
       if (path === 'outline' && file) {
@@ -196,6 +211,7 @@ export default function NewCoursePage() {
           eyebrow="Build your semester"
           icon="book"
         />
+        <CourseSetupGuide defaultOpen onUseExample={useExample} />
         <div className="grid gap-4 md:grid-cols-3">
           {PATHS.map((p) => (
             <button
@@ -360,6 +376,7 @@ export default function NewCoursePage() {
       <h1 className="font-heading text-2xl font-bold text-slate-900 mt-2 mb-6">
         {path === 'outline' ? 'Upload a course outline' : 'Add a course'}
       </h1>
+      <CourseSetupGuide onUseExample={useExample} />
       <form onSubmit={handleSubmit} className="card p-6 sm:p-8 space-y-5">
         {error && (
           <div
@@ -477,6 +494,31 @@ export default function NewCoursePage() {
           </label>
         )}
 
+        <div>
+          <label
+            htmlFor="targetExamDate"
+            className="mb-1.5 block text-sm font-medium text-slate-700"
+          >
+            Exam date (optional)
+          </label>
+          <input
+            id="targetExamDate"
+            type="date"
+            min={nextStudyDate()}
+            value={targetExamDate}
+            onChange={(e) => setTargetExamDate(e.target.value)}
+            disabled={loading}
+            className="input-base"
+          />
+          <p className="mt-1.5 text-xs text-slate-500">
+            Leave it empty if your date has not been announced. You can add or change it later.
+          </p>
+          <HelpTip label="How exam dates work">
+            This date will be ready in your course’s Study setup. If you skip it, choose a semester
+            or a number of weeks instead.
+          </HelpTip>
+        </div>
+
         {path === 'manual' && (
           <label className="flex items-start gap-3 bg-violet-50/60 border border-violet-100 rounded-xl px-4 py-3 cursor-pointer">
             <input
@@ -518,6 +560,15 @@ export default function NewCoursePage() {
           </div>
         )}
 
+        <div className="rounded-xl bg-slate-50 p-4 text-sm leading-relaxed text-slate-600">
+          <p className="font-semibold text-slate-900">What happens next?</p>
+          <p className="mt-1">
+            {path === 'manual' && generateOutline
+              ? 'Review the suggested topics, then choose your study days and times to make a plan.'
+              : 'Open your course to add or review its topics, then choose your study days and times to make a plan.'}{' '}
+            Your other courses stay in My Courses.
+          </p>
+        </div>
         <button type="submit" disabled={loading} className="btn-primary w-full">
           {loading
             ? path === 'outline'
