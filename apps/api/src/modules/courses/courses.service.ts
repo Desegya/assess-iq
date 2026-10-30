@@ -5,6 +5,7 @@ import { lessonVisualKeys } from '../../common/lesson-visual-keys'
 import { PrismaService } from '../prisma/prisma.service'
 import { AuthUser, UserRole } from '@assessiq/types'
 import { CreateCourseDto } from './dto/create-course.dto'
+import { courseExamDate } from './course-exam-date'
 import { UpdateCourseDto } from './dto/update-course.dto'
 
 @Injectable()
@@ -28,6 +29,7 @@ export class CoursesService {
           semester: dto.semester,
           creditUnits: dto.creditUnits,
           isCarryover: dto.isCarryover ?? false,
+          targetExamDate: courseExamDate(dto.targetExamDate),
           ownerId: user.id,
         },
       })
@@ -48,6 +50,7 @@ export class CoursesService {
         semester: dto.semester,
         organizationId: user.organizationId,
         teacherId: user.id,
+        targetExamDate: courseExamDate(dto.targetExamDate),
       },
     })
   }
@@ -113,6 +116,10 @@ export class CoursesService {
           ? { subject: dto.subject.trim() }
           : // Student courses default subject to the title; keep it in step so AI context isn't stale
             dto.title && course.subject === course.title && { subject: dto.title.trim() }),
+        ...(has('targetExamDate') &&
+          dto.targetExamDate !== course.targetExamDate?.toISOString().slice(0, 10) && {
+            targetExamDate: courseExamDate(dto.targetExamDate),
+          }),
         ...(has('description') && { description: dto.description?.trim() || null }),
         ...(has('courseCode') && { courseCode: dto.courseCode?.trim().toUpperCase() || null }),
         ...(has('level') && { level: dto.level ?? null }),

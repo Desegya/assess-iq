@@ -64,6 +64,7 @@ const NAV_SECTIONS = [
     items: [
       { href: '/onboarding', label: 'Profile', icon: ICONS.profile },
       { href: '/account', label: 'Account & privacy', icon: ICONS.profile },
+      { href: '/guide', label: 'Quick guide', icon: ICONS.courses },
     ],
   },
 ]
