@@ -246,8 +246,8 @@ export class TimetableService {
               startDate: prepared.startDate,
               examDate: plan.deadline,
               version: version + 1,
-              planType: 'DURATION',
-              weeks: settings.weeks,
+              planType: plan.deadline < prepared.endDate ? 'EXAM_DATE' : 'DURATION',
+              weeks: plan.deadline < prepared.endDate ? null : settings.weeks,
               weeklyMinutes: plan.weeklyMinutes,
               schedulingPreferences: json({
                 schedulingStyle: settings.schedulingStyle,

@@ -160,6 +160,24 @@ describe('combined timetable service', () => {
     expect(preview.days.length).toBeGreaterThan(0)
   })
 
+  it('labels a course ending at its earlier exam date accurately', async () => {
+    const { db, plans, service } = setup()
+    db.course.findMany.mockResolvedValue([
+      { id: 'biology', title: 'Biology', creditUnits: 3, targetExamDate: new Date('2026-11-16') },
+      { id: 'chemistry', title: 'Chemistry', creditUnits: 3, targetExamDate: null },
+    ])
+    await service.apply(settings, user)
+    expect(plans.find((plan) => plan.courseId === 'biology')).toMatchObject({
+      planType: 'EXAM_DATE',
+      weeks: null,
+      examDate: new Date('2026-11-16'),
+    })
+    expect(plans.find((plan) => plan.courseId === 'chemistry')).toMatchObject({
+      planType: 'DURATION',
+      weeks: 2,
+    })
+  })
+
   it('rejects inaccessible courses and invalid timed windows', async () => {
     const { db, service } = setup()
     await expect(
