@@ -64,6 +64,159 @@ async function openFeedbackLesson(page: Page) {
   await page.goto('/topics/feedback-topic/learn')
 }
 
+test('questions stay alongside the lesson, retain drafts on failure, and support contextual follow-ups in focus mode', async ({
+  page,
+}) => {
+  await mockStudyFullscreen(page, 'rejected')
+  const requests: any[] = []
+  await page.route('**/study/courses/course/chat', (route) => {
+    const data = route.request().postDataJSON()
+    requests.push(data)
+    if (requests.length === 1)
+      return route.fulfill({
+        status: 503,
+        json: { message: 'Could not answer yet. Please retry.' },
+      })
+    return route.fulfill({
+      json: {
+        source: 'lesson',
+        reply: 'A wave transfers energy without carrying matter along with it.',
+      },
+    })
+  })
+  await openFeedbackLesson(page)
+  await page.getByRole('button', { name: 'Enter focus mode', exact: true }).click()
+  const selected = await page.evaluate(() => {
+    const text = document.querySelector('#lesson-1-wave-property-1 p')!.firstChild!
+    const range = document.createRange()
+    range.setStart(text, 0)
+    range.setEnd(text, 22)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return selection.toString()
+  })
+  await page.getByRole('button', { name: 'Ask about this topic', exact: true }).click()
+  const panel = page.getByRole('complementary', { name: 'Ask while you study', exact: true })
+  const input = panel.getByRole('textbox', { name: 'Your question', exact: true })
+  await input.fill('a'.repeat(2001))
+  await expect(panel.getByRole('button', { name: 'Ask', exact: true })).toBeDisabled()
+  expect(requests).toHaveLength(0)
+  await input.fill('How can it transfer energy without moving matter?')
+  await panel.getByRole('button', { name: 'Ask', exact: true }).click()
+  await expect(panel.getByRole('alert')).toHaveText('Could not answer yet. Please retry.')
+  await expect(panel.getByRole('alert')).toBeInViewport()
+  await expect(input).toHaveValue('How can it transfer energy without moving matter?')
+  await panel.getByRole('button', { name: 'Ask', exact: true }).click()
+  await expect(panel.getByRole('log')).toContainText(
+    'A wave transfers energy without carrying matter',
+  )
+  expect(requests[1]).toMatchObject({
+    topicId: 'feedback-topic',
+    lessonId: 'feedback-lesson',
+    selectedText: selected,
+    history: [],
+  })
+  await input.fill('Can you show an everyday example?')
+  await panel.getByRole('button', { name: 'Ask', exact: true }).click()
+  await expect(input).toHaveValue('')
+  expect(requests[2].history).toHaveLength(2)
+  await input.fill('Keep this question while I read the next paragraph.')
+  await page.keyboard.press('Escape')
+  await expect(panel).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Exit focus mode', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Ask about this topic', exact: true }).click()
+  await expect(input).toHaveValue('Keep this question while I read the next paragraph.')
+  await expect(panel.getByRole('log')).toContainText('A wave transfers energy')
+  await expect(page).toHaveURL(/\/topics\/feedback-topic\/learn$/)
+})
+
+test('questions about cited notes open inside the reference reader without closing the material', async ({
+  page,
+}) => {
+  let sent: any
+  await page.route('**/study/courses/course/chat', (route) => {
+    sent = route.request().postDataJSON()
+    return route.fulfill({ json: { source: 'ai', reply: 'Hertz means cycles per second.' } })
+  })
+  await page.route('**/learning/topics/notes-topic/lesson', (route) =>
+    route.fulfill({
+      json: {
+        topic: {
+          id: 'notes-topic',
+          name: 'Frequency',
+          courseId: 'course',
+          courseTitle: 'Physics',
+          subtopics: [],
+        },
+        hasMaterial: true,
+        versions: [],
+        lesson: {
+          id: 'notes-lesson',
+          version: 1,
+          mode: 'MATERIAL',
+          createdAt: '2026-11-04',
+          content: { ...content, introduction: 'Frequency is measured in hertz [S1].' },
+          sources: [
+            {
+              marker: 'S1',
+              documentId: 'approved-notes',
+              documentName: 'Lecture notes.pdf',
+              excerpt: 'Frequency is measured in hertz.',
+            },
+          ],
+        },
+      },
+    }),
+  )
+  await page.goto('/topics/notes-topic/learn')
+  await page.getByRole('link', { name: 'Read reference S1', exact: true }).first().click()
+  const reader = page.getByRole('dialog')
+  await reader.getByRole('button', { name: 'Ask about these notes', exact: true }).click()
+  const panel = reader.getByRole('complementary', { name: 'Ask while you study', exact: true })
+  await panel
+    .getByRole('textbox', { name: 'Your question', exact: true })
+    .fill('What does hertz mean?')
+  await panel.getByRole('button', { name: 'Ask', exact: true }).click()
+  await expect(panel.getByRole('log')).toContainText('Hertz means cycles per second.')
+  expect(sent).toMatchObject({
+    topicId: 'notes-topic',
+    lessonId: 'notes-lesson',
+    documentId: 'approved-notes',
+    selectedText: 'Frequency is measured in hertz.',
+  })
+  await page.keyboard.press('Escape')
+  await expect(panel).toHaveCount(0)
+  await expect(reader).toBeVisible()
+  await expect(reader.getByLabel('Reference text')).toContainText('Frequency is measured in hertz.')
+  await reader.getByRole('button', { name: 'Close reference reader', exact: true }).click()
+  await expect(reader).toHaveCount(0)
+  await expect(page).toHaveURL(/\/topics\/notes-topic\/learn$/)
+})
+
+test('the study question field stays above an on-screen keyboard', async ({ page }) => {
+  await page.addInitScript(() => {
+    const viewport = Object.assign(new EventTarget(), { height: window.innerHeight, offsetTop: 0 })
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport })
+    ;(window as any).__showStudyKeyboard = () => {
+      viewport.height = 400
+      viewport.dispatchEvent(new Event('resize'))
+    }
+  })
+  await openFeedbackLesson(page)
+  await page.getByRole('button', { name: 'Ask about this topic', exact: true }).click()
+  await page.evaluate(() => (window as any).__showStudyKeyboard())
+  const panel = page.getByRole('complementary', { name: 'Ask while you study', exact: true })
+  await expect
+    .poll(async () => {
+      const box = await panel.boundingBox()
+      return box ? Math.round(box.y + box.height) : 9999
+    })
+    .toBeLessThanOrEqual(400)
+  await expect(panel.getByRole('textbox', { name: 'Your question', exact: true })).toBeInViewport()
+  await panel.getByRole('button', { name: 'Close study questions', exact: true }).click()
+})
+
 async function mockStudyFullscreen(page: Page, mode: 'supported' | 'rejected' | 'unsupported') {
   await page.addInitScript((mode) => {
     let fullscreen: Element | null = null

@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
+import { StudyQuestions } from '@/components/product/StudyQuestions'
 import { SourceReader, type LessonSource } from '@/components/product/SourceReader'
 import type { LessonVisual as Visual } from '@assessiq/types'
 import { LessonVisual } from '@/components/product/LessonVisual'
@@ -151,6 +152,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
   const { id } = usePromise(params)
   const api = useApi()
 
+  const readingRef = useRef<HTMLDivElement>(null)
   const [data, setData] = useState<LessonResponse | null>(null)
   const [lesson, setLesson] = useState<Lesson | null>(null)
   const [sourceTriggerId, setSourceTriggerId] = useState('')
@@ -413,7 +415,10 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
               ))}
             </div>
           </nav>
-          <div className="rounded-[20px] border border-[#eae6ef] bg-white px-5 sm:px-8 lg:px-10">
+          <div
+            ref={readingRef}
+            className="rounded-[20px] border border-[#eae6ef] bg-white px-5 sm:px-8 lg:px-10"
+          >
             <Card title="What you'll learn">
               <ul className="list-disc pl-5 space-y-1 mb-4">
                 {c.objectives.map((o, i) => (
@@ -716,9 +721,21 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
           </div>
         </section>
       )}
+      {data && (
+        <StudyQuestions
+          key={lesson?.id ?? id}
+          courseId={data.topic.courseId}
+          topicId={id}
+          lessonId={lesson?.id}
+          contextRef={readingRef}
+        />
+      )}
       {sourceMarker && lesson?.sources.find((source) => source.marker === sourceMarker) && (
         <SourceReader
           key={`${lesson.id}-${sourceMarker}`}
+          studyContext={
+            data ? { courseId: data.topic.courseId, topicId: id, lessonId: lesson.id } : undefined
+          }
           source={lesson.sources.find((source) => source.marker === sourceMarker)!}
           returnFocusId={sourceTriggerId}
           onClose={() => setSourceMarker(null)}

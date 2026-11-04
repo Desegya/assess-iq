@@ -272,3 +272,7 @@
 .nk-product [data-study-focus='true'] [data-focus-distraction] {
   display: none !important;
 }
+.nk-product [data-study-focus='true'] [data-study-ask-launcher],
+.nk-product [data-study-focus='true'] [data-study-question-panel] {
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { useApi } from '@/hooks/use-api'
+import { StudyQuestions } from './StudyQuestions'
 import { ReadingText } from './ReadingText'
 
 export interface LessonSource {
@@ -15,10 +16,12 @@ export function SourceReader({
   source,
   onClose,
   returnFocusId,
+  studyContext,
 }: {
   source: LessonSource
   onClose: () => void
   returnFocusId: string
+  studyContext?: { courseId: string; topicId?: string; lessonId?: string }
 }) {
   const api = useApi()
   const dialog = useRef<HTMLDialogElement>(null)
@@ -73,7 +76,7 @@ export function SourceReader({
       }}
       className="source-reader m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-white p-0 text-slate-800 sm:m-auto sm:h-[min(85dvh,900px)] sm:w-[calc(100%-2rem)] sm:max-w-4xl sm:rounded-2xl"
     >
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="relative flex h-full min-h-0 flex-col">
         <header className="shrink-0 space-y-3 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -132,6 +135,15 @@ export function SourceReader({
               </select>
             </label>
           </div>
+          {studyContext && (
+            <StudyQuestions
+              {...studyContext}
+              documentId={source.documentId}
+              defaultPassage={view === 'passage' ? source.excerpt : null}
+              contextRef={body}
+              embedded
+            />
+          )}
         </header>
         <div
           ref={body}
