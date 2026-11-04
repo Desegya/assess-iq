@@ -12,7 +12,7 @@ export async function loadPlanTopics(
     orderBy: { order: 'asc' },
     include: { subTopics: { where: { archivedAt: null }, select: { id: true } } },
   })
-  const ids = topics.map((t) => t.id)
+  const ids = topics.flatMap((t) => [t.id, ...t.subTopics.map((subtopic) => subtopic.id)])
   const [masteries, completed] = await Promise.all([
     database.topicMastery.findMany({ where: { studentId: user.id, topicId: { in: ids } } }),
     database.studySession.findMany({
@@ -27,15 +27,19 @@ export async function loadPlanTopics(
     }),
   ])
   return topics.map((t) => {
-    const mine = completed.filter((s) => s.topicId === t.id)
+    const family = new Set([t.id, ...t.subTopics.map((subtopic) => subtopic.id)])
+    const mine = completed.filter((s) => s.topicId !== null && family.has(s.topicId))
     const ratings = mine.map((s) => s.confidenceRating).filter((r): r is number => r != null)
-    const mastery = masteries.find((m) => m.topicId === t.id)
+    const scores = masteries
+      .filter((m) => family.has(m.topicId))
+      .map((m) => m.quizAverage)
+      .filter((score): score is number => score !== null)
     return {
       id: t.id,
       name: t.name,
       estimatedMinutes: t.estimatedMinutes,
       subtopicCount: t.subTopics.length,
-      mastery: mastery?.quizAverage ?? null,
+      mastery: scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : null,
       confidence: ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null,
       completedMinutes: mine
         .filter((s) => s.kind !== 'REVISION')
