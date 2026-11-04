@@ -1,6 +1,7 @@
 import { ExamCalendarModule } from '../exam-calendar/exam-calendar.module'
 import { Module } from '@nestjs/common'
 import { StudyController } from './study.controller'
+import { TimetableService } from './timetable.service'
 import { StudyService } from './study.service'
 import { CoursesModule } from '../courses/courses.module'
 import { AiModule } from '../ai/ai.module'
@@ -10,7 +11,7 @@ import { LearningModule } from '../learning/learning.module'
 @Module({
   imports: [ExamCalendarModule, CoursesModule, AiModule, TopicsModule, LearningModule],
   controllers: [StudyController],
-  providers: [StudyService],
+  providers: [StudyService, TimetableService],
   exports: [StudyService],
 })
 export class StudyModule {}

@@ -6,6 +6,8 @@ import { TopicsService } from '../topics/topics.service'
 import { RetrievalService } from '../learning/retrieval.service'
 import { describeCourse, SEMESTER_LABEL } from '../courses/describe-course'
 import { allocateSlots, buildPlan, type PlanTopic } from './plan-builder'
+import { loadPlanTopics } from './plan-topics'
+import { TimetableService } from './timetable.service'
 import { dailyTimetableSlots } from './daily-timetable'
 import { freeSlots, weeklyBudgetSlots, type BudgetPreferences } from './weekly-budget'
 import { defaultMarks, recommendDifficulty } from './quiz-scoring'
@@ -87,6 +89,7 @@ export class StudyService {
     private readonly ai: AiService,
     private readonly topicsService: TopicsService,
     private readonly retrieval: RetrievalService,
+    private readonly timetables?: TimetableService,
   ) {}
 
   // ─── Availability ─────────────────────────────────────────────────────────
@@ -139,37 +142,8 @@ export class StudyService {
     return slots
   }
 
-  // Everything the scheduler weighs per topic: size, quiz mastery, self-rated confidence, time already spent
-  private async planTopics(courseId: string, user: AuthUser): Promise<PlanTopic[]> {
-    const topics = await this.prisma.topic.findMany({
-      where: { courseId, parentTopicId: null, archivedAt: null },
-      orderBy: { order: 'asc' },
-      include: { subTopics: { where: { archivedAt: null }, select: { id: true } } },
-    })
-    const ids = topics.map(t => t.id)
-    const [masteries, completed] = await Promise.all([
-      this.prisma.topicMastery.findMany({ where: { studentId: user.id, topicId: { in: ids } } }),
-      this.prisma.studySession.findMany({
-        where: { studentId: user.id, topicId: { in: ids }, status: 'COMPLETED' },
-        select: { topicId: true, kind: true, actualMinutes: true, estimatedMinutes: true, confidenceRating: true },
-      }),
-    ])
-    return topics.map(t => {
-      const mine = completed.filter(s => s.topicId === t.id)
-      const ratings = mine.map(s => s.confidenceRating).filter((r): r is number => r != null)
-      const mastery = masteries.find(m => m.topicId === t.id)
-      return {
-        id: t.id,
-        name: t.name,
-        estimatedMinutes: t.estimatedMinutes,
-        subtopicCount: t.subTopics.length,
-        mastery: mastery?.quizAverage ?? null,
-        confidence: ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null,
-        completedMinutes: mine
-          .filter(s => s.kind !== 'REVISION')
-          .reduce((sum, s) => sum + (s.actualMinutes ?? s.estimatedMinutes), 0),
-      }
-    })
+  private planTopics(courseId: string, user: AuthUser) {
+    return loadPlanTopics(this.prisma, courseId, user)
   }
 
   async generatePlan(dto: GeneratePlanDto, user: AuthUser) {
@@ -310,6 +284,7 @@ export class StudyService {
   // ─── Sessions ─────────────────────────────────────────────────────────────
 
   async getTodaySessions(user: AuthUser, timeZone = 'UTC') {
+    await this.timetables?.refreshDue(user).catch(error => this.logger.warn(`Timetable refresh postponed: ${String(error)}`))
     const today = this.nextBudgetDay({ timeZone } as BudgetPreferences)
     today.setUTCDate(today.getUTCDate() - 1)
     const tomorrow = new Date(today)
@@ -335,6 +310,7 @@ export class StudyService {
   async completeSession(id: string, dto: CompleteSessionDto, user: AuthUser) {
     const session = await this.prisma.studySession.findUnique({ where: { id } })
     if (!session || session.studentId !== user.id) throw new NotFoundException('Session not found')
+    if (session.status === 'COMPLETED') return session
 
     const updated = await this.prisma.studySession.update({
       where: { id },
@@ -355,6 +331,7 @@ export class StudyService {
       })
     }
 
+    await this.timetables?.afterStudy(session.courseId, user, 'Updated after a completed study task and confidence feedback').catch(error => this.logger.warn(`Timetable adjustment postponed: ${String(error)}`))
     return updated
   }
 
@@ -365,6 +342,10 @@ export class StudyService {
     if (!plan || plan.studentId !== user.id || plan.status !== 'ACTIVE') throw new NotFoundException('Study plan not found')
     if (plan.examDate <= startOfDay(new Date())) throw new BadRequestException('This plan has ended — create a new one')
 
+    if (plan.timetableId && this.timetables) {
+      await this.timetables.adapt(plan.timetableId, user, reason)
+      return this.getCurrentPlan(plan.courseId, user)
+    }
     if (plan.weeklyMinutes && plan.schedulingPreferences) {
       const preferences = plan.schedulingPreferences as unknown as BudgetPreferences
       const from = this.nextBudgetDay(preferences)
@@ -471,7 +452,7 @@ export class StudyService {
     const date = startOfDay(new Date(examDate))
     if (date <= startOfDay(new Date())) throw new BadRequestException('Exam date must be in the future')
 
-    if (plan.weeklyMinutes && plan.schedulingPreferences) {
+    if (!plan.timetableId && plan.weeklyMinutes && plan.schedulingPreferences) {
       const preferences = plan.schedulingPreferences as unknown as BudgetPreferences
       await this.budgetSlots(user, plan.courseId, startOfDay(plan.startDate), date, plan.weeklyMinutes, preferences, this.nextBudgetDay(preferences))
     }
@@ -503,6 +484,10 @@ export class StudyService {
     const log = (plan.changeLog as object[]) ?? []
     const today = startOfDay(new Date())
 
+    if (plan.timetableId && this.timetables) {
+      const adjusted = await this.timetables.afterStudy(courseId, user, `Updated after a ${scorePercent}% quiz in ${topic.name}`)
+      return adjusted ? 'Your combined timetable has been adjusted using your latest performance, within your saved workload and daily limits.' : null
+    }
     if (scorePercent < 50) {
       // Poor score: re-plan so this topic gets extra revision time (weak topics are weighted up), sharing
       // time fairly with other courses rather than squeezing a session into someone else's slot

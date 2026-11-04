@@ -762,6 +762,7 @@ model StudyAvailability {
 // ─── Study Plan ───────────────────────────────────────────────────────────────
 
 model StudyPlan {
+  timetableId String?
   id        String          @id @default(cuid())
   studentId String
   courseId  String
@@ -785,6 +786,7 @@ model StudyPlan {
 
   @@index([studentId])
   @@index([courseId])
+  @@index([studentId, timetableId])
   @@map("study_plans")
 }
 

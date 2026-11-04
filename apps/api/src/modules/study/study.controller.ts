@@ -19,6 +19,8 @@ import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiConsumes } from '@nestjs/swagger'
 import { StudyService } from './study.service'
 import { SetAvailabilityDto } from './dto/set-availability.dto'
+import { TimetableService } from './timetable.service'
+import { TimetableDto } from './dto/timetable.dto'
 import { GeneratePlanDto, SetExamDateDto, StudyDayQueryDto } from './dto/generate-plan.dto'
 import { CompleteSessionDto } from './dto/complete-session.dto'
 import { GenerateQuizDto } from './dto/generate-quiz.dto'
@@ -35,7 +37,16 @@ import { OutlineTextDto, ExpandOutlineDto } from './dto/outline.dto'
 @ApiBearerAuth()
 @Controller('study')
 export class StudyController {
-  constructor(private readonly studyService: StudyService) {}
+  constructor(private readonly studyService: StudyService, private readonly timetables: TimetableService) {}
+
+  @Post('timetables/preview')
+  previewTimetable(@Body() dto: TimetableDto, @CurrentUser() user: AuthUser) { return this.timetables.preview(dto, user) }
+
+  @Post('timetables/apply')
+  applyTimetable(@Body() dto: TimetableDto, @CurrentUser() user: AuthUser) { return this.timetables.apply(dto, user) }
+
+  @Get('timetables/current')
+  currentTimetable(@CurrentUser() user: AuthUser) { return this.timetables.current(user) }
 
   // ─── Availability ─────────────────────────────────────────────────────────
 
