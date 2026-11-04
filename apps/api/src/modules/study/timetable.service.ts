@@ -188,15 +188,13 @@ export class TimetableService {
       for (const session of plan.sessions) {
         const date = dateKey(session.scheduledDate)
         if (!days.has(date)) days.set(date, { date, sessions: [] })
-        days
-          .get(date)!
-          .sessions.push({
-            ...session,
-            courseId: plan.courseId,
-            courseTitle: plan.title,
-            topicName:
-              plan.topics.find((topic) => topic.id === session.topicId)?.name ?? 'Course study',
-          })
+        days.get(date)!.sessions.push({
+          ...session,
+          courseId: plan.courseId,
+          courseTitle: plan.title,
+          topicName:
+            plan.topics.find((topic) => topic.id === session.topicId)?.name ?? 'Course study',
+        })
       }
     return {
       settings: prepared.settings,
@@ -220,6 +218,14 @@ export class TimetableService {
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${user.id}))::text`
         const prepared = await this.prepare(settings, user, tx)
         if (!prepared.canApply) throw new BadRequestException(prepared.warnings.join(' '))
+        const previous = await tx.studyPlan.findMany({
+          where: {
+            studentId: user.id,
+            courseId: { in: settings.courses.map((course) => course.courseId) },
+            status: 'ACTIVE',
+          },
+          select: { id: true, courseId: true },
+        })
         await tx.studyPlan.updateMany({
           where: {
             studentId: user.id,
@@ -232,7 +238,7 @@ export class TimetableService {
           const version = await tx.studyPlan.count({
             where: { studentId: user.id, courseId: plan.courseId },
           })
-          await tx.studyPlan.create({
+          const replacement = await tx.studyPlan.create({
             data: {
               studentId: user.id,
               courseId: plan.courseId,
@@ -269,6 +275,20 @@ export class TimetableService {
                 })),
               },
             },
+          })
+          // Today is already a commitment. Keep its task IDs, completion and ratings visible under
+          // the replacement plan; only tomorrow onwards receives the new timetable.
+          await tx.studySession.updateMany({
+            where: {
+              studentId: user.id,
+              courseId: plan.courseId,
+              studyPlanId: {
+                in: previous.filter((old) => old.courseId === plan.courseId).map((old) => old.id),
+              },
+              scheduledDate: { gte: new Date(+prepared.earliest - DAY), lt: prepared.earliest },
+              status: { in: ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'] },
+            },
+            data: { studyPlanId: replacement.id },
           })
         }
       },
@@ -373,7 +393,13 @@ export class TimetableService {
 
   async afterStudy(courseId: string, user: AuthUser, reason: string) {
     const plan = await this.prisma.studyPlan.findFirst({
-      where: { studentId: user.id, courseId, status: 'ACTIVE', timetableId: { not: null } },
+      where: {
+        studentId: user.id,
+        courseId,
+        status: 'ACTIVE',
+        timetableId: { not: null },
+        examDate: { gt: new Date() },
+      },
     })
     if (!plan?.timetableId) return false
     const preferences = plan.schedulingPreferences as unknown as SavedPreferences

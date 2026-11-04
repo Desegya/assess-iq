@@ -136,6 +136,21 @@ describe('combined timetable service', () => {
     expect(db.studyPlan.create).not.toHaveBeenCalled()
   })
 
+  it('carries today’s existing tasks into replacement plans without resetting completion', async () => {
+    const { db, plans, service } = setup()
+    plans.push({ id: 'old-biology-plan', courseId: 'biology', status: 'ACTIVE' })
+    await service.apply(settings, user)
+    const transfer = db.studySession.updateMany.mock.calls.find(
+      ([query]: any) => query.where.courseId === 'biology',
+    )[0]
+    expect(transfer.where).toMatchObject({
+      studyPlanId: { in: ['old-biology-plan'] },
+      scheduledDate: { gte: new Date('2026-11-08'), lt: new Date('2026-11-09') },
+      status: { in: ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'] },
+    })
+    expect(transfer.data).toEqual({ studyPlanId: 'plan-1' })
+  })
+
   it('keeps course-level study blocks when an outline has not been added yet', async () => {
     const { db, service } = setup()
     db.topic.findMany.mockResolvedValue([])
