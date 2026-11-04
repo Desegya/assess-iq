@@ -92,6 +92,7 @@ export function buildTimetableSlots(
       ]),
     )
     const target = Math.floor((limits.weeklyMinutes * (end - week)) / (7 * DAY) / 15) * 15
+    const blockMinutes = Math.max(15, Math.min(45, Math.floor(target / active.length / 15) * 15))
     let remaining = Math.max(
       0,
       target - committedWeek.reduce((sum, s) => sum + sessionMinutes(s), 0),
@@ -152,7 +153,7 @@ export function buildTimetableSlots(
         const duration =
           Math.floor(
             Math.min(
-              45,
+              blockMinutes,
               remaining,
               limits.dailyMinutes - day.total,
               120 - (day.own.get(course.id) ?? 0),

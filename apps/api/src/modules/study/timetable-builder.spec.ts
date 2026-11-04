@@ -149,4 +149,12 @@ describe('combined timetable allocation', () => {
     expect(result.warnings).toHaveLength(1)
     expect(result.allocation.get('a')!.reduce((sum, s) => sum + s.capacityMinutes, 0)).toBe(60)
   })
+
+  it('uses shorter blocks when a modest budget must cover many courses', () => {
+    const courses = Array.from({ length: 20 }, (_, index) => ({ id: `course-${index}`, end: day(7), weight: 3 }))
+    const result = buildTimetableSlots(courses, start, day(7), start, { ...limits, maxCoursesPerDay: 4 }, [])
+    expect(result.warnings).toEqual([])
+    expect([...result.allocation.values()].every(slots => slots.length > 0)).toBe(true)
+    expect([...result.allocation.values()].flat().reduce((sum, slot) => sum + slot.capacityMinutes, 0)).toBe(480)
+  })
 })
