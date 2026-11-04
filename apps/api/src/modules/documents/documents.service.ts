@@ -49,16 +49,22 @@ export class DocumentsService {
     }
     const mime = documentMime(file)
     if (!ALLOWED_MIMETYPES.has(mime)) {
-      throw new BadRequestException('File type not supported. Upload a PDF, Word, PowerPoint (.ppt or .pptx), or text file.')
+      throw new BadRequestException(
+        'File type not supported. Upload a PDF, Word, PowerPoint (.ppt or .pptx), or text file.',
+      )
     }
     if (file.size > MAX_FILE_SIZE) {
       throw new BadRequestException('File exceeds the 20 MB limit')
     }
 
-    const course = dto.courseId ? await this.prisma.course.findFirst({
-      where: user.organizationId ? { id: dto.courseId, organizationId: user.organizationId } : { id: dto.courseId, ownerId: user.id },
-      include: { topics: { where: { archivedAt: null }, select: { name: true } } },
-    }) : null
+    const course = dto.courseId
+      ? await this.prisma.course.findFirst({
+          where: user.organizationId
+            ? { id: dto.courseId, organizationId: user.organizationId }
+            : { id: dto.courseId, ownerId: user.id },
+          include: { topics: { where: { archivedAt: null }, select: { name: true } } },
+        })
+      : null
     if (dto.courseId && !course) throw new NotFoundException('Course not found')
     const fileType = this.detectFileType(mime)
 
@@ -95,22 +101,33 @@ export class DocumentsService {
       let materialReviewReason: string | null = null
       if (course) {
         materialReviewStatus = 'NEEDS_REVIEW'
-        materialReviewReason = 'We could not confidently check whether this file belongs to this course. Please review it before using it.'
+        materialReviewReason =
+          'We could not confidently check whether this file belongs to this course. Please review it before using it.'
         if (text.trim()) {
           try {
             const assessment = await this.ai.assessCourseMaterial(
               `${course.title} (${course.subject})${course.description ? ': ' + course.description : ''}`,
-              course.topics.map(topic => topic.name), text,
-              { userId: user.id, organizationId: user.organizationId ?? undefined, relatedEntityId: doc.id },
+              course.topics.map((topic) => topic.name),
+              text,
+              {
+                userId: user.id,
+                organizationId: user.organizationId ?? undefined,
+                relatedEntityId: doc.id,
+              },
             )
             materialReviewStatus = assessment.verdict === 'MATCH' ? 'APPROVED' : 'NEEDS_REVIEW'
-            materialReviewReason = assessment.verdict === 'MISMATCH'
-              ? `This file may belong to a different course. ${assessment.reason}`
-              : assessment.verdict === 'UNCERTAIN' ? `We are not sure this file belongs to this course. ${assessment.reason}` : assessment.reason
+            materialReviewReason =
+              assessment.verdict === 'MISMATCH'
+                ? `This file may belong to a different course. ${assessment.reason}`
+                : assessment.verdict === 'UNCERTAIN'
+                  ? `We are not sure this file belongs to this course. ${assessment.reason}`
+                  : assessment.reason
           } catch (error) {
             this.logger.warn(`Course material check unavailable for document ${doc.id}`)
           }
-        } else materialReviewReason = 'We could not read any text from this file to check its course relevance.'
+        } else
+          materialReviewReason =
+            'We could not read any text from this file to check its course relevance.'
       }
 
       // ── 3. Mark READY ──────────────────────────────────────────────────────
@@ -135,9 +152,12 @@ export class DocumentsService {
       )
 
       // ── 4. Index passages for retrieval (course material only; never blocks the upload) ──
-      if (materialReviewStatus === 'APPROVED') await this.retrieval
-        .indexDocument(ready, user)
-        .catch(err => this.logger.warn(`Indexing failed for document ${doc.id}: ${String(err)}`))
+      if (materialReviewStatus === 'APPROVED')
+        await this.retrieval
+          .indexDocument(ready, user)
+          .catch((err) =>
+            this.logger.warn(`Indexing failed for document ${doc.id}: ${String(err)}`),
+          )
       return ready
     } catch (err) {
       this.logger.error(`Failed to process document ${doc.id}`, err)
@@ -216,7 +236,9 @@ export class DocumentsService {
   async extractTopics(id: string, user: AuthUser) {
     const doc = await this.findOne(id, user)
     if (doc.status !== 'READY') {
-      throw new BadRequestException('Document is not ready yet — wait for text extraction to finish')
+      throw new BadRequestException(
+        'Document is not ready yet — wait for text extraction to finish',
+      )
     }
     if (!doc.extractedText) {
       throw new BadRequestException('Document has no extracted text')
@@ -235,17 +257,33 @@ export class DocumentsService {
           err instanceof Error ? err.message : String(err)
         }`,
       )
-      return { source: 'fallback' as const, proposals: extractTopicsHeuristically(doc.extractedText) }
+      return {
+        source: 'fallback' as const,
+        proposals: extractTopicsHeuristically(doc.extractedText),
+      }
     }
   }
 
   async approveCourseMaterial(id: string, user: AuthUser) {
     const doc = await this.findOne(id, user)
-    if (doc.uploadedById !== user.id && user.role !== UserRole.ORG_ADMIN && user.role !== UserRole.SUPER_ADMIN)
+    if (
+      doc.uploadedById !== user.id &&
+      user.role !== UserRole.ORG_ADMIN &&
+      user.role !== UserRole.SUPER_ADMIN
+    )
       throw new ForbiddenException('Only the uploader or an administrator can confirm this file')
     if (!doc.courseId || doc.status !== 'READY' || !doc.extractedText?.trim())
-      throw new BadRequestException('This file needs readable text and a course before it can be used')
-    const approved = await this.prisma.document.update({ where: { id }, data: { materialReviewStatus: 'APPROVED', materialReviewReason: 'Confirmed for this course by the uploader or administrator.' } })
+      throw new BadRequestException(
+        'This file needs readable text and a course before it can be used',
+      )
+    if (doc.materialReviewStatus === 'APPROVED') return doc
+    const approved = await this.prisma.document.update({
+      where: { id },
+      data: {
+        materialReviewStatus: 'APPROVED',
+        materialReviewReason: 'Confirmed for this course by the uploader or administrator.',
+      },
+    })
     await this.retrieval.indexDocument(approved, user).catch(() => undefined)
     return approved
   }
@@ -306,7 +344,9 @@ export class DocumentsService {
         if (!result.text.trim()) throw new Error('No readable slide text')
         return result
       } catch (err) {
-        throw new BadRequestException('We could not read text from this PowerPoint file. Remove password protection or upload a copy with selectable slide text.')
+        throw new BadRequestException(
+          'We could not read text from this PowerPoint file. Remove password protection or upload a copy with selectable slide text.',
+        )
       }
     }
 
@@ -318,20 +358,28 @@ export class DocumentsService {
   private async extractPptxText(buffer: Buffer): Promise<{ text: string; pageCount: number }> {
     const zip = await JSZip.loadAsync(buffer)
     const slideFiles = Object.keys(zip.files)
-      .filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+      .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
       .sort((a, b) => Number(a.match(/(\d+)\.xml$/)![1]) - Number(b.match(/(\d+)\.xml$/)![1]))
 
     const decode = (t: string) =>
-      t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&')
+      t
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&')
 
     const slides: string[] = []
     for (const name of slideFiles) {
       const xml = await zip.file(name)!.async('string')
       // Keep paragraphs on separate lines so headings and bullets stay distinct
-      const paragraphs = xml.split(/<\/a:p>/).map(p =>
-        [...p.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m => decode(m[1]!)).join(''),
-      )
-      const text = paragraphs.map(p => p.trim()).filter(Boolean).join('\n')
+      const paragraphs = xml
+        .split(/<\/a:p>/)
+        .map((p) => [...p.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => decode(m[1]!)).join(''))
+      const text = paragraphs
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .join('\n')
       if (text) slides.push(text)
     }
     return { text: slides.join('\n\n'), pageCount: slideFiles.length }
@@ -364,7 +412,8 @@ export class DocumentsService {
   private detectFileType(mimetype: string): DocumentType {
     if (mimetype === 'application/vnd.ms-powerpoint') return DocumentType.PPT
     if (mimetype === 'application/pdf') return DocumentType.PDF
-    if (mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') return DocumentType.PPTX
+    if (mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
+      return DocumentType.PPTX
     if (
       mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       mimetype === 'application/msword'

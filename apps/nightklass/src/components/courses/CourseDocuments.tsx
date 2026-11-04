@@ -143,7 +143,9 @@ export function CourseDocuments({
                 </p>
                 <p className="text-xs text-slate-500">
                   {document.status === 'READY'
-                    ? 'Ready'
+                    ? document.materialReviewStatus && document.materialReviewStatus !== 'APPROVED'
+                      ? 'Needs course review'
+                      : 'Ready'
                     : document.status === 'FAILED'
                       ? 'Could not read file'
                       : 'Processing'}
