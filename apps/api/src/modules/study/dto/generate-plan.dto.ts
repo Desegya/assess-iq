@@ -10,6 +10,10 @@ import {
   Matches,
   Max,
   Min,
+  IsArray,
+  ArrayMinSize,
+  ArrayMaxSize,
+  ArrayUnique,
 } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 
@@ -41,6 +45,20 @@ export class GeneratePlanDto {
   weeklyHours?: number
 
   @IsOptional()
+  @IsIn(['TIMED', 'DAILY'])
+  schedulingStyle?: 'TIMED' | 'DAILY'
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(7)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(6, { each: true })
+  studyDays?: number[]
+
+  @IsOptional()
   @IsIn(['EVENINGS', 'WEEKENDS', 'FLEXIBLE'])
   studyPreference?: 'EVENINGS' | 'WEEKENDS' | 'FLEXIBLE'
 
@@ -65,4 +83,10 @@ export class SetExamDateDto {
   @ApiProperty({ example: '2026-12-10', description: 'Examination date (ISO date string)' })
   @IsDateString()
   examDate!: string
+}
+
+export class StudyDayQueryDto {
+  @IsOptional()
+  @IsTimeZone()
+  timeZone?: string
 }

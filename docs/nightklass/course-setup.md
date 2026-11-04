@@ -20,6 +20,12 @@ Study setup defaults to a per-course weekly budget. Learners can prefer weekday 
 
 Exact-time scheduling remains available as an alternative. These windows are shared across courses using exact times; rebalancing excludes reservations belonging to weekly-budget plans. Plan writes use a per-student transaction lock when allocating sessions.
 
+Learners with changing daily schedules can choose **Day-by-day timetable (no fixed times)** in Study setup. They choose study days and an approximate weekly workload; no free-time windows or work hours are required. Topics and revision are assigned to lighter days while considering the estimated effort already reserved by all other active courses. A daily timetable permits up to two courses and three hours total per day, and two hours per course. These are workload estimates, not clock appointments. The API defaults to three hours/week when a daily request omits its budget. Saved preferences and daily mode survive regeneration and adaptation.
+
+Daily sessions store null start/end times. Today and the dashboard label them “Anytime today”; the course plan labels them “Anytime this day.” The dashboard links to Today, where explicit completion is saved and counted. Opening a lesson does not imply completion. Failed completion requests keep the task unfinished and show a focused inline error. Today lists unfinished earlier work separately, linking to its course plan for completion or an explicit plan update, rather than adding overdue work to the current day's workload. Today and overdue queries accept the learner's timezone so the calendar date stays correct around midnight.
+
+Apply `20261104120000_flexible_daily_timetable` before deploying the API and regenerate Prisma. It makes the two study-session time columns nullable without rewriting existing appointments. No database migration or deployment was performed by this task.
+
 Apply the additive `20261103120000_weekly_study_budget` migration before deploying this API, and regenerate Prisma. It adds nullable weekly-minute and scheduling-preference fields to study plans. Existing plans retain exact-time scheduling. No database migration has been applied by this implementation task.
 
 Apply the additive `20261030120000_course_target_exam_date` database migration **before running the new API**:

@@ -794,8 +794,8 @@ model StudySession {
   courseId         String
   topicId          String?             // null = revision/buffer session
   scheduledDate    DateTime
-  startTime        String
-  endTime          String
+  startTime        String?
+  endTime          String?
   kind             SessionKind         @default(LEARN)
   weekNumber       Int?
   // Why this session exists when it wasn't in the original plan, e.g. "Added after a 40% quiz"

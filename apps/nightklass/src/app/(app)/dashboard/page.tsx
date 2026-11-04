@@ -23,8 +23,10 @@ interface Progress {
 
 interface Session {
   id: string
-  startTime: string
-  endTime: string
+  estimatedMinutes: number
+  status: string
+  startTime: string | null
+  endTime: string | null
   topic: { id: string; name: string } | null
   course: { id: string; title: string }
 }
@@ -89,7 +91,9 @@ export default function DashboardPage() {
       .then(setProgress)
       .catch(() => undefined)
     api
-      .get<Session[]>('/study/sessions/today')
+      .get<Session[]>(
+        `/study/sessions/today?timeZone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`,
+      )
       .then(setToday)
       .catch(() => setToday([]))
     api
@@ -237,7 +241,7 @@ export default function DashboardPage() {
               return (
                 <Link
                   key={s.id}
-                  href={`/courses/${s.course.id}`}
+                  href="/today"
                   className={`card-accent bg-white rounded-2xl p-4 w-[240px] flex-shrink-0 border border-slate-100`}
                   style={{ ['--accent-color' as string]: color.hex }}
                 >
@@ -246,7 +250,9 @@ export default function DashboardPage() {
                     {s.topic?.name ?? 'Revision'}
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    {s.startTime}–{s.endTime}
+                    {s.startTime && s.endTime ? `${s.startTime}–${s.endTime}` : 'Anytime today'} ·{' '}
+                    {s.estimatedMinutes} min
+                    {s.status === 'COMPLETED' ? ' · Done' : ''}
                   </p>
                 </Link>
               )
@@ -312,7 +318,11 @@ export default function DashboardPage() {
       {courses && courses.length > 0 && (
         <div>
           <h2 className="product-section-title mb-4">Your courses</h2>
-          <CourseGrid courses={courses} progressByCourse={progressByCourse} onDeleted={removeCourse} />
+          <CourseGrid
+            courses={courses}
+            progressByCourse={progressByCourse}
+            onDeleted={removeCourse}
+          />
         </div>
       )}
     </div>

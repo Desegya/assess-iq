@@ -1,0 +1,1 @@
+ALTER TABLE "study_sessions" ALTER COLUMN "startTime" DROP NOT NULL, ALTER COLUMN "endTime" DROP NOT NULL;

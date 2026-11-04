@@ -7,23 +7,32 @@ export interface BudgetPreferences {
   workStart: string
   workEnd: string
   timeZone?: string
+  schedulingStyle?: 'TIMED' | 'DAILY'
+  studyDays?: number[]
 }
 export interface BusySession {
   scheduledDate: Date
-  startTime: string
-  endTime: string
+  startTime: string | null
+  endTime: string | null
+  estimatedMinutes?: number
+  courseId?: string
 }
 const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3))
 const clock = (value: number) =>
   `${Math.floor(value / 60)}`.padStart(2, '0') + ':' + `${value % 60}`.padStart(2, '0')
 
 // Leave a quarter-hour between courses as well as between study blocks.
-export function freeSlots(slots: PlanSlot[], busy: BusySession[]): PlanSlot[] {
-  return slots.flatMap((slot) => {
+export function freeSlots(
+  slots: PlanSlot[],
+  busy: BusySession[],
+  limitDailyWorkload = false,
+): PlanSlot[] {
+  const available = slots.flatMap((slot) => {
     let ranges = [[minutes(slot.startTime), minutes(slot.endTime)]]
     for (const session of busy.filter(
       (s) => s.scheduledDate.toISOString().slice(0, 10) === slot.date.toISOString().slice(0, 10),
     )) {
+      if (!session.startTime || !session.endTime) continue
       const start = minutes(session.startTime) - 15
       const end = minutes(session.endTime) + 15
       ranges = ranges.flatMap(([a, b]) =>
@@ -50,6 +59,31 @@ export function freeSlots(slots: PlanSlot[], busy: BusySession[]): PlanSlot[] {
       ]
     })
   })
+  if (!limitDailyWorkload) return available
+  const remaining = new Map<string, number>()
+  return available.flatMap((slot) => {
+    const date = slot.date.toISOString().slice(0, 10)
+    const capacity =
+      remaining.get(date) ??
+      Math.max(
+        0,
+        180 -
+          busy
+            .filter((s) => s.scheduledDate.toISOString().slice(0, 10) === date)
+            .reduce((sum, s) => sum + sessionMinutes(s), 0),
+      )
+    const allocated = Math.min(capacity, slot.capacityMinutes)
+    remaining.set(date, capacity - allocated)
+    return allocated < 15
+      ? []
+      : [
+          {
+            ...slot,
+            capacityMinutes: allocated,
+            endTime: clock(minutes(slot.startTime) + allocated),
+          },
+        ]
+  })
 }
 
 // Seven-day budgets start at `from`; the last partial week receives a proportional budget.
@@ -62,6 +96,7 @@ export function weeklyBudgetSlots(
   busy: BusySession[],
   earliest = from,
   committed: BusySession[] = [],
+  courseId?: string,
 ) {
   const slots: PlanSlot[] = []
   const shortages: string[] = []
@@ -71,12 +106,21 @@ export function weeklyBudgetSlots(
     const target = Math.floor((weeklyMinutes * ((end - week) / (7 * DAY))) / 15) * 15
     const committedMinutes = committed
       .filter((s) => s.scheduledDate.getTime() >= week && s.scheduledDate.getTime() < end)
-      .reduce((sum, s) => sum + minutes(s.endTime) - minutes(s.startTime), 0)
+      .reduce((sum, s) => sum + sessionMinutes(s), 0)
     let remaining = Math.max(0, target - committedMinutes)
     const days: PlanSlot[][] = []
     for (let day = week; day < end; day += DAY) {
       if (day < earliest.getTime()) continue
       const date = new Date(day)
+      const courses = new Set(
+        busy
+          .filter(
+            (s) => s.scheduledDate.toISOString().slice(0, 10) === date.toISOString().slice(0, 10),
+          )
+          .map((s) => s.courseId)
+          .filter(Boolean),
+      )
+      if (courseId && courses.size >= 2 && !courses.has(courseId)) continue
       const weekend = [0, 6].includes(date.getUTCDay())
       if (preferences.studyPreference === 'WEEKENDS' && !weekend) continue
       const start = preferences.studyPreference === 'EVENINGS' && !weekend ? 18 * 60 : 9 * 60
@@ -105,7 +149,7 @@ export function weeklyBudgetSlots(
         const key = window.date.toISOString().slice(0, 10)
         const otherMinutes = busy
           .filter((s) => s.scheduledDate.toISOString().slice(0, 10) === key)
-          .reduce((sum, s) => sum + minutes(s.endTime) - minutes(s.startTime), 0)
+          .reduce((sum, s) => sum + sessionMinutes(s), 0)
         // At most three hours across courses, and two hours for this course in a day.
         const duration =
           Math.floor(
@@ -139,4 +183,13 @@ export function weeklyBudgetSlots(
     ),
     shortages,
   }
+}
+
+export function sessionMinutes(session: BusySession) {
+  return (
+    session.estimatedMinutes ??
+    (session.startTime && session.endTime
+      ? minutes(session.endTime) - minutes(session.startTime)
+      : 0)
+  )
 }

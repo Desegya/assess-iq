@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/product/PageHeader'
 import { Icon } from '@/components/product/Icon'
@@ -11,13 +11,19 @@ import { Skeleton } from '@/components/ui/Skeleton'
 
 interface Session {
   id: string
-  startTime: string
-  endTime: string
+  startTime: string | null
+  endTime: string | null
   estimatedMinutes: number
   status: string
   kind: 'LEARN' | 'REVIEW' | 'REVISION'
   note: string | null
   topic: { id: string; name: string } | null
+  course: { id: string; title: string }
+}
+
+interface OverdueSession {
+  id: string
+  studyPlanId: string
   course: { id: string; title: string }
 }
 
@@ -36,14 +42,31 @@ export default function TodayPage() {
   const [sessions, setSessions] = useState<Session[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confidence, setConfidence] = useState<Record<string, number>>({})
+  const [overdue, setOverdue] = useState<OverdueSession[]>([])
+  const [saving, setSaving] = useState<string[]>([])
+  const [sessionErrors, setSessionErrors] = useState<Record<string, string>>({})
+
+  const [failedSession, setFailedSession] = useState<string | null>(null)
+  const completionErrorRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (failedSession && sessionErrors[failedSession]) completionErrorRef.current?.focus()
+  }, [failedSession, sessionErrors])
 
   function load() {
     api
-      .get<Session[]>('/study/sessions/today')
+      .get<Session[]>(
+        `/study/sessions/today?timeZone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`,
+      )
       .then(setSessions)
       .catch((err) =>
         setError(err instanceof Error ? err.message : 'Failed to load today’s sessions'),
       )
+    api
+      .get<OverdueSession[]>(
+        `/study/sessions/overdue?timeZone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`,
+      )
+      .then(setOverdue)
+      .catch(() => undefined)
   }
 
   useEffect(() => {
@@ -52,14 +75,26 @@ export default function TodayPage() {
   }, [])
 
   async function handleComplete(sessionId: string) {
-    setError(null)
+    setSessionErrors((current) => ({ ...current, [sessionId]: '' }))
+    setSaving((current) => [...current, sessionId])
     try {
       await api.post(`/study/sessions/${sessionId}/complete`, {
         confidenceRating: confidence[sessionId] ?? undefined,
       })
-      load()
+      setSessions(
+        (current) =>
+          current?.map((session) =>
+            session.id === sessionId ? { ...session, status: 'COMPLETED' } : session,
+          ) ?? null,
+      )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save this session. Try again.')
+      setFailedSession(sessionId)
+      setSessionErrors((current) => ({
+        ...current,
+        [sessionId]: err instanceof Error ? err.message : 'Could not save this session. Try again.',
+      }))
+    } finally {
+      setSaving((current) => current.filter((id) => id !== sessionId))
     }
   }
 
@@ -71,6 +106,55 @@ export default function TodayPage() {
         eyebrow="Your daily plan"
         icon="calendar"
       />
+
+      {sessions && sessions.length > 0 && (
+        <div role="status" className="card mb-4 p-4 text-sm text-slate-700">
+          <p className="font-semibold">
+            {sessions.filter((s) => s.status === 'COMPLETED').length} of {sessions.length} tasks
+            complete today
+          </p>
+          <p className="mt-1 text-slate-500">
+            {new Set(sessions.map((s) => s.course.id)).size} courses · About{' '}
+            {sessions
+              .filter((s) => s.status !== 'COMPLETED')
+              .reduce((sum, s) => sum + s.estimatedMinutes, 0)}{' '}
+            min remaining
+          </p>
+          {sessions.some((s) => !s.startTime) && (
+            <p className="mt-1 text-slate-500">
+              Study the “Anytime today” tasks whenever you have space. Mark them complete when you
+              finish; opening a lesson alone does not mark it done.
+            </p>
+          )}
+        </div>
+      )}
+
+      {overdue.length > 0 && (
+        <details className="card mb-4 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-amber-800">
+            Unfinished from earlier days ({overdue.length}
+            {overdue.length === 50 ? '+' : ''})
+          </summary>
+          <p className="mt-2 text-sm text-slate-500">
+            These stay separate from today’s workload. Review a course plan to mark work done or use
+            “Update my plan” to spread the remaining work over future days.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {Array.from(new Map(overdue.map((s) => [s.course.id, s.course])).values()).map(
+              (course) => (
+                <li key={course.id}>
+                  <Link
+                    className="text-sm font-semibold text-violet-700"
+                    href={`/courses/${course.id}/plan`}
+                  >
+                    Review {course.title} plan →
+                  </Link>
+                </li>
+              ),
+            )}
+          </ul>
+        </details>
+      )}
 
       {error && (
         <div
@@ -113,7 +197,9 @@ export default function TodayPage() {
                   {s.topic?.name ?? 'Revision'}
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  {KIND_LABEL[s.kind]} · {s.startTime}–{s.endTime} · {s.estimatedMinutes} min
+                  {KIND_LABEL[s.kind]} ·{' '}
+                  {s.startTime && s.endTime ? `${s.startTime}–${s.endTime}` : 'Anytime today'} ·{' '}
+                  {s.estimatedMinutes} min
                   {s.note && <span className="text-amber-700"> · {s.note}</span>}
                 </p>
               </div>
@@ -143,9 +229,13 @@ export default function TodayPage() {
                     </option>
                   ))}
                 </select>
-                <button onClick={() => handleComplete(s.id)} className="btn-primary">
+                <button
+                  onClick={() => handleComplete(s.id)}
+                  disabled={saving.includes(s.id)}
+                  className="btn-primary"
+                >
                   <Icon name="check" />
-                  Mark complete
+                  {saving.includes(s.id) ? 'Saving…' : 'Mark complete'}
                 </button>
                 {s.topic && (
                   <>
@@ -160,6 +250,16 @@ export default function TodayPage() {
                   </>
                 )}
               </div>
+            )}
+            {sessionErrors[s.id] && (
+              <p
+                ref={failedSession === s.id ? completionErrorRef : undefined}
+                tabIndex={-1}
+                role="alert"
+                className="mt-3 text-sm text-red-700"
+              >
+                {sessionErrors[s.id]}
+              </p>
             )}
           </div>
         ))}

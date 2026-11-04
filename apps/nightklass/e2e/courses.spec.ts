@@ -19,18 +19,164 @@ const course = (id: string, title: string) => ({
 })
 type Course = ReturnType<typeof course>
 
+test('a saved day-by-day timetable restores selected days and keeps time fields hidden', async ({
+  page,
+}) => {
+  await setup(page, [course('biology', 'Biology')])
+  await page.route('**/api/v1/study/plans/current?*', (route) =>
+    route.fulfill({
+      json: {
+        planType: 'DURATION',
+        weeks: 5,
+        weeklyMinutes: 180,
+        schedulingPreferences: {
+          schedulingStyle: 'DAILY',
+          studyDays: [1, 3, 5],
+          studyPreference: 'EVENINGS',
+          avoidWorkHours: true,
+          workStart: '09:00',
+          workEnd: '17:00',
+        },
+      },
+    }),
+  )
+  await page.goto('/courses/biology')
+  await page.getByRole('button', { name: 'Study setup', exact: true }).click()
+  await expect(page.getByLabel('Day-by-day timetable (no fixed times)')).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'Mon', exact: true })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'Tue', exact: true })).not.toBeChecked()
+  await expect(page.getByLabel('Work / class starts')).toBeHidden()
+})
+
+test('a daily timetable asks for days and workload without asking for clock times', async ({
+  page,
+}) => {
+  await setup(page, [course('biology', 'Biology')])
+  await page.route('**/api/v1/study/plans/generate', (route) => route.fulfill({ json: {} }))
+  await page.goto('/courses/biology')
+  await page.getByRole('button', { name: 'Study setup', exact: true }).click()
+  await page.getByLabel('Day-by-day timetable (no fixed times)').check()
+  await expect(page.getByLabel('Work / class starts')).toBeHidden()
+  await expect(page.getByLabel('When do you prefer to study?')).toBeHidden()
+  await page.getByLabel('Hours per week for this course').fill('3')
+  for (const day of ['Tue', 'Thu', 'Sat'])
+    await page.getByRole('checkbox', { name: day, exact: true }).uncheck()
+  const request = page.waitForRequest(
+    (request) => request.url().includes('/study/plans/generate') && request.method() === 'POST',
+  )
+  await page.getByRole('button', { name: 'Generate study plan', exact: true }).click()
+  const payload = (await request).postDataJSON()
+  expect(payload).toMatchObject({ schedulingStyle: 'DAILY', weeklyHours: 3, studyDays: [1, 3, 5] })
+  expect(payload.workStart).toBeUndefined()
+  await expect(page).toHaveURL(/\/courses\/biology\/plan$/)
+})
+
+test('Today lists flexible tasks, tracks completion across reloads, and shows missed work separately', async ({
+  page,
+}) => {
+  await setup(page, [course('biology', 'Biology'), course('chemistry', 'Chemistry')])
+  const sessions = [
+    {
+      id: 'biology-task',
+      startTime: null,
+      endTime: null,
+      estimatedMinutes: 45,
+      status: 'NOT_STARTED',
+      kind: 'LEARN',
+      note: null,
+      topic: { id: 'cells', name: 'Cell structure' },
+      course: { id: 'biology', title: 'Biology' },
+    },
+    {
+      id: 'chemistry-task',
+      startTime: null,
+      endTime: null,
+      estimatedMinutes: 30,
+      status: 'NOT_STARTED',
+      kind: 'REVIEW',
+      note: null,
+      topic: { id: 'atoms', name: 'Atoms' },
+      course: { id: 'chemistry', title: 'Chemistry' },
+    },
+  ]
+  await page.route('**/api/v1/study/sessions/today?*', (route) => route.fulfill({ json: sessions }))
+  await page.route('**/api/v1/study/sessions/overdue?*', (route) =>
+    route.fulfill({
+      json: [
+        { id: 'old-task', studyPlanId: 'old-plan', course: { id: 'biology', title: 'Biology' } },
+      ],
+    }),
+  )
+  await page.route('**/api/v1/study/sessions/*/complete', (route) => {
+    if (route.request().url().includes('chemistry-task'))
+      return route.fulfill({
+        status: 503,
+        json: { message: 'Could not save completion. Try again.' },
+      })
+    sessions[0]!.status = 'COMPLETED'
+    return route.fulfill({ json: sessions[0] })
+  })
+  await page.goto('/today')
+  await expect(page.getByText('Anytime today', { exact: false }).first()).toBeVisible()
+  await expect(page.getByRole('status')).toContainText('0 of 2 tasks complete today')
+  const biology = page
+    .locator('.card-accent')
+    .filter({ has: page.getByRole('heading', { name: 'Cell structure', exact: true }) })
+  await biology.getByRole('link', { name: 'Open lesson' }).click()
+  await page.goto('/today')
+  await expect(page.getByRole('status')).toContainText('0 of 2 tasks complete today')
+  await biology.getByRole('button', { name: 'Mark complete' }).click()
+  await expect(page.getByRole('status')).toContainText('1 of 2 tasks complete today')
+  await page.reload()
+  await expect(page.getByRole('status')).toContainText('1 of 2 tasks complete today')
+  await expect(biology.getByRole('button', { name: 'Mark complete' })).toHaveCount(0)
+  const chemistry = page
+    .locator('.card-accent')
+    .filter({ has: page.getByRole('heading', { name: 'Atoms', exact: true }) })
+  await chemistry.getByRole('button', { name: 'Mark complete' }).click()
+  await expect(chemistry.getByRole('alert')).toHaveText('Could not save completion. Try again.')
+  await expect(chemistry.getByRole('alert')).toBeInViewport()
+  await page.getByText('Unfinished from earlier days (1)', { exact: true }).click()
+  await expect(page.getByRole('link', { name: 'Review Biology plan' })).toHaveAttribute(
+    'href',
+    '/courses/biology/plan',
+  )
+  await page.route('**/api/v1/study/progress', (route) =>
+    route.fulfill({ json: { courses: [], last30Days: [], currentStreak: 0, longestStreak: 0 } }),
+  )
+  await page.goto('/dashboard')
+  await expect(page.getByText('Today’s study', { exact: true })).toBeVisible()
+  await expect(page.getByText('Anytime today · 45 min · Done')).toBeVisible()
+  await page.getByRole('link', { name: /Biology Cell structure Anytime today/ }).click()
+  await expect(page).toHaveURL(/\/today$/)
+})
+
 test('study setup restores saved weekly hours, preferences and plan length', async ({ page }) => {
   await setup(page, [course('biology', 'Biology')])
-  await page.route('**/api/v1/study/plans/current?*', route => route.fulfill({ json: {
-    planType: 'DURATION', weeks: 10, weeklyMinutes: 180,
-    schedulingPreferences: { studyPreference: 'WEEKENDS', avoidWorkHours: false, workStart: '08:00', workEnd: '16:00' },
-  } }))
+  await page.route('**/api/v1/study/plans/current?*', (route) =>
+    route.fulfill({
+      json: {
+        planType: 'DURATION',
+        weeks: 10,
+        weeklyMinutes: 180,
+        schedulingPreferences: {
+          studyPreference: 'WEEKENDS',
+          avoidWorkHours: false,
+          workStart: '08:00',
+          workEnd: '16:00',
+        },
+      },
+    }),
+  )
   await page.goto('/courses/biology')
   await page.getByRole('button', { name: 'Study setup', exact: true }).click()
   await expect(page.getByLabel('Hours per week for this course')).toHaveValue('3')
   await expect(page.getByLabel('When do you prefer to study?')).toHaveValue('WEEKENDS')
   await expect(page.getByLabel('Keep weekday work / class hours free')).not.toBeChecked()
-  await expect(page.getByRole('button', { name: '10 weeks', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: '10 weeks', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
 })
 
 test('course sections collapse and weekly budgets do not overwrite exact-time availability', async ({

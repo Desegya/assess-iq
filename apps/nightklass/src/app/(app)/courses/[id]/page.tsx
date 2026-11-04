@@ -106,7 +106,8 @@ function CourseDetail({ id }: { id: string }) {
   const [editing, setEditing] = useState(false)
 
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
-  const [scheduleMode, setScheduleMode] = useState<'budget' | 'manual'>('budget')
+  const [scheduleMode, setScheduleMode] = useState<'budget' | 'manual' | 'daily'>('budget')
+  const [studyDays, setStudyDays] = useState<number[]>([1, 2, 3, 4, 5, 6])
   const [weeklyHours, setWeeklyHours] = useState('4')
   const [studyPreference, setStudyPreference] = useState('EVENINGS')
   const [avoidWorkHours, setAvoidWorkHours] = useState(true)
@@ -172,6 +173,8 @@ function CourseDetail({ id }: { id: string }) {
         examDate?: string
         weeklyMinutes?: number | null
         schedulingPreferences?: {
+          schedulingStyle?: 'TIMED' | 'DAILY'
+          studyDays?: number[]
           studyPreference: string
           avoidWorkHours: boolean
           workStart: string
@@ -198,6 +201,10 @@ function CourseDetail({ id }: { id: string }) {
           setPlanLength('exam')
         }
         if (plan.weeklyMinutes && plan.schedulingPreferences) {
+          setScheduleMode(
+            plan.schedulingPreferences.schedulingStyle === 'DAILY' ? 'daily' : 'budget',
+          )
+          setStudyDays(plan.schedulingPreferences.studyDays ?? [1, 2, 3, 4, 5, 6])
           setWeeklyHours(String(plan.weeklyMinutes / 60))
           setStudyPreference(plan.schedulingPreferences.studyPreference)
           setAvoidWorkHours(plan.schedulingPreferences.avoidWorkHours)
@@ -321,16 +328,18 @@ function CourseDetail({ id }: { id: string }) {
         throw new Error('Choose between 1 and 52 weeks')
       }
 
+      if (scheduleMode === 'daily' && studyDays.length === 0)
+        throw new Error('Choose at least one study day')
       if (scheduleMode === 'manual') await api.post('/study/availability', { slots })
       await api.post('/study/plans/generate', {
         courseId: id,
-        ...(scheduleMode === 'budget'
+        ...(scheduleMode !== 'manual'
           ? {
               weeklyHours: Number(weeklyHours),
-              studyPreference,
-              avoidWorkHours,
-              workStart,
-              workEnd,
+              schedulingStyle: scheduleMode === 'daily' ? 'DAILY' : 'TIMED',
+              ...(scheduleMode === 'daily'
+                ? { studyDays }
+                : { studyPreference, avoidWorkHours, workStart, workEnd }),
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             }
           : {}),
@@ -861,6 +870,15 @@ function CourseDetail({ id }: { id: string }) {
                     <input
                       type="radio"
                       name="schedule-mode"
+                      checked={scheduleMode === 'daily'}
+                      onChange={() => setScheduleMode('daily')}
+                    />
+                    Day-by-day timetable (no fixed times)
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="schedule-mode"
                       checked={scheduleMode === 'budget'}
                       onChange={() => setScheduleMode('budget')}
                     />
@@ -876,7 +894,7 @@ function CourseDetail({ id }: { id: string }) {
                     Choose exact times
                   </label>
                 </div>
-                {scheduleMode === 'budget' ? (
+                {scheduleMode !== 'manual' ? (
                   <div className="space-y-4">
                     <label className="block text-sm text-slate-700">
                       Hours per week for this course
@@ -891,57 +909,97 @@ function CourseDetail({ id }: { id: string }) {
                         className="input-base mt-1 w-28 block"
                       />
                     </label>
-                    <label className="block text-sm text-slate-700">
-                      When do you prefer to study?
-                      <select
-                        value={studyPreference}
-                        onChange={(e) => setStudyPreference(e.target.value)}
-                        className="input-base mt-1"
-                      >
-                        <option value="EVENINGS">Weekday evenings & weekends</option>
-                        <option value="WEEKENDS">Weekends only</option>
-                        <option value="FLEXIBLE">Flexible daytime & evenings</option>
-                      </select>
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={avoidWorkHours}
-                        onChange={(e) => setAvoidWorkHours(e.target.checked)}
-                      />
-                      Keep weekday work / class hours free
-                    </label>
-                    {avoidWorkHours && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <label className="text-sm text-slate-700">
-                          Work / class starts
-                          <input
-                            type="time"
-                            required
-                            value={workStart}
-                            onChange={(e) => setWorkStart(e.target.value)}
-                            className="input-base mt-1"
-                          />
-                        </label>
-                        <label className="text-sm text-slate-700">
-                          Work / class ends
-                          <input
-                            type="time"
-                            required
-                            value={workEnd}
-                            onChange={(e) => setWorkEnd(e.target.value)}
-                            className="input-base mt-1"
-                          />
-                        </label>
+                    {scheduleMode === 'daily' ? (
+                      <div className="space-y-3">
+                        <fieldset>
+                          <legend className="text-sm font-medium text-slate-700 mb-2">
+                            Which days would you like to study?
+                          </legend>
+                          <div className="flex flex-wrap gap-3">
+                            {DAYS.map((label, day) => (
+                              <label
+                                key={label}
+                                className="flex min-h-11 items-center gap-2 text-sm"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={studyDays.includes(day)}
+                                  onChange={(event) =>
+                                    setStudyDays((current) =>
+                                      event.target.checked
+                                        ? [...current, day]
+                                        : current.filter((value) => value !== day),
+                                    )
+                                  }
+                                />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
+                        <p className="text-xs text-slate-500">
+                          An approximate weekly workload, without a fixed clock time. Starts
+                          tomorrow, spreads topics and revision across your chosen days, and
+                          considers work already planned for other courses. Today shows your tasks
+                          and tracks what you mark complete. Lighter days come first, with at most
+                          two courses and three hours of planned study per day.
+                        </p>
                       </div>
+                    ) : (
+                      <>
+                        <label className="block text-sm text-slate-700">
+                          When do you prefer to study?
+                          <select
+                            value={studyPreference}
+                            onChange={(e) => setStudyPreference(e.target.value)}
+                            className="input-base mt-1"
+                          >
+                            <option value="EVENINGS">Weekday evenings & weekends</option>
+                            <option value="WEEKENDS">Weekends only</option>
+                            <option value="FLEXIBLE">Flexible daytime & evenings</option>
+                          </select>
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={avoidWorkHours}
+                            onChange={(e) => setAvoidWorkHours(e.target.checked)}
+                          />
+                          Keep weekday work / class hours free
+                        </label>
+                        {avoidWorkHours && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <label className="text-sm text-slate-700">
+                              Work / class starts
+                              <input
+                                type="time"
+                                required
+                                value={workStart}
+                                onChange={(e) => setWorkStart(e.target.value)}
+                                className="input-base mt-1"
+                              />
+                            </label>
+                            <label className="text-sm text-slate-700">
+                              Work / class ends
+                              <input
+                                type="time"
+                                required
+                                value={workEnd}
+                                onChange={(e) => setWorkEnd(e.target.value)}
+                                className="input-base mt-1"
+                              />
+                            </label>
+                          </div>
+                        )}
+                        <p className="text-xs text-slate-500">
+                          Starts tomorrow. Sessions last up to an hour, with 15-minute breaks, no
+                          study after 10pm, up to 2 hours for this course per day, and at most 3
+                          hours across courses. Weekday work / class hours include a one-hour
+                          buffer. Other course sessions stay reserved; we’ll tell you if your budget
+                          cannot fit. Times follow your local clock.
+                        </p>{' '}
+                      </>
                     )}
-                    <p className="text-xs text-slate-500">
-                      Starts tomorrow. Sessions last up to an hour, with 15-minute breaks, no study
-                      after 10pm, up to 2 hours for this course per day, and at most 3 hours across
-                      courses. Weekday work / class hours include a one-hour buffer. Other course
-                      sessions stay reserved; we’ll tell you if your budget cannot fit. Times follow
-                      your local clock.
-                    </p>
                   </div>
                 ) : (
                   <div>

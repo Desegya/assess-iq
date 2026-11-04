@@ -11,8 +11,8 @@ type Kind = 'LEARN' | 'REVIEW' | 'REVISION'
 interface Session {
   id: string
   scheduledDate: string
-  startTime: string
-  endTime: string
+  startTime: string | null
+  endTime: string | null
   estimatedMinutes: number
   status: string
   kind: Kind
@@ -26,6 +26,7 @@ interface StudyPlan {
   examDate: string
   startDate: string
   planType: 'EXAM_DATE' | 'DURATION'
+  schedulingPreferences?: { schedulingStyle?: 'TIMED' | 'DAILY' } | null
   weeklyMinutes?: number | null
   weeks: number | null
   changeLog: { at: string; reason: string }[]
@@ -172,6 +173,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
                 ? `Exam ${new Date(plan.examDate).toDateString()} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} to go`
                 : `${plan.weeks ? `${plan.weeks}-week plan` : 'Plan'} · runs to ${new Date(plan.examDate).toDateString()}`}{' '}
               · {done}/{total} sessions done
+              {plan.schedulingPreferences?.schedulingStyle === 'DAILY' && ' · Day-by-day timetable, no fixed times'}
               {plan.weeklyMinutes ? ` · Up to ${plan.weeklyMinutes / 60} hours/week` : ''}
             </p>
           </div>
@@ -370,7 +372,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
                             </p>
                           </div>
                           <p className="text-xs text-slate-400 mt-1">
-                            {s.startTime}–{s.endTime} · {s.estimatedMinutes} min
+                            {s.startTime && s.endTime ? `${s.startTime}–${s.endTime}` : 'Anytime this day'} · {s.estimatedMinutes} min
                             {s.note && <span className="text-amber-700"> · {s.note}</span>}
                           </p>
                         </div>

@@ -19,7 +19,7 @@ import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiConsumes } from '@nestjs/swagger'
 import { StudyService } from './study.service'
 import { SetAvailabilityDto } from './dto/set-availability.dto'
-import { GeneratePlanDto, SetExamDateDto } from './dto/generate-plan.dto'
+import { GeneratePlanDto, SetExamDateDto, StudyDayQueryDto } from './dto/generate-plan.dto'
 import { CompleteSessionDto } from './dto/complete-session.dto'
 import { GenerateQuizDto } from './dto/generate-quiz.dto'
 import { SubmitQuizDto } from './dto/submit-quiz.dto'
@@ -76,8 +76,13 @@ export class StudyController {
 
   @Get('sessions/today')
   @ApiOperation({ summary: "Get today's study sessions" })
-  getTodaySessions(@CurrentUser() user: AuthUser) {
-    return this.studyService.getTodaySessions(user)
+  getTodaySessions(@CurrentUser() user: AuthUser, @Query() query: StudyDayQueryDto) {
+    return this.studyService.getTodaySessions(user, query.timeZone)
+  }
+
+  @Get('sessions/overdue')
+  getOverdueSessions(@CurrentUser() user: AuthUser, @Query() query: StudyDayQueryDto) {
+    return this.studyService.getOverdueSessions(user, query.timeZone)
   }
 
   @Post('sessions/:id/complete')

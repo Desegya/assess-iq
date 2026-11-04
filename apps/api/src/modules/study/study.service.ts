@@ -6,6 +6,7 @@ import { TopicsService } from '../topics/topics.service'
 import { RetrievalService } from '../learning/retrieval.service'
 import { describeCourse, SEMESTER_LABEL } from '../courses/describe-course'
 import { allocateSlots, buildPlan, type PlanTopic } from './plan-builder'
+import { dailyTimetableSlots } from './daily-timetable'
 import { freeSlots, weeklyBudgetSlots, type BudgetPreferences } from './weekly-budget'
 import { defaultMarks, recommendDifficulty } from './quiz-scoring'
 import { extractTopicsHeuristically } from '../documents/topic-extraction-fallback'
@@ -189,6 +190,7 @@ export class StudyService {
     if (topicCount === 0) {
       throw new BadRequestException('This course has no topics yet — add topics before generating a plan')
     }
+    if (dto.schedulingStyle === 'DAILY' && dto.weeklyHours === undefined) dto.weeklyHours = 3
     if (dto.weeklyHours !== undefined) {
       return this.generateBudgetPlan(dto, user, end)
     }
@@ -240,11 +242,14 @@ export class StudyService {
         status: { in: ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'] },
         OR: [{ studyPlan: { status: 'ACTIVE' }, courseId: { not: courseId } }, { status: { in: ['IN_PROGRESS', 'COMPLETED'] } }, { studyPlan: { status: 'ACTIVE' }, courseId, scheduledDate: { lt: earliest } }],
       },
-      select: { scheduledDate: true, startTime: true, endTime: true, courseId: true },
+      select: { scheduledDate: true, startTime: true, endTime: true, courseId: true, estimatedMinutes: true },
     })
-    const result = weeklyBudgetSlots(from, end, weeklyMinutes, preferences, busy, earliest, busy.filter(s => s.courseId === courseId))
+    const committed = busy.filter(s => s.courseId === courseId)
+    const result = preferences.schedulingStyle === 'DAILY'
+      ? dailyTimetableSlots(from, end, weeklyMinutes, preferences.studyDays ?? [1, 2, 3, 4, 5, 6], busy, earliest, committed, courseId)
+      : weeklyBudgetSlots(from, end, weeklyMinutes, preferences, busy, earliest, committed, courseId)
     if (result.shortages.length) throw new BadRequestException(
-      `Your weekly budget does not fit around your preferences and existing course sessions (${result.shortages[0]}). Reduce the hours or choose a wider study window.`,
+      `Your weekly budget does not fit around your preferences and existing course sessions (${result.shortages[0]}). Reduce the hours or choose more study days / a wider study window.`,
     )
     return result.slots
   }
@@ -253,8 +258,9 @@ export class StudyService {
     const preferences: BudgetPreferences = {
       studyPreference: dto.studyPreference ?? 'EVENINGS', avoidWorkHours: dto.avoidWorkHours ?? true,
       workStart: dto.workStart ?? '09:00', workEnd: dto.workEnd ?? '17:00', timeZone: dto.timeZone ?? 'UTC',
+      schedulingStyle: dto.schedulingStyle ?? 'TIMED', studyDays: dto.studyDays ?? [1, 2, 3, 4, 5, 6],
     }
-    if (preferences.avoidWorkHours && preferences.workStart >= preferences.workEnd)
+    if (preferences.schedulingStyle !== 'DAILY' && preferences.avoidWorkHours && preferences.workStart >= preferences.workEnd)
       throw new BadRequestException('Work end time must be after work start time')
     const from = this.nextBudgetDay(preferences)
     if (dto.weeks) end = new Date(from.getTime() + dto.weeks * 7 * 86400000)
@@ -272,8 +278,8 @@ export class StudyService {
         studentId: user.id, courseId: dto.courseId, examDate: end, startDate: from,
         version: version + 1, planType: dto.weeks ? 'DURATION' : 'EXAM_DATE', weeks: dto.weeks ?? null,
         weeklyMinutes, schedulingPreferences: { ...preferences },
-        changeLog: [{ at: new Date().toISOString(), reason: `${weeklyMinutes / 60} hours/week; scheduled around your other courses${built.scaledDown ? '; shortened topics to fit your budget' : ''}${built.unscheduledTopics.length ? '; not enough time for ' + built.unscheduledTopics.join(', ') : ''}` }],
-        sessions: { create: built.sessions.map(s => ({ ...s, studentId: user.id, courseId: dto.courseId })) },
+        changeLog: [{ at: new Date().toISOString(), reason: `${weeklyMinutes / 60} hours/week${preferences.schedulingStyle === 'DAILY' ? '; daily timetable, study whenever you can' : ''}; scheduled around your other courses${built.scaledDown ? '; shortened topics to fit your budget' : ''}${built.unscheduledTopics.length ? '; not enough time for ' + built.unscheduledTopics.join(', ') : ''}` }],
+        sessions: { create: built.sessions.map(s => ({ ...s, ...(preferences.schedulingStyle === 'DAILY' ? { startTime: null, endTime: null } : {}), studentId: user.id, courseId: dto.courseId })) },
       } })
     })
     return this.getCurrentPlan(dto.courseId, user)
@@ -303,15 +309,26 @@ export class StudyService {
 
   // ─── Sessions ─────────────────────────────────────────────────────────────
 
-  async getTodaySessions(user: AuthUser) {
-    const today = startOfDay(new Date())
+  async getTodaySessions(user: AuthUser, timeZone = 'UTC') {
+    const today = this.nextBudgetDay({ timeZone } as BudgetPreferences)
+    today.setUTCDate(today.getUTCDate() - 1)
     const tomorrow = new Date(today)
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
 
     return this.prisma.studySession.findMany({
       where: { studentId: user.id, studyPlan: { status: 'ACTIVE' }, scheduledDate: { gte: today, lt: tomorrow } },
       include: { topic: true, course: { select: { id: true, title: true } } },
-      orderBy: { startTime: 'asc' },
+      orderBy: [{ courseId: 'asc' }, { startTime: 'asc' }, { createdAt: 'asc' }],
+    })
+  }
+
+  async getOverdueSessions(user: AuthUser, timeZone = 'UTC') {
+    const today = this.nextBudgetDay({ timeZone } as BudgetPreferences)
+    today.setUTCDate(today.getUTCDate() - 1)
+    return this.prisma.studySession.findMany({
+      where: { studentId: user.id, studyPlan: { status: 'ACTIVE' }, status: { in: ['NOT_STARTED', 'IN_PROGRESS'] }, scheduledDate: { lt: today } },
+      select: { id: true, studyPlanId: true, course: { select: { id: true, title: true } }, topic: { select: { name: true } }, scheduledDate: true },
+      orderBy: { scheduledDate: 'asc' }, take: 50,
     })
   }
 
@@ -358,7 +375,7 @@ export class StudyService {
         const built = buildPlan(topics, slots, { planStart: plan.startDate, examDate: plan.examDate, fillPractice: true })
         await tx.studySession.updateMany({ where: { studyPlanId: plan.id, status: 'NOT_STARTED', scheduledDate: { lt: startOfDay(new Date()) } }, data: { status: 'MISSED' } })
         await tx.studySession.deleteMany({ where: { studyPlanId: plan.id, status: 'NOT_STARTED', scheduledDate: { gte: from } } })
-        await tx.studySession.createMany({ data: built.sessions.map(s => ({ ...s, studyPlanId: plan.id, studentId: user.id, courseId: plan.courseId })) })
+        await tx.studySession.createMany({ data: built.sessions.map(s => ({ ...s, ...(preferences.schedulingStyle === 'DAILY' ? { startTime: null, endTime: null } : {}), studyPlanId: plan.id, studentId: user.id, courseId: plan.courseId })) })
         await tx.studyPlan.update({ where: { id: plan.id }, data: { changeLog: [...((plan.changeLog as object[]) ?? []), { at: new Date().toISOString(), reason: [reason, built.scaledDown && 'shortened topics to fit your budget', built.unscheduledTopics.length && 'not enough time for ' + built.unscheduledTopics.join(', ')].filter(Boolean).join('; ') }] } })
       })
     } else {
@@ -387,7 +404,7 @@ export class StudyService {
       studentId: user.id, scheduledDate: { gte: today, lt: lastEnd },
       OR: [{ studyPlan: { status: 'ACTIVE', weeklyMinutes: { not: null } }, status: 'NOT_STARTED' }, { status: { in: ['COMPLETED', 'IN_PROGRESS'] } }],
     } })
-    const slots = freeSlots(await this.datedSlots(user, today, lastEnd), reserved)
+    const slots = freeSlots(await this.datedSlots(user, today, lastEnd), reserved, true)
     const DAY = 24 * 60 * 60 * 1000
     const allocation = allocateSlots(
       plans.map(p => ({
@@ -399,7 +416,7 @@ export class StudyService {
       slots,
     )
 
-    const signature = (ss: { scheduledDate: Date; startTime: string; estimatedMinutes: number; topicId: string | null; kind: string }[]) =>
+    const signature = (ss: { scheduledDate: Date; startTime: string | null; estimatedMinutes: number; topicId: string | null; kind: string }[]) =>
       ss
         .map(x => `${x.scheduledDate.toISOString().slice(0, 10)}|${x.startTime}|${x.estimatedMinutes}|${x.topicId}|${x.kind}`)
         .sort()
@@ -495,7 +512,7 @@ export class StudyService {
         orderBy: { scheduledDate: 'asc' },
       })
       return next
-        ? `We gave ${topic.name} more study time in your plan. Next session: ${next.scheduledDate.toDateString()}, ${next.startTime}.`
+        ? `We gave ${topic.name} more study time in your plan. Next session: ${next.scheduledDate.toDateString()}${next.startTime ? ', ' + next.startTime : ', whenever you can' }.`
         : `We gave ${topic.name} more weight in your plan.`
     }
 
