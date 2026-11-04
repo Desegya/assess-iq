@@ -512,11 +512,14 @@ ${studentContext}`
     },
   ): Promise<LessonContent> {
     const sourceRules = {
-      MATERIAL: `Use ONLY the numbered excerpts from the student's own material. If something isn't covered there, leave it out
-rather than adding outside knowledge. Cite the excerpt you used at the end of the sentence, like [S2].`,
-      COMBINED: `Ground the lesson in the numbered excerpts from the student's own material and cite them like [S2] wherever you
-use them. Fill important gaps with accurate, level-appropriate knowledge, but never attach a citation to content that
-didn't come from an excerpt.`,
+      MATERIAL: `Use ONLY the numbered excerpts from the student's own material. Explain their content directly and thoroughly,
+without adding outside knowledge. Omit unsupported material without narrating what the sources do not cover.
+Cite the excerpt supporting a claim at the end of that claim, like [S2].`,
+      COMBINED: `Write one comprehensive, integrated lesson, using the numbered excerpts to anchor the course's scope and terminology.
+Use accurate, level-appropriate knowledge to supply missing prerequisites, definitions, mechanisms, reasoning, examples,
+comparisons and applications. Teach these additions normally; do not interrupt the lesson to announce a gap in the excerpts.
+Attach inline citations such as [S2] ONLY to claims supported by that excerpt. Do not attach a citation to an entire paragraph
+when only one claim in it is supported. Never invent citations for the added explanation.`,
       AI: `The student has no material for this topic, so teach it from accurate knowledge appropriate to the academic level specified in the course context.
 Do not include any citation markers.`,
     }[opts.mode]
@@ -533,8 +536,16 @@ TOPIC: ${topic.name}${topic.description ? `\nScope: ${topic.description}` : ''}$
 SOURCE RULES:
 ${sourceRules}
 - Never invent textbook titles, page numbers, authors, URLs or institutional requirements.
+- Source attribution belongs in inline citation markers, not in the teaching prose. Explain the subject itself, not the documents.
+- Do not write "the notes say", "the lecture notes explain", "the notes distinguish", "the excerpts mention", "the material does not cover",
+  or similar commentary about what a source says, implies, includes or omits. This applies to every field, including definitions and examples.
+  For example, write "Data confidentiality prevents unauthorized disclosure [S2]. Privacy concerns control over personal information."
+  rather than "The notes distinguish confidentiality from privacy." Keep meaningful academic terms containing "notes" when those ARE the subject.
+- Do not describe a standard definition as merely "implied by the notes". Teach it directly when the selected source mode permits it.
 ${opts.feedback ? `\nThe student flagged a problem with the previous version of this lesson — fix it:\n"${opts.feedback}"\n` : ''}
 CONTENT:
+- Aim for a thorough lesson the learner can study independently, not a compressed summary or a commentary on the supplied excerpts.
+- Establish necessary prerequisites, build from intuition to precise meaning, and connect related concepts before moving on.
 - objectives: 3-5 learning objectives ("By the end you should be able to…" style, without that prefix)
 - introduction: 2-4 sentences on what the topic is and why it matters
 - sections: ${
@@ -542,11 +553,15 @@ CONTENT:
         ? `EXACTLY ${topic.subtopics.length} sections, one per subtopic listed above, in that order, each headed with the subtopic name`
         : '3-6 sections in a logical learning order'
     }. Each section is a detailed explanation in Markdown (paragraphs, bullet points, step-by-step reasoning,
-  formulas where relevant), 150-350 words.
+  formulas where relevant), usually 300-600 words. Use the depth each concept needs rather than padding or repeating it.
+- Within sections, explain what each major concept means, why it matters, how it works, and when to apply it. Include concrete examples,
+  distinguish easily confused ideas, and address common misconceptions. Give step-by-step mechanisms or reasoning where applicable.
+- Explain relevant assumptions, limitations and trade-offs as properties of the CONCEPT, not as omissions from the student's sources.
 ${MATH_NOTATION}
-- keyTerms: the essential definitions
-- workedExamples: 1-3 worked examples with numbered steps where the topic involves calculation or method; use an
-  empty array for purely descriptive topics
+- keyTerms: precise, useful definitions of the essential terms, explained directly with citations where supported
+- workedExamples: 2-3 substantial examples with numbered reasoning steps. Use calculations or procedures when relevant;
+  for conceptual topics, use realistic scenarios, comparisons, classification or decision-making examples. Show why the answer follows.
+  In MATERIAL mode, use only examples supported by the excerpts; return fewer examples if necessary rather than inventing outside content.
 - applications: 2-4 practical or discipline-specific applications
 - diagramIdeas: 0-3 optional drawing exercises for the learner
 - Every section must be understandable without its visuals; media may be unavailable.
@@ -570,7 +585,7 @@ Respond with the lesson as JSON.${
         : ''
     }`
 
-    const output = await this.complete(prompt, 10000, 'GENERATE_SUMMARY', opts, undefined, {
+    const output = await this.complete(prompt, 16000, 'GENERATE_SUMMARY', opts, undefined, {
       name: 'lesson',
       schema: LESSON_SCHEMA,
     })
