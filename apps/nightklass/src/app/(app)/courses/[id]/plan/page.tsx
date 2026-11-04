@@ -368,7 +368,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
                               {KIND_BADGE[s.kind].label}
                             </span>
                             <p className="text-sm font-medium text-slate-800">
-                              {s.topic?.name ?? 'Revision'}
+                              {s.topic?.name ?? (s.kind === 'LEARN' ? 'Course study' : 'Revision')}
                             </p>
                           </div>
                           <p className="text-xs text-slate-400 mt-1">
@@ -379,6 +379,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
                         <div className="flex items-center gap-3 flex-shrink-0">
                           {s.status === 'NOT_STARTED' ? (
                             <>
+                              {!s.topic && <Link href={`/courses/${id}`} className="compact-action text-xs font-semibold text-violet-700">Open course</Link>}
                               {s.topic && (
                                 <>
                                   <Link

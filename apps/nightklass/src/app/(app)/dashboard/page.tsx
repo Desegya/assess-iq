@@ -22,6 +22,7 @@ interface Progress {
 }
 
 interface Session {
+  kind?: 'LEARN' | 'REVIEW' | 'REVISION'
   id: string
   estimatedMinutes: number
   status: string
@@ -247,7 +248,7 @@ export default function DashboardPage() {
                 >
                   <p className={`text-[11px] font-bold ${color.text}`}>{s.course.title}</p>
                   <p className="text-sm font-semibold text-slate-800 mt-0.5 truncate">
-                    {s.topic?.name ?? 'Revision'}
+                    {s.topic?.name ?? (s.kind === 'LEARN' ? 'Course study' : 'Revision')}
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
                     {s.startTime && s.endTime ? `${s.startTime}–${s.endTime}` : 'Anytime today'} ·{' '}

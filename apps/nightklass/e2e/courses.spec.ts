@@ -19,6 +19,142 @@ const course = (id: string, title: string) => ({
 })
 type Course = ReturnType<typeof course>
 
+test('My Courses previews a combined timetable and applies it only after review', async ({
+  page,
+}) => {
+  await setup(page, [course('biology', 'Biology'), course('chemistry', 'Chemistry')])
+  let current: any = null
+  let applies = 0
+  let lastSettings: any
+  await page.route('**/api/v1/study/timetables/current', (route) =>
+    route.fulfill({ json: current }),
+  )
+  await page.route('**/api/v1/study/timetables/preview', (route) => {
+    lastSettings = route.request().postDataJSON()
+    return route.fulfill({
+      json: {
+        canApply: true,
+        warnings: [],
+        courses: [
+          {
+            courseId: 'biology',
+            title: 'Biology',
+            weeklyMinutes: 240,
+            reason: '3 units; your rated difficulty 5/5; quiz average 35%',
+          },
+          {
+            courseId: 'chemistry',
+            title: 'Chemistry',
+            weeklyMinutes: 120,
+            reason: '3 units; estimated difficulty 2/5; quiz average 80%',
+          },
+        ],
+        days: [
+          {
+            date: '2026-11-09',
+            sessions: [
+              {
+                courseId: 'biology',
+                courseTitle: 'Biology',
+                topicName: 'Cells',
+                estimatedMinutes: 45,
+                startTime: null,
+                endTime: null,
+              },
+            ],
+          },
+        ],
+      },
+    })
+  })
+  await page.route('**/api/v1/study/timetables/apply', (route) => {
+    applies++
+    if (applies === 1)
+      return route.fulfill({
+        status: 503,
+        json: { message: 'Could not save this timetable. Try again.' },
+      })
+    current = {
+      id: 'combined',
+      settings: route.request().postDataJSON(),
+      lastChange: 'Combined timetable created with extra attention to Biology.',
+      updatedAt: '2026-11-08T12:00:00Z',
+    }
+    return route.fulfill({ json: current })
+  })
+  await page.goto('/courses')
+  await page.getByRole('button', { name: 'Suggest a study plan', exact: true }).click()
+  const planner = page.getByRole('region', { name: 'Combined study planner' })
+  await expect(planner.getByLabel('Plan style')).toHaveValue('DAILY')
+  await expect(planner.getByLabel('Study window starts')).toBeHidden()
+  await planner.getByLabel('Difficulty for Biology').selectOption('5')
+  await planner.getByLabel('Total hours per week across these courses').fill('6')
+  await planner.getByLabel('Maximum courses per day').fill('1')
+  await planner.getByLabel('Plan length in weeks').fill('5')
+  await planner.getByRole('button', { name: 'Preview suggested plan' }).click()
+  await expect(planner.getByText('Anytime this day · 45 min')).toBeVisible()
+  expect(applies).toBe(0)
+  expect(lastSettings).toMatchObject({
+    weeklyHours: 6,
+    maxCoursesPerDay: 1,
+    weeks: 5,
+    courses: [{ courseId: 'biology', difficulty: 5 }, { courseId: 'chemistry' }],
+    autoAdjust: true,
+  })
+  await planner.getByLabel('Maximum courses per day').fill('2')
+  await expect(planner.getByRole('button', { name: 'Use this study plan' })).toHaveCount(0)
+  await planner.getByRole('button', { name: 'Preview suggested plan' }).click()
+  await planner.getByRole('button', { name: 'Use this study plan' }).click()
+  await expect(planner.getByRole('alert')).toHaveText('Could not save this timetable. Try again.')
+  await expect(planner.getByRole('alert')).toBeFocused()
+  await expect(planner.getByRole('alert')).toBeInViewport()
+  await planner.getByRole('button', { name: 'Use this study plan' }).click()
+  await expect(planner.getByRole('status')).toContainText('Your combined timetable is ready')
+  await page.reload()
+  await page.getByRole('button', { name: 'Suggest a study plan', exact: true }).click()
+  await expect(planner.getByLabel('Total hours per week across these courses')).toHaveValue('6')
+  await expect(planner.getByLabel('Difficulty for Biology')).toHaveValue('5')
+  await planner.getByText('Current timetable · Automatic adjustments on', { exact: true }).click()
+  await expect(
+    planner.getByText('Combined timetable created with extra attention to Biology.'),
+  ).toBeVisible()
+})
+
+test('combined planner supports timed sessions and explains insufficient capacity without applying', async ({
+  page,
+}) => {
+  await setup(page, [course('biology', 'Biology')])
+  await page.route('**/api/v1/study/timetables/current', (route) => route.fulfill({ json: null }))
+  let payload: any
+  await page.route('**/api/v1/study/timetables/preview', (route) => {
+    payload = route.request().postDataJSON()
+    return route.fulfill({
+      json: {
+        canApply: false,
+        courses: [],
+        days: [],
+        warnings: ['Your requested hours cannot fit in the chosen study window.'],
+      },
+    })
+  })
+  await page.goto('/courses')
+  await page.getByRole('button', { name: 'Suggest a study plan' }).click()
+  const planner = page.getByRole('region', { name: 'Combined study planner' })
+  await planner.getByLabel('Plan style').selectOption('TIMED')
+  await planner.getByLabel('Study window starts').fill('19:00')
+  await planner.getByLabel('Study window ends').fill('21:00')
+  await planner.getByRole('checkbox', { name: /Adjust automatically as I study/ }).uncheck()
+  await planner.getByRole('button', { name: 'Preview suggested plan' }).click()
+  expect(payload).toMatchObject({
+    schedulingStyle: 'TIMED',
+    startTime: '19:00',
+    endTime: '21:00',
+    autoAdjust: false,
+  })
+  await expect(planner.getByRole('status')).toContainText('cannot fit')
+  await expect(planner.getByRole('button', { name: 'Use this study plan' })).toBeDisabled()
+})
+
 test('a suspect lecture note stays held until confirmation and can be removed without affecting other notes', async ({
   page,
 }) => {
@@ -65,13 +201,11 @@ test('a suspect lecture note stays held until confirmation and can be removed wi
   })
   await page.goto('/courses/biology')
   await page.getByRole('button', { name: 'Study materials', exact: true }).click()
-  await page
-    .getByLabel('Lecture notes or slides', { exact: true })
-    .setInputFiles({
-      name: 'accounting.txt',
-      mimeType: 'text/plain',
-      buffer: Buffer.from('Debits and credits'),
-    })
+  await page.getByLabel('Lecture notes or slides', { exact: true }).setInputFiles({
+    name: 'accounting.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('Debits and credits'),
+  })
   await expect(page.getByLabel('Upload results').getByRole('status')).toContainText(
     'Finished: 1 of 1 files uploaded',
   )

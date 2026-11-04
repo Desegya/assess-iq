@@ -194,7 +194,7 @@ export default function TodayPage() {
                   {s.course.title}
                 </p>
                 <h2 className="font-heading font-bold text-slate-900 mt-0.5">
-                  {s.topic?.name ?? 'Revision'}
+                  {s.topic?.name ?? (s.kind === 'LEARN' ? 'Course study' : 'Revision')}
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
                   {KIND_LABEL[s.kind]} ·{' '}
@@ -237,6 +237,11 @@ export default function TodayPage() {
                   <Icon name="check" />
                   {saving.includes(s.id) ? 'Saving…' : 'Mark complete'}
                 </button>
+                {!s.topic && (
+                  <Link href={`/courses/${s.course.id}`} className="btn-secondary">
+                    Open course & choose a topic
+                  </Link>
+                )}
                 {s.topic && (
                   <>
                     <Link href={`/topics/${s.topic.id}/learn`} className="btn-secondary">

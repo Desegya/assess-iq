@@ -13,6 +13,7 @@ export interface Course {
   courseCode: string | null
   level: number | null
   semester: 'FIRST' | 'SECOND' | null
+  creditUnits?: number | null
   isCarryover?: boolean
   _count: { documents: number; questions: number; assessments: number }
 }

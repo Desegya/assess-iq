@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { PageHeader } from '@/components/product/PageHeader'
 import { Icon } from '@/components/product/Icon'
 import { CourseSetupGuide } from '@/components/courses/CourseSetupGuide'
+import { CourseTimetablePlanner } from '@/components/courses/CourseTimetablePlanner'
 import { useCourses } from '@/hooks/use-courses'
 import { useApi } from '@/hooks/use-api'
 import { SkeletonCard } from '@/components/ui/Skeleton'
@@ -15,6 +16,7 @@ export default function CoursesPage() {
   const api = useApi()
   const { courses, error: courseError, reload: reloadCourses, remove: removeCourse } = useCourses()
   const [progress, setProgress] = useState<CourseProgress[]>([])
+  const [plannerOpen, setPlannerOpen] = useState(false)
   const error = courseError
 
   useEffect(() => {
@@ -35,12 +37,28 @@ export default function CoursesPage() {
         eyebrow="Your library"
         icon="book"
         action={
-          <Link href="/courses/new" className="btn-primary">
-            <Icon name="plus" />
-            New course
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!courses?.length}
+              aria-expanded={plannerOpen}
+              aria-controls="combined-planner"
+              onClick={() => setPlannerOpen((open) => !open)}
+              className="btn-secondary"
+            >
+              Suggest a study plan
+            </button>
+            <Link href="/courses/new" className="btn-primary">
+              <Icon name="plus" />
+              New course
+            </Link>
+          </div>
         }
       />
+
+      {plannerOpen && courses && (
+        <CourseTimetablePlanner courses={courses} onClose={() => setPlannerOpen(false)} />
+      )}
 
       {courses !== null && <CourseSetupGuide defaultOpen={courses.length === 0} />}
 
@@ -50,7 +68,13 @@ export default function CoursesPage() {
           className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3"
         >
           {error}
-          <button type="button" onClick={() => void reloadCourses()} className="ml-3 min-h-11 underline">Try again</button>
+          <button
+            type="button"
+            onClick={() => void reloadCourses()}
+            className="ml-3 min-h-11 underline"
+          >
+            Try again
+          </button>
         </div>
       )}
 
@@ -75,7 +99,11 @@ export default function CoursesPage() {
       )}
 
       {courses && courses.length > 0 && (
-        <CourseGrid courses={courses} progressByCourse={progressByCourse} onDeleted={removeCourse} />
+        <CourseGrid
+          courses={courses}
+          progressByCourse={progressByCourse}
+          onDeleted={removeCourse}
+        />
       )}
     </div>
   )
