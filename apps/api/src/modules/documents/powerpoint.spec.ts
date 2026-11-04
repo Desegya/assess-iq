@@ -40,9 +40,20 @@ describe('PowerPoint uploads', () => {
     const uploadBuffer = vi.fn()
     const indexDocument = vi.fn().mockResolvedValue(undefined)
     const service = new DocumentsService(
-      { document: { create: vi.fn().mockResolvedValue(document), update } } as never,
+      {
+        course: {
+          findFirst: vi
+            .fn()
+            .mockResolvedValue({ title: 'Biology', subject: 'Biology', topics: [] }),
+        },
+        document: { create: vi.fn().mockResolvedValue(document), update },
+      } as never,
       { uploadBuffer } as never,
-      {} as never,
+      {
+        assessCourseMaterial: vi
+          .fn()
+          .mockResolvedValue({ verdict: 'MATCH', reason: 'Biology slides' }),
+      } as never,
       { indexDocument } as never,
     )
     const saved = await service.upload(file(await presentation()), { courseId: 'biology' }, {

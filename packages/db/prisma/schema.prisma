@@ -500,6 +500,8 @@ model Document {
   fileUrl        String
   fileSizeBytes  Int
   status         DocumentStatus @default(UPLOADING)
+  materialReviewStatus String @default("APPROVED")
+  materialReviewReason String?
   extractedText  String?        @db.Text
   pageCount      Int?
   chunkCount     Int?

@@ -32,8 +32,14 @@ export class QuestionsService {
     })
     if (!doc) throw new NotFoundException('Document not found')
     if (doc.status !== 'READY') {
-      throw new BadRequestException('Document is not ready yet — wait for text extraction to finish')
+      throw new BadRequestException(
+        'Document is not ready yet — wait for text extraction to finish',
+      )
     }
+    if (doc.courseId && doc.materialReviewStatus !== 'APPROVED')
+      throw new BadRequestException(
+        'Confirm that this file belongs to its course before generating questions.',
+      )
     if (!doc.extractedText) {
       throw new BadRequestException('Document has no extracted text')
     }
@@ -51,7 +57,7 @@ export class QuestionsService {
 
     // 3. Save all generated questions to DB
     const saved = await Promise.all(
-      rawQuestions.map(q =>
+      rawQuestions.map((q) =>
         this.prisma.question.create({
           data: {
             organizationId: user.organizationId!,
@@ -89,12 +95,11 @@ export class QuestionsService {
     ].filter(Boolean)
 
     // Score and filter bank questions
-    const scored = QUESTION_BANK
-      .filter(q => requestedTypes.includes(q.type))
-      .map(q => ({ q, score: scoreQuestion(q, searchTerms) }))
+    const scored = QUESTION_BANK.filter((q) => requestedTypes.includes(q.type))
+      .map((q) => ({ q, score: scoreQuestion(q, searchTerms) }))
       .sort((a, b) => b.score - a.score || Math.random() - 0.5)
 
-    const picked = scored.slice(0, dto.count).map(s => s.q)
+    const picked = scored.slice(0, dto.count).map((s) => s.q)
 
     // Fill any gap with templates
     const shortfall = dto.count - picked.length
@@ -113,7 +118,7 @@ export class QuestionsService {
 
     // Save to DB
     const saved = await Promise.all(
-      picked.map(q =>
+      picked.map((q) =>
         this.prisma.question.create({
           data: {
             organizationId: user.organizationId!,
@@ -165,7 +170,9 @@ export class QuestionsService {
 
   async findOne(id: string, user: AuthUser) {
     const q = await this.prisma.question.findFirst({
-      where: user.organizationId ? { id, organizationId: user.organizationId } : { id, organizationId: null, createdById: user.id },
+      where: user.organizationId
+        ? { id, organizationId: user.organizationId }
+        : { id, organizationId: null, createdById: user.id },
     })
     if (!q) throw new NotFoundException('Question not found')
     return q

@@ -39,7 +39,6 @@ export class DocumentsController {
   // ─── Upload ──────────────────────────────────────────────────────────────
 
   @AiThrottle()
-
   @Post('upload')
   @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN, UserRole.STUDENT)
   @UseInterceptors(FileInterceptor('file'))
@@ -98,11 +97,17 @@ export class DocumentsController {
   // ─── Extract topics ──────────────────────────────────────────────────────
 
   @AiThrottle()
-
   @Post(':id/extract-topics')
-  @ApiOperation({ summary: 'Propose candidate topics from a ready document (AI, with a heuristic fallback)' })
+  @ApiOperation({
+    summary: 'Propose candidate topics from a ready document (AI, with a heuristic fallback)',
+  })
   extractTopics(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.documentsService.extractTopics(id, user)
+  }
+
+  @Post(':id/approve-course-material')
+  approveCourseMaterial(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.documentsService.approveCourseMaterial(id, user)
   }
 
   // ─── Delete ──────────────────────────────────────────────────────────────

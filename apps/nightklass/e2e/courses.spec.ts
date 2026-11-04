@@ -19,6 +19,88 @@ const course = (id: string, title: string) => ({
 })
 type Course = ReturnType<typeof course>
 
+test('a suspect lecture note stays held until confirmation and can be removed without affecting other notes', async ({
+  page,
+}) => {
+  await setup(page, [course('biology', 'Biology')])
+  const saved = [
+    {
+      id: 'good-note',
+      fileName: 'cells.txt',
+      status: 'READY',
+      createdAt: '2026-11-04T10:00:00Z',
+      materialReviewStatus: 'APPROVED',
+      materialReviewReason: '',
+    },
+  ]
+  let maps = 0
+  await page.route('**/api/v1/documents?*', (route) => route.fulfill({ json: saved }))
+  await page.route('**/api/v1/documents/upload', async (route) => {
+    const doc = {
+      id: 'wrong-note',
+      fileName: 'accounting.txt',
+      status: 'READY',
+      createdAt: '2026-11-04T11:00:00Z',
+      materialReviewStatus: 'NEEDS_REVIEW',
+      materialReviewReason:
+        'This file may belong to a different course. It discusses accounting ledgers rather than biology.',
+    }
+    saved.push(doc)
+    await route.fulfill({ json: doc })
+  })
+  await page.route('**/api/v1/documents/wrong-note/approve-course-material', (route) => {
+    saved[1]!.materialReviewStatus = 'APPROVED'
+    return route.fulfill({ json: saved[1] })
+  })
+  await page.route('**/api/v1/learning/documents/wrong-note/map', (route) => {
+    maps++
+    return route.fulfill({
+      json: { documentId: 'wrong-note', fileName: 'accounting.txt', covered: [], newTopics: [] },
+    })
+  })
+  await page.route('**/api/v1/documents/wrong-note', (route) => {
+    expect(route.request().method()).toBe('DELETE')
+    saved.splice(1, 1)
+    return route.fulfill({ json: { message: 'Document deleted' } })
+  })
+  await page.goto('/courses/biology')
+  await page.getByRole('button', { name: 'Study materials', exact: true }).click()
+  await page
+    .getByLabel('Lecture notes or slides', { exact: true })
+    .setInputFiles({
+      name: 'accounting.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Debits and credits'),
+    })
+  await expect(page.getByLabel('Upload results').getByRole('status')).toContainText(
+    'Finished: 1 of 1 files uploaded',
+  )
+  const warning = page.getByRole('alert', { name: 'Review accounting.txt' })
+  await expect(warning).toContainText('excluded from lessons, quizzes and course answers')
+  expect(maps).toBe(0)
+  await page.getByRole('button', { name: 'Review this file', exact: true }).click()
+  await expect(warning).toBeFocused()
+  await expect(warning).toBeInViewport()
+  await page.reload()
+  await page.getByRole('button', { name: 'Study materials', exact: true }).click()
+  await expect(warning).toBeVisible()
+  await page
+    .getByRole('button', { name: 'Use accounting.txt for this course', exact: true })
+    .click()
+  await expect(warning).toHaveCount(0)
+  await page.reload()
+  await page.getByRole('button', { name: 'Study materials', exact: true }).click()
+  await expect(warning).toHaveCount(0)
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Remove accounting.txt', exact: true }).click()
+  await expect(
+    page.getByLabel('Uploaded course materials').getByText('accounting.txt', { exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByLabel('Uploaded course materials').getByText('cells.txt', { exact: true }),
+  ).toBeVisible()
+})
+
 test('lecture notes upload as a batch with isolated failures and no duplicate uploads when topic matching retries', async ({
   page,
 }) => {

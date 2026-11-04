@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { AiService } from '../ai/ai.service'
 import { CoursesService } from '../courses/courses.service'
@@ -40,7 +40,10 @@ export class RetrievalService {
 
   // Splits a course document into passages and embeds them. Passages are stored even if embedding fails,
   // so keyword retrieval still works without AI.
-  async indexDocument(doc: { id: string; courseId: string | null; extractedText: string | null }, user: AuthUser) {
+  async indexDocument(
+    doc: { id: string; courseId: string | null; extractedText: string | null },
+    user: AuthUser,
+  ) {
     if (!doc.courseId || !doc.extractedText?.trim()) return 0
     const passages = chunkText(doc.extractedText)
     if (passages.length === 0) return 0
@@ -48,10 +51,14 @@ export class RetrievalService {
     const vectors: number[][] = []
     try {
       for (let i = 0; i < passages.length; i += EMBED_BATCH) {
-        vectors.push(...(await this.ai.embed(passages.slice(i, i + EMBED_BATCH), aiOpts(user, doc.id))))
+        vectors.push(
+          ...(await this.ai.embed(passages.slice(i, i + EMBED_BATCH), aiOpts(user, doc.id))),
+        )
       }
     } catch (err) {
-      this.logger.warn(`Embedding failed for document ${doc.id}, storing passages without vectors: ${String(err)}`)
+      this.logger.warn(
+        `Embedding failed for document ${doc.id}, storing passages without vectors: ${String(err)}`,
+      )
       vectors.length = 0
     }
 
@@ -67,21 +74,36 @@ export class RetrievalService {
         })),
       }),
     ])
-    this.logger.log(`Indexed document ${doc.id}: ${passages.length} passages${vectors.length ? ' with embeddings' : ''}`)
+    this.logger.log(
+      `Indexed document ${doc.id}: ${passages.length} passages${vectors.length ? ' with embeddings' : ''}`,
+    )
     return passages.length
   }
 
   // Documents uploaded before retrieval existed get indexed the first time they're needed
   private async ensureCourseIndexed(courseId: string, user: AuthUser) {
     const unindexed = await this.prisma.document.findMany({
-      where: { courseId, status: 'READY', extractedText: { not: null }, chunks: { none: {} } },
+      where: {
+        courseId,
+        status: 'READY',
+        materialReviewStatus: 'APPROVED',
+        extractedText: { not: null },
+        chunks: { none: {} },
+      },
       select: { id: true, courseId: true, extractedText: true },
     })
     for (const doc of unindexed) await this.indexDocument(doc, user)
   }
 
   async courseHasMaterial(courseId: string) {
-    const count = await this.prisma.document.count({ where: { courseId, status: 'READY', extractedText: { not: null } } })
+    const count = await this.prisma.document.count({
+      where: {
+        courseId,
+        status: 'READY',
+        materialReviewStatus: 'APPROVED',
+        extractedText: { not: null },
+      },
+    })
     return count > 0
   }
 
@@ -97,33 +119,42 @@ export class RetrievalService {
     await this.ensureCourseIndexed(courseId, user)
 
     const chunks = await this.prisma.documentChunk.findMany({
-      where: { courseId },
-      select: { id: true, documentId: true, text: true, embedding: true, topicId: true, document: { select: { fileName: true } } },
+      where: { courseId, document: { status: 'READY', materialReviewStatus: 'APPROVED' } },
+      select: {
+        id: true,
+        documentId: true,
+        text: true,
+        embedding: true,
+        topicId: true,
+        document: { select: { fileName: true } },
+      },
     })
     if (chunks.length === 0) return []
 
     let queryVector: number[] | null = null
-    if (chunks.some(c => c.embedding.length > 0)) {
+    if (chunks.some((c) => c.embedding.length > 0)) {
       try {
         queryVector = (await this.ai.embed([query], aiOpts(user, courseId)))[0] ?? null
       } catch (err) {
-        this.logger.warn(`Query embedding failed, falling back to keyword retrieval: ${String(err)}`)
+        this.logger.warn(
+          `Query embedding failed, falling back to keyword retrieval: ${String(err)}`,
+        )
       }
     }
 
     const boostTopics = new Set(options.topicIds ?? [])
     const scored = chunks
-      .map(c => {
+      .map((c) => {
         const semantic = queryVector && c.embedding.length ? cosine(queryVector, c.embedding) : null
         const base = semantic ?? keywordScore(query, c.text) * 0.6
         const relevant = semantic !== null ? semantic >= MIN_SIMILARITY : base > 0
         // Passages already mapped to the topic being studied get a small boost
         return { c, score: base + (c.topicId && boostTopics.has(c.topicId) ? 0.08 : 0), relevant }
       })
-      .filter(x => x.relevant)
+      .filter((x) => x.relevant)
       .sort((a, b) => b.score - a.score)
     const best = scored[0]?.score ?? 0
-    const top = scored.filter(x => x.score >= best - RELATIVE_WINDOW).slice(0, k)
+    const top = scored.filter((x) => x.score >= best - RELATIVE_WINDOW).slice(0, k)
 
     return top.map(({ c, score }) => ({
       id: c.id,
@@ -140,8 +171,13 @@ export class RetrievalService {
     const doc = await this.prisma.document.findUnique({ where: { id: documentId } })
     if (!doc?.courseId) throw new NotFoundException('Document not found')
     await this.coursesService.findOne(doc.courseId, user) // access check
+    if (doc.materialReviewStatus !== 'APPROVED')
+      throw new BadRequestException(
+        'Review this file and confirm that it belongs to this course before matching topics or using it for study.',
+      )
 
-    if ((await this.prisma.documentChunk.count({ where: { documentId } })) === 0) await this.indexDocument(doc, user)
+    if ((await this.prisma.documentChunk.count({ where: { documentId } })) === 0)
+      await this.indexDocument(doc, user)
     const chunks = await this.prisma.documentChunk.findMany({ where: { documentId } })
     const topics = await this.prisma.topic.findMany({
       where: { courseId: doc.courseId, archivedAt: null },
@@ -150,10 +186,10 @@ export class RetrievalService {
 
     // 1. Link each passage to its closest topic (subtopic matches count toward their parent)
     const coverage = new Map<string, number>()
-    if (topics.length && chunks.some(c => c.embedding.length)) {
+    if (topics.length && chunks.some((c) => c.embedding.length)) {
       try {
         const topicVectors = await this.ai.embed(
-          topics.map(t => `${t.name}${t.description ? `: ${t.description}` : ''}`),
+          topics.map((t) => `${t.name}${t.description ? `: ${t.description}` : ''}`),
           aiOpts(user, documentId),
         )
         const updates = []
@@ -165,7 +201,12 @@ export class RetrievalService {
             if (score > best.score) best = { index: i, score }
           })
           const topic = best.score >= TOPIC_MATCH_SIMILARITY ? topics[best.index]! : null
-          updates.push(this.prisma.documentChunk.update({ where: { id: chunk.id }, data: { topicId: topic?.id ?? null } }))
+          updates.push(
+            this.prisma.documentChunk.update({
+              where: { id: chunk.id },
+              data: { topicId: topic?.id ?? null },
+            }),
+          )
           if (topic) {
             const key = topic.parentTopicId ?? topic.id
             coverage.set(key, (coverage.get(key) ?? 0) + 1)
@@ -181,7 +222,7 @@ export class RetrievalService {
     let newTopics: { name: string; description?: string }[] = []
     try {
       newTopics = await this.ai.findUncoveredTopics(
-        topics.map(t => t.name),
+        topics.map((t) => t.name),
         doc.extractedText ?? '',
         aiOpts(user, documentId),
       )
@@ -189,14 +230,14 @@ export class RetrievalService {
       this.logger.warn(`New-concept detection failed for document ${documentId}: ${String(err)}`)
     }
 
-    const byId = new Map(topics.map(t => [t.id, t]))
+    const byId = new Map(topics.map((t) => [t.id, t]))
     return {
       documentId,
       fileName: doc.fileName,
       covered: [...coverage.entries()]
         .map(([topicId, passages]) => ({ topicId, name: byId.get(topicId)?.name ?? '', passages }))
         .sort((a, b) => b.passages - a.passages),
-      newTopics: newTopics.filter(t => t?.name).slice(0, 5),
+      newTopics: newTopics.filter((t) => t?.name).slice(0, 5),
     }
   }
 }

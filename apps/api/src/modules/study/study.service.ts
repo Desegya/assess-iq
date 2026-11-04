@@ -1192,7 +1192,7 @@ export class StudyService {
     }
 
     const doc = await this.prisma.document.findFirst({
-      where: { courseId, status: 'READY', extractedText: { not: null } },
+      where: { courseId, status: 'READY', materialReviewStatus: 'APPROVED', extractedText: { not: null } },
       orderBy: { createdAt: 'desc' },
     })
 

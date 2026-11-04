@@ -43,6 +43,8 @@ const OUTLINE_SOURCE_LABEL = {
 } as const
 
 interface UploadedDocument {
+  materialReviewStatus?: string
+  materialReviewReason?: string | null
   id: string
   status: string
   fileName: string
@@ -59,6 +61,7 @@ interface NoteUpload {
     | 'ready'
     | 'upload-failed'
     | 'mapping-failed'
+    | 'needs-review'
   documentId?: string
   error?: string
 }
@@ -334,6 +337,15 @@ function CourseDetail({ id }: { id: string }) {
               throw new Error("We couldn't read that file. Try a different one.")
             documentId = doc.id
             update(item.key, { documentId, status: 'mapping' })
+            if (doc.materialReviewStatus && doc.materialReviewStatus !== 'APPROVED') {
+              update(item.key, {
+                status: 'needs-review',
+                error:
+                  doc.materialReviewReason ??
+                  'Check this file’s course before using it. It is saved but will not be used until you confirm it belongs.',
+              })
+              continue
+            }
           }
           const mapped = await withRateLimitRetry('mapping', () =>
             api.post<DocumentMap>(`/learning/documents/${documentId}/map`, {}),
@@ -816,7 +828,21 @@ function CourseDetail({ id }: { id: string }) {
               text). Nightklass uses them for your study notes, quizzes and answers, so they match
               what your lecturer teaches.
             </p>
-            <CourseDocuments courseId={id} version={documentsVersion} />
+            <CourseDocuments
+              courseId={id}
+              version={documentsVersion}
+              uploadsBusy={uploadingNotes}
+              onApproved={(documentId) => {
+                const item = noteUploads.find((upload) => upload.documentId === documentId)
+                if (item) void processNoteUploads([item])
+              }}
+              onRemoved={(documentId) => {
+                setNotesMaps((current) => current.filter((map) => map.documentId !== documentId))
+                setNoteUploads((current) =>
+                  current.filter((upload) => upload.documentId !== documentId),
+                )
+              }}
+            />
             {notesError && (
               <div
                 role="alert"
@@ -865,16 +891,33 @@ function CourseDetail({ id }: { id: string }) {
                             ready: 'Uploaded & linked to your course',
                             'upload-failed': 'Upload failed',
                             'mapping-failed': 'Uploaded · topic matching needs a retry',
+                            'needs-review': 'Saved · check the course match before use',
                           }[item.status]
                         }
                       </p>
                       {item.error && (
-                        <p role="alert" className="mt-1 text-xs text-red-700">
+                        <p
+                          role="alert"
+                          className={`mt-1 text-xs ${item.status === 'needs-review' ? 'text-amber-800' : 'text-red-700'}`}
+                        >
                           {item.error}
-                          {item.documentId
+                          {item.status === 'needs-review' &&
+                            ' This file is excluded from study materials until you confirm it belongs.'}
+                          {item.documentId && item.status !== 'needs-review'
                             ? ' Your file is saved; retrying will only match its topics.'
                             : ''}
                         </p>
+                      )}
+                      {item.status === 'needs-review' && (
+                        <button
+                          type="button"
+                          className="mt-2 text-xs font-semibold text-violet-700 underline"
+                          onClick={() =>
+                            document.getElementById(`material-review-${item.documentId}`)?.focus()
+                          }
+                        >
+                          Review this file
+                        </button>
                       )}
                       {(item.status === 'upload-failed' || item.status === 'mapping-failed') && (
                         <button

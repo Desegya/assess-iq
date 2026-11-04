@@ -55,6 +55,11 @@ export class DocumentsService {
       throw new BadRequestException('File exceeds the 20 MB limit')
     }
 
+    const course = dto.courseId ? await this.prisma.course.findFirst({
+      where: user.organizationId ? { id: dto.courseId, organizationId: user.organizationId } : { id: dto.courseId, ownerId: user.id },
+      include: { topics: { where: { archivedAt: null }, select: { name: true } } },
+    }) : null
+    if (dto.courseId && !course) throw new NotFoundException('Course not found')
     const fileType = this.detectFileType(mime)
 
     // Create record in UPLOADING state so the client can see progress
@@ -68,6 +73,7 @@ export class DocumentsService {
         fileUrl: '',
         fileSizeBytes: file.size,
         status: 'UPLOADING',
+        materialReviewStatus: course ? 'PENDING' : 'APPROVED',
       },
     })
 
@@ -85,12 +91,35 @@ export class DocumentsService {
       // ── 2. Extract text ────────────────────────────────────────────────────
       const { text, pageCount } = await this.extractText(file.buffer, fileType)
       const chunks = this.chunkText(text)
+      let materialReviewStatus = 'APPROVED'
+      let materialReviewReason: string | null = null
+      if (course) {
+        materialReviewStatus = 'NEEDS_REVIEW'
+        materialReviewReason = 'We could not confidently check whether this file belongs to this course. Please review it before using it.'
+        if (text.trim()) {
+          try {
+            const assessment = await this.ai.assessCourseMaterial(
+              `${course.title} (${course.subject})${course.description ? ': ' + course.description : ''}`,
+              course.topics.map(topic => topic.name), text,
+              { userId: user.id, organizationId: user.organizationId ?? undefined, relatedEntityId: doc.id },
+            )
+            materialReviewStatus = assessment.verdict === 'MATCH' ? 'APPROVED' : 'NEEDS_REVIEW'
+            materialReviewReason = assessment.verdict === 'MISMATCH'
+              ? `This file may belong to a different course. ${assessment.reason}`
+              : assessment.verdict === 'UNCERTAIN' ? `We are not sure this file belongs to this course. ${assessment.reason}` : assessment.reason
+          } catch (error) {
+            this.logger.warn(`Course material check unavailable for document ${doc.id}`)
+          }
+        } else materialReviewReason = 'We could not read any text from this file to check its course relevance.'
+      }
 
       // ── 3. Mark READY ──────────────────────────────────────────────────────
       const ready = await this.prisma.document.update({
         where: { id: doc.id },
         data: {
           status: 'READY',
+          materialReviewStatus,
+          materialReviewReason,
           extractedText: text,
           pageCount: pageCount ?? null,
           chunkCount: chunks.length,
@@ -106,7 +135,7 @@ export class DocumentsService {
       )
 
       // ── 4. Index passages for retrieval (course material only; never blocks the upload) ──
-      await this.retrieval
+      if (materialReviewStatus === 'APPROVED') await this.retrieval
         .indexDocument(ready, user)
         .catch(err => this.logger.warn(`Indexing failed for document ${doc.id}: ${String(err)}`))
       return ready
@@ -133,6 +162,8 @@ export class DocumentsService {
       select: {
         id: true,
         fileName: true,
+        materialReviewStatus: true,
+        materialReviewReason: true,
         fileType: true,
         fileSizeBytes: true,
         status: true,
@@ -206,6 +237,17 @@ export class DocumentsService {
       )
       return { source: 'fallback' as const, proposals: extractTopicsHeuristically(doc.extractedText) }
     }
+  }
+
+  async approveCourseMaterial(id: string, user: AuthUser) {
+    const doc = await this.findOne(id, user)
+    if (doc.uploadedById !== user.id && user.role !== UserRole.ORG_ADMIN && user.role !== UserRole.SUPER_ADMIN)
+      throw new ForbiddenException('Only the uploader or an administrator can confirm this file')
+    if (!doc.courseId || doc.status !== 'READY' || !doc.extractedText?.trim())
+      throw new BadRequestException('This file needs readable text and a course before it can be used')
+    const approved = await this.prisma.document.update({ where: { id }, data: { materialReviewStatus: 'APPROVED', materialReviewReason: 'Confirmed for this course by the uploader or administrator.' } })
+    await this.retrieval.indexDocument(approved, user).catch(() => undefined)
+    return approved
   }
 
   // ─── Delete ────────────────────────────────────────────────────────────────
