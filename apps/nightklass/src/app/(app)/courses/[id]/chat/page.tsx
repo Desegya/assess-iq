@@ -58,7 +58,7 @@ export default function CourseChatPage({ params }: { params: Promise<{ id: strin
 
     setError(null)
     setInput('')
-    const history = messages.map((m) => ({ role: m.role, content: m.content }))
+    const history = messages.slice(-20).map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }))
     setMessages((prev) => [...prev, { role: 'user', content: message }])
     setSending(true)
 

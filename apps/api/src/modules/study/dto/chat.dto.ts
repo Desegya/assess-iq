@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer'
-import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator'
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 
 export class ChatHistoryMessageDto {
@@ -9,6 +17,7 @@ export class ChatHistoryMessageDto {
 
   @ApiProperty()
   @IsString()
+  @MaxLength(4000)
   content!: string
 }
 
@@ -25,4 +34,24 @@ export class ChatDto {
   @Type(() => ChatHistoryMessageDto)
   @IsOptional()
   history?: ChatHistoryMessageDto[]
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  topicId?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  lessonId?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  documentId?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  selectedText?: string
 }

@@ -113,13 +113,13 @@ export class RetrievalService {
     courseId: string,
     query: string,
     user: AuthUser,
-    options: { k?: number; topicIds?: string[] } = {},
+    options: { k?: number; topicIds?: string[]; documentId?: string } = {},
   ): Promise<RetrievedChunk[]> {
     const k = options.k ?? 6
     await this.ensureCourseIndexed(courseId, user)
 
     const chunks = await this.prisma.documentChunk.findMany({
-      where: { courseId, document: { status: 'READY', materialReviewStatus: 'APPROVED' } },
+      where: { courseId, ...(options.documentId ? { documentId: options.documentId } : {}), document: { status: 'READY', materialReviewStatus: 'APPROVED' } },
       select: {
         id: true,
         documentId: true,
