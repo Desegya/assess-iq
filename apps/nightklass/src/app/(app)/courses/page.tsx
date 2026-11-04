@@ -17,6 +17,7 @@ export default function CoursesPage() {
   const { courses, error: courseError, reload: reloadCourses, remove: removeCourse } = useCourses()
   const [progress, setProgress] = useState<CourseProgress[]>([])
   const [plannerOpen, setPlannerOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const error = courseError
 
   useEffect(() => {
@@ -28,6 +29,29 @@ export default function CoursesPage() {
   }, [])
 
   const progressByCourse = new Map(progress.map((c) => [c.courseId, c]))
+  const sortedCourses = [...(courses ?? [])].sort((a, b) => {
+    const aCode = a.courseCode?.trim()
+    const bCode = b.courseCode?.trim()
+    if (!!aCode !== !!bCode) return aCode ? -1 : 1
+    return (
+      (aCode || a.title).localeCompare(bCode || b.title, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      }) ||
+      a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }) ||
+      a.id.localeCompare(b.id)
+    )
+  })
+  const query = search.trim().toLocaleLowerCase()
+  const visibleCourses = sortedCourses.filter(
+    (course) =>
+      !query ||
+      course.title.toLocaleLowerCase().includes(query) ||
+      (course.courseCode ?? '')
+        .toLocaleLowerCase()
+        .replace(/\s+/g, '')
+        .includes(query.replace(/\s+/g, '')),
+  )
 
   return (
     <div className="space-y-6">
@@ -57,7 +81,7 @@ export default function CoursesPage() {
       />
 
       {plannerOpen && courses && (
-        <CourseTimetablePlanner courses={courses} onClose={() => setPlannerOpen(false)} />
+        <CourseTimetablePlanner courses={sortedCourses} onClose={() => setPlannerOpen(false)} />
       )}
 
       {courses !== null && <CourseSetupGuide defaultOpen={courses.length === 0} />}
@@ -99,11 +123,51 @@ export default function CoursesPage() {
       )}
 
       {courses && courses.length > 0 && (
-        <CourseGrid
-          courses={courses}
-          progressByCourse={progressByCourse}
-          onDeleted={removeCourse}
-        />
+        <div className="space-y-3">
+          <div className="flex items-end gap-2">
+            <label className="block flex-1 text-sm font-medium text-slate-700">
+              Search courses
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by course code or title"
+                className="input-base mt-1"
+              />
+            </label>
+            {search && (
+              <button type="button" onClick={() => setSearch('')} className="btn-secondary">
+                Clear search
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            Sorted by course code. Courses without codes appear last, sorted by title.
+          </p>
+          {query && (
+            <p role="status" className="text-sm text-slate-500">
+              Showing {visibleCourses.length} of {courses.length} courses
+            </p>
+          )}
+          {visibleCourses.length > 0 ? (
+            <CourseGrid
+              courses={visibleCourses}
+              progressByCourse={progressByCourse}
+              onDeleted={removeCourse}
+            />
+          ) : (
+            <EmptyState
+              illustration="empty"
+              title="No courses match your search"
+              subtitle="Try another course code or title."
+              action={
+                <button type="button" onClick={() => setSearch('')} className="btn-secondary">
+                  Clear search
+                </button>
+              }
+            />
+          )}
+        </div>
       )}
     </div>
   )

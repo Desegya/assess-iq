@@ -2,6 +2,8 @@
 
 The course library reads the full server list with `cache: no-store`. It reloads when the route changes, the browser tab regains focus, or a suspended page is restored. Responses from older requests cannot overwrite a newer list or reinsert a deleted course. Both Dashboard and My Courses use the same hook.
 
+My Courses sorts by course code, ignoring case and sorting numbers naturally. Courses without codes appear afterward, sorted by title. Search matches course codes and titles without changing the saved course list; code searches accept omitted spaces such as `BIO101` for `BIO 101`. Search results show a count and a clear-search action. The combined planner still offers all courses when the visible library is filtered.
+
 Every course card exposes Edit course and Delete course. A course page also has a selector for switching between saved courses. Switching remounts that course workspace so draft topics, errors and planning state cannot carry over from another course. Delete asks for confirmation. Courses linked to an exam goal must first be removed through that goal's Edit subjects flow.
 
 Adding a manual course, uploading an outline, accepting programme suggestions, and selecting WAEC/JAMB subjects were inspected. None intentionally replaces the learner's complete course list. A failed batch of programme additions now deselects already-saved courses so retrying adds only the remaining choices. The original report of a missing course was not reproduced as a database overwrite; list freshness and the regression checks address the observed risk without claiming a proven cause.

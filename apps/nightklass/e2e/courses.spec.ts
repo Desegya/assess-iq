@@ -5,7 +5,7 @@ const course = (id: string, title: string) => ({
   id,
   title,
   subject: title,
-  courseCode: null,
+  courseCode: null as string | null,
   description: null,
   level: 100,
   semester: 'FIRST',
@@ -18,6 +18,35 @@ const course = (id: string, title: string) => ({
   _count: { documents: 0, questions: 0, assessments: 0 },
 })
 type Course = ReturnType<typeof course>
+
+test('My Courses sorts by course code and searches codes and titles without narrowing the planner', async ({
+  page,
+}) => {
+  await setup(page, [
+    { ...course('zoology', 'Zoology'), courseCode: 'BIO 101' },
+    { ...course('algebra', 'Algebra'), courseCode: 'MAT 201' },
+    { ...course('chemistry', 'Chemistry'), courseCode: 'CHM 102' },
+    course('uncoded', 'Animal Science'),
+  ])
+  await page.goto('/courses')
+  const titles = page.getByRole('article').getByRole('heading')
+  await expect(titles).toHaveText(['Zoology', 'Chemistry', 'Algebra', 'Animal Science'])
+  const search = page.getByRole('searchbox', { name: 'Search courses', exact: true })
+  await search.fill('bio101')
+  await expect(titles).toHaveText(['Zoology'])
+  await expect(page.getByRole('status')).toHaveText('Showing 1 of 4 courses')
+  await page.getByRole('button', { name: 'Suggest a study plan', exact: true }).click()
+  const planner = page.getByRole('region', { name: 'Combined study planner' })
+  await expect(planner.getByLabel('Difficulty for Algebra')).toBeVisible()
+  await planner.getByRole('button', { name: 'Close planner' }).click()
+  await search.fill('  cHeMiStRy  ')
+  await expect(titles).toHaveText(['Chemistry'])
+  await search.fill('no such course')
+  await expect(page.getByRole('heading', { name: 'No courses match your search' })).toBeVisible()
+  await expect(page.getByRole('article')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Clear search', exact: true }).first().click()
+  await expect(titles).toHaveText(['Zoology', 'Chemistry', 'Algebra', 'Animal Science'])
+})
 
 test('My Courses previews a combined timetable and applies it only after review', async ({
   page,
