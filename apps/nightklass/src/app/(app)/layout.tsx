@@ -11,6 +11,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { useAuth } from '@/contexts/auth-context'
 import { useApi } from '@/hooks/use-api'
 import type { AcademicProfile } from '@/lib/profile'
+import { useStudyFocus } from '@/hooks/use-study-focus'
 
 function Icon({ d, className = 'w-5 h-5' }: { d: string; className?: string }) {
   return (
@@ -84,23 +85,40 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const api = useApi()
   const [dueCount, setDueCount] = useState(0)
   const [examLearner, setExamLearner] = useState(false)
+  const studyRoute =
+    /^\/topics\/[^/]+\/(learn|quiz)$/.test(pathname) ||
+    ['/today', '/flashcards', '/exam-preparation/practice', '/exam-preparation/mocks'].includes(
+      pathname,
+    )
+  const focus = useStudyFocus(studyRoute)
 
   useEffect(() => {
     let active = true
-    api.get<AcademicProfile>('/users/me/profile').then(profile => {
-      if (active) setExamLearner(profile.studyPathway === 'EXAM_PREPARATION')
-    }).catch(() => undefined)
-    return () => { active = false }
+    api
+      .get<AcademicProfile>('/users/me/profile')
+      .then((profile) => {
+        if (active) setExamLearner(profile.studyPathway === 'EXAM_PREPARATION')
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
   }, [api, pathname])
 
-  const navSections = NAV_SECTIONS.map(section => ({
+  const navSections = NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter(item => !examLearner || (item.href !== '/gpa' && item.href !== '/courses')).map(item => ({
-      ...item, label: examLearner && item.href === '/exam-preparation' ? 'My Subjects' : item.label,
-    })),
+    items: section.items
+      .filter((item) => !examLearner || (item.href !== '/gpa' && item.href !== '/courses'))
+      .map((item) => ({
+        ...item,
+        label: examLearner && item.href === '/exam-preparation' ? 'My Subjects' : item.label,
+      })),
   }))
-  const mobileNav = MOBILE_NAV.map(item => examLearner && item.href === '/courses'
-    ? { ...item, href: '/exam-preparation', label: 'Subjects' } : item)
+  const mobileNav = MOBILE_NAV.map((item) =>
+    examLearner && item.href === '/courses'
+      ? { ...item, href: '/exam-preparation', label: 'Subjects' }
+      : item,
+  )
 
   useEffect(() => {
     api
@@ -115,14 +133,20 @@ function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-dvh bg-[#fcfbfe] lg:flex">
+    <div
+      data-study-focus={focus.active ? 'true' : 'false'}
+      className="min-h-dvh bg-[#fcfbfe] lg:flex"
+    >
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-white focus:p-4"
       >
         Skip to content
       </a>
-      <aside className="fixed inset-y-0 left-0 hidden w-[248px] flex-col border-r border-[#eae6ef] bg-white lg:flex">
+      <aside
+        data-app-navigation
+        className="fixed inset-y-0 left-0 hidden w-[248px] flex-col border-r border-[#eae6ef] bg-white lg:flex"
+      >
         <Link
           href="/dashboard"
           className="mx-6 mb-8 mt-8 inline-flex min-h-11 items-center"
@@ -187,8 +211,11 @@ function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </aside>
-      <div className="min-w-0 flex-1 lg:ml-[248px]">
-        <header className="sticky top-0 z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-[#eae6ef] bg-white/95 px-4 backdrop-blur-sm sm:px-8">
+      <div className={`min-w-0 flex-1 ${focus.active ? '' : 'lg:ml-[248px]'}`}>
+        <header
+          data-app-navigation
+          className="sticky top-0 z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-[#eae6ef] bg-white/95 px-4 backdrop-blur-sm sm:px-8"
+        >
           <Link href="/dashboard" className="lg:hidden" aria-label="NightKlass home">
             <Brand />
           </Link>
@@ -196,15 +223,17 @@ function AppShell({ children }: { children: React.ReactNode }) {
             Your personal study coach
           </p>
           <div className="flex items-center gap-1 sm:gap-3">
-            {!examLearner && <Link
-              href="/gpa"
-              aria-label="GPA calculator"
-              aria-current={isActive('/gpa') ? 'page' : undefined}
-              className="flex h-11 items-center gap-2 rounded-xl px-2 text-xs font-medium text-[#716778] hover:bg-[#f3edff]"
-            >
-              <ProductIcon name="chart" className="h-4 w-4" />
-              <span className="hidden sm:inline">GPA & grades</span>
-            </Link>}
+            {!examLearner && (
+              <Link
+                href="/gpa"
+                aria-label="GPA calculator"
+                aria-current={isActive('/gpa') ? 'page' : undefined}
+                className="flex h-11 items-center gap-2 rounded-xl px-2 text-xs font-medium text-[#716778] hover:bg-[#f3edff]"
+              >
+                <ProductIcon name="chart" className="h-4 w-4" />
+                <span className="hidden sm:inline">GPA & grades</span>
+              </Link>
+            )}
             <Link
               href="/onboarding"
               aria-label="Academic profile"
@@ -224,12 +253,45 @@ function AppShell({ children }: { children: React.ReactNode }) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="mx-auto max-w-[1200px] px-4 pb-[calc(112px+env(safe-area-inset-bottom))] pt-7 sm:px-8 sm:pt-10 lg:px-10 lg:pb-12"
+          className={`mx-auto px-4 sm:px-8 lg:px-10 ${focus.active ? 'max-w-[1050px] pb-10 pt-3' : 'max-w-[1200px] pb-[calc(112px+env(safe-area-inset-bottom))] pt-7 sm:pt-10 lg:pb-12'}`}
         >
+          {studyRoute && (
+            <div
+              role="toolbar"
+              aria-label="Study view controls"
+              className={`sticky z-20 mb-5 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 backdrop-blur-sm ${focus.active ? 'top-0' : 'top-[72px]'}`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-slate-500">
+                  {focus.active ? 'Focus mode' : 'Make room to study'}
+                  <span className="hidden sm:inline">
+                    {focus.active
+                      ? ' · Press Esc to exit'
+                      : ' · Hide navigation and try fullscreen'}
+                  </span>
+                </p>
+                <button
+                  ref={focus.buttonRef}
+                  type="button"
+                  aria-pressed={focus.active}
+                  onClick={focus.toggle}
+                  className="btn-secondary"
+                >
+                  {focus.active ? 'Exit focus mode' : 'Enter focus mode'}
+                </button>
+              </div>
+              {focus.notice && (
+                <p role="status" className="mt-2 text-xs text-slate-500">
+                  {focus.notice}
+                </p>
+              )}
+            </div>
+          )}
           {children}
         </main>
       </div>
       <nav
+        data-app-navigation
         aria-label="Mobile navigation"
         className="fixed inset-x-0 bottom-0 z-20 flex items-center border-t border-[#eae6ef] bg-white px-1 pb-[env(safe-area-inset-bottom)] lg:hidden"
       >

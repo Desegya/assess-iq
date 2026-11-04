@@ -64,6 +64,146 @@ async function openFeedbackLesson(page: Page) {
   await page.goto('/topics/feedback-topic/learn')
 }
 
+async function mockStudyFullscreen(page: Page, mode: 'supported' | 'rejected' | 'unsupported') {
+  await page.addInitScript((mode) => {
+    let fullscreen: Element | null = null
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => fullscreen,
+    })
+    Object.defineProperty(document, 'fullscreenEnabled', {
+      configurable: true,
+      get: () => mode !== 'unsupported',
+    })
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: function (this: HTMLElement, options: FullscreenOptions) {
+        ;(window as any).__focusFullscreenOptions = options
+        if (mode === 'rejected') return Promise.reject(new Error('Fullscreen blocked'))
+        fullscreen = this
+        document.dispatchEvent(new Event('fullscreenchange'))
+        return Promise.resolve()
+      },
+    })
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: () => {
+        fullscreen = null
+        document.dispatchEvent(new Event('fullscreenchange'))
+        return Promise.resolve()
+      },
+    })
+  }, mode)
+}
+
+test('focus mode can enter and leave native desktop fullscreen', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'Mobile fullscreen fallback is covered separately')
+  await openFeedbackLesson(page)
+  await page.getByRole('button', { name: 'Enter focus mode', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => document.fullscreenElement === document.documentElement))
+    .toBe(true)
+  await page.getByRole('button', { name: 'Exit focus mode', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true)
+  await expect(page.locator('header[data-app-navigation]')).toBeVisible()
+})
+
+test('focus mode hides navigation and lesson extras without losing feedback when fullscreen is blocked', async ({
+  page,
+}) => {
+  await mockStudyFullscreen(page, 'rejected')
+  await openFeedbackLesson(page)
+  await page.getByRole('button', { name: 'Regenerate', exact: true }).click()
+  const feedback = page.getByRole('textbox', { name: 'What should change', exact: true })
+  await feedback.fill('Keep my feedback while I concentrate on the lesson.')
+  await page.getByRole('button', { name: 'Enter focus mode', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Exit focus mode', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true })).toBeHidden()
+  await expect(
+    page.getByRole('navigation', { name: 'Mobile navigation', exact: true }),
+  ).toBeHidden()
+  await expect(page.locator('header[data-app-navigation]')).toBeHidden()
+  await expect(page.getByRole('heading', { name: '1. Wave property 1', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Regenerate', exact: true })).toBeHidden()
+  await expect(page.getByRole('heading', { name: 'Watch & read more', exact: true })).toBeHidden()
+  await expect(feedback).toBeHidden()
+  await expect(page.getByRole('status')).toContainText('Browser fullscreen is unavailable')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Enter focus mode', exact: true })).toBeFocused()
+  await expect(page.locator('header[data-app-navigation]')).toBeVisible()
+  await expect(feedback).toHaveValue('Keep my feedback while I concentrate on the lesson.')
+  await expect(feedback).toBeVisible()
+})
+
+test('focus mode follows browser fullscreen changes and preserves quiz choices', async ({
+  page,
+}) => {
+  await mockStudyFullscreen(page, 'supported')
+  await page.route('**/study/topics/feedback-topic/quiz/history', (route) =>
+    route.fulfill({ json: { recommendedDifficulty: 'MEDIUM', attempts: [] } }),
+  )
+  await openFeedbackLesson(page)
+  await page.getByRole('button', { name: 'Enter focus mode', exact: true }).click()
+  expect(await page.evaluate(() => (window as any).__focusFullscreenOptions)).toMatchObject({
+    navigationUI: 'hide',
+  })
+  await page.getByRole('link', { name: 'Quiz me on this', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Exit focus mode', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: /Advanced/ }).click()
+  const selected = page.getByRole('button', { name: /Advanced/ })
+  await expect(selected).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Exit focus mode', exact: true }).click()
+  expect(await page.evaluate(() => document.fullscreenElement)).toBeNull()
+  await expect(selected).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Enter focus mode', exact: true }).click()
+  await page.evaluate(() => document.exitFullscreen())
+  await expect(page.getByRole('button', { name: 'Enter focus mode', exact: true })).toBeVisible()
+  await expect(page.locator('header[data-app-navigation]')).toBeVisible()
+})
+
+test('focus mode works without fullscreen support and resets on a non-study route', async ({
+  page,
+}) => {
+  await mockStudyFullscreen(page, 'unsupported')
+  await page.route('**/api/v1/courses', (route) => route.fulfill({ json: [] }))
+  await page.route('**/api/v1/documents?*', (route) => route.fulfill({ json: [] }))
+  await page.route('**/api/v1/study/availability', (route) => route.fulfill({ json: [] }))
+  await page.route('**/api/v1/study/courses/course/readiness', (route) =>
+    route.fulfill({ json: { topics: [] } }),
+  )
+  await page.route('**/api/v1/study/plans/current?*', (route) =>
+    route.fulfill({ status: 404, json: { message: 'No plan' } }),
+  )
+  await page.route('**/study/sessions/today?*', (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: 'task',
+          course: { id: 'course', title: 'Physics' },
+          topic: null,
+          kind: 'LEARN',
+          status: 'NOT_STARTED',
+          startTime: null,
+          endTime: null,
+          estimatedMinutes: 45,
+          note: null,
+        },
+      ],
+    }),
+  )
+  await page.route('**/study/sessions/overdue?*', (route) => route.fulfill({ json: [] }))
+  await page.route('**/courses/course', (route) =>
+    route.fulfill({ json: { id: 'course', title: 'Physics', subject: 'Physics', topics: [] } }),
+  )
+  await page.goto('/today')
+  await page.getByRole('button', { name: 'Enter focus mode', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Mark complete', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Open course & choose a topic', exact: true }).click()
+  await expect(page).toHaveURL(/\/courses\/course$/)
+  await expect(page.locator('header[data-app-navigation]')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Exit focus mode', exact: true })).toHaveCount(0)
+})
+
 test('regeneration shows feedback limits and request errors beside the feedback field', async ({
   page,
 }) => {

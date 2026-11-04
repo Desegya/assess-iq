@@ -305,6 +305,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
       <div>
         {data && (
           <Link
+            data-focus-distraction
             href={`/courses/${data.topic.courseId}`}
             className="text-sm text-violet-600 font-semibold"
           >
@@ -365,7 +366,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
           </div>
 
           {data && data.versions.length > 1 && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div data-focus-distraction className="flex flex-wrap items-center gap-2 text-xs">
               <label htmlFor="version" className="text-slate-500">
                 Version
               </label>
@@ -563,10 +564,15 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
               <Icon name="target" />
               Quiz me on this
             </Link>
-            <button onClick={() => togglePanel('regenerate')} className="btn-secondary">
+            <button
+              data-focus-distraction
+              onClick={() => togglePanel('regenerate')}
+              className="btn-secondary"
+            >
               Regenerate
             </button>
             <button
+              data-focus-distraction
               onClick={() => togglePanel('report')}
               className="text-sm text-slate-500 font-semibold hover:text-red-600"
             >
@@ -575,7 +581,11 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
           </div>
 
           {panel && (
-            <section aria-label="Lesson feedback" className="card p-5 space-y-3">
+            <section
+              data-focus-distraction
+              aria-label="Lesson feedback"
+              className="card p-5 space-y-3"
+            >
               {panel === 'report' ? (
                 <>
                   <p className="text-sm font-semibold text-slate-800">
@@ -658,7 +668,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
       )}
 
       {resources && (
-        <section className="card p-6">
+        <section data-focus-distraction className="card p-6">
           <h2 className="font-heading font-bold text-slate-900 mb-1">Watch &amp; read more</h2>
           {resources.videos.length > 0 ? (
             <div className="grid sm:grid-cols-2 gap-3 mt-3">

@@ -130,7 +130,7 @@ export default function TodayPage() {
       )}
 
       {overdue.length > 0 && (
-        <details className="card mb-4 p-4">
+        <details data-focus-distraction className="card mb-4 p-4">
           <summary className="cursor-pointer text-sm font-semibold text-amber-800">
             Unfinished from earlier days ({overdue.length}
             {overdue.length === 50 ? '+' : ''})

@@ -267,3 +267,8 @@
 .source-reader::backdrop {
   background: rgb(15 23 42 / 55%);
 }
+
+.nk-product [data-study-focus='true'] [data-app-navigation],
+.nk-product [data-study-focus='true'] [data-focus-distraction] {
+  display: none !important;
+}
