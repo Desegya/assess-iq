@@ -16,11 +16,14 @@ import { RetrievalService } from '../learning/retrieval.service'
 import { extractPdfText } from '../../common/pdf-text'
 import mammoth from 'mammoth'
 import JSZip from 'jszip'
+import { documentMime } from './document-mime'
+import { extractPptText } from './ppt-text'
 
 const ALLOWED_MIMETYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/msword',
+  'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'text/plain',
 ])
@@ -44,14 +47,15 @@ export class DocumentsService {
     if (!user.organizationId && user.role !== UserRole.STUDENT) {
       throw new ForbiddenException('You must belong to an organisation to upload documents')
     }
-    if (!ALLOWED_MIMETYPES.has(file.mimetype)) {
-      throw new BadRequestException('File type not supported. Upload a PDF, DOCX, or TXT file.')
+    const mime = documentMime(file)
+    if (!ALLOWED_MIMETYPES.has(mime)) {
+      throw new BadRequestException('File type not supported. Upload a PDF, Word, PowerPoint (.ppt or .pptx), or text file.')
     }
     if (file.size > MAX_FILE_SIZE) {
       throw new BadRequestException('File exceeds the 20 MB limit')
     }
 
-    const fileType = this.detectFileType(file.mimetype)
+    const fileType = this.detectFileType(mime)
 
     // Create record in UPLOADING state so the client can see progress
     const doc = await this.prisma.document.create({
@@ -71,7 +75,7 @@ export class DocumentsService {
       // ── 1. Store in R2 ─────────────────────────────────────────────────────
       const scopeKey = user.organizationId ?? `personal/${user.id}`
       const key = `${scopeKey}/documents/${doc.id}/${file.originalname}`
-      await this.storage.uploadBuffer(key, file.buffer, file.mimetype)
+      await this.storage.uploadBuffer(key, file.buffer, mime)
 
       await this.prisma.document.update({
         where: { id: doc.id },
@@ -252,12 +256,15 @@ export class DocumentsService {
       }
     }
 
+    if (type === DocumentType.PPT) return extractPptText(buffer)
+
     if (type === DocumentType.PPTX) {
       try {
-        return await this.extractPptxText(buffer)
+        const result = await this.extractPptxText(buffer)
+        if (!result.text.trim()) throw new Error('No readable slide text')
+        return result
       } catch (err) {
-        this.logger.warn('PPTX extraction failed, continuing without text', err)
-        return { text: '' }
+        throw new BadRequestException('We could not read text from this PowerPoint file. Remove password protection or upload a copy with selectable slide text.')
       }
     }
 
@@ -313,6 +320,7 @@ export class DocumentsService {
   }
 
   private detectFileType(mimetype: string): DocumentType {
+    if (mimetype === 'application/vnd.ms-powerpoint') return DocumentType.PPT
     if (mimetype === 'application/pdf') return DocumentType.PDF
     if (mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') return DocumentType.PPTX
     if (

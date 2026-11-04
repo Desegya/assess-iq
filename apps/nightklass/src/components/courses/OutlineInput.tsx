@@ -147,12 +147,12 @@ export function OutlineInput({
         <div className="mt-3">
           <input
             type="file"
-            accept=".pdf,.doc,.docx,.pptx,.txt"
+            accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
             onChange={handleFile}
             className="text-sm"
             aria-label="Course outline file"
           />
-          <p className="text-xs text-slate-400 mt-1.5">PDF, Word, PowerPoint or text.</p>
+          <p className="text-xs text-slate-400 mt-1.5">PDF, Word, PowerPoint (.ppt / .pptx) or text.</p>
         </div>
       )}
 

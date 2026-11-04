@@ -103,6 +103,7 @@ enum DocumentType {
   PDF
   DOCX
   PPTX
+  PPT
   TXT
 }
 

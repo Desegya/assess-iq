@@ -43,7 +43,7 @@ export class DocumentsController {
   @Post('upload')
   @Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN, UserRole.STUDENT)
   @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: 'Upload a document (PDF, DOCX, PPTX, or TXT) and extract text' })
+  @ApiOperation({ summary: 'Upload a document (PDF, DOCX, PPT, PPTX, or TXT) and extract text' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {

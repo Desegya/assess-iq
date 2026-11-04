@@ -19,6 +19,91 @@ const course = (id: string, title: string) => ({
 })
 type Course = ReturnType<typeof course>
 
+test('lecture notes upload as a batch with isolated failures and no duplicate uploads when topic matching retries', async ({
+  page,
+}) => {
+  await setup(page, [course('biology', 'Biology')])
+  const saved: { id: string; fileName: string; status: string; createdAt: string }[] = []
+  const uploaded: string[] = []
+  let brokenAttempts = 0
+  let slideMappings = 0
+  let legacyMappings = 0
+  await page.route('**/api/v1/documents?*', (route) => route.fulfill({ json: saved }))
+  await page.route('**/api/v1/documents/upload', async (route) => {
+    const body = route.request().postDataBuffer()!.toString()
+    expect(body).toContain('biology')
+    const fileName = body.match(/filename="([^"]+)"/)![1]!
+    uploaded.push(fileName)
+    if (fileName === 'retry.txt' && brokenAttempts++ === 0)
+      return route.fulfill({ status: 503, json: { message: 'Upload interrupted. Please retry.' } })
+    const doc = {
+      id: `doc-${fileName}`,
+      fileName,
+      status: 'READY',
+      createdAt: '2026-11-04T10:00:00Z',
+    }
+    saved.push(doc)
+    await route.fulfill({ json: doc })
+  })
+  await page.route('**/api/v1/learning/documents/*/map', (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-2)!
+    const doc = saved.find((doc) => doc.id === id)!
+    if (doc.fileName === 'older-slides.ppt' && legacyMappings++ === 0)
+      return route.fulfill({
+        status: 429,
+        headers: { 'retry-after': '1' },
+        json: { message: 'Please wait one second.' },
+      })
+    if (doc.fileName === 'slides.pptx' && slideMappings++ === 0)
+      return route.fulfill({ status: 503, json: { message: 'Topic matching interrupted.' } })
+    return route.fulfill({
+      json: { documentId: doc.id, fileName: doc.fileName, covered: [], newTopics: [] },
+    })
+  })
+  await page.goto('/courses/biology')
+  await page.getByRole('button', { name: 'Study materials', exact: true }).click()
+  const input = page.getByLabel('Lecture notes or slides', { exact: true })
+  await expect(input).toHaveAttribute('multiple', '')
+  await expect(input).toHaveAttribute('accept', /\.ppt,\.pptx/)
+  await input.setInputFiles([
+    { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Lecture notes') },
+    { name: 'slides.pptx', mimeType: 'application/octet-stream', buffer: Buffer.from('Slides') },
+    {
+      name: 'older-slides.ppt',
+      mimeType: 'application/vnd.ms-powerpoint',
+      buffer: Buffer.from('Legacy slides'),
+    },
+    { name: 'retry.txt', mimeType: 'text/plain', buffer: Buffer.from('More notes') },
+  ])
+  const results = page.getByLabel('Upload results')
+  await expect(results.getByRole('status')).toHaveText('Finished: 3 of 4 files uploaded')
+  await expect(
+    page.getByLabel('Uploaded course materials').getByText('older-slides.ppt', { exact: true }),
+  ).toBeVisible()
+  const slideResult = results.getByRole('listitem').filter({ hasText: 'slides.pptx' })
+  await expect(slideResult.getByRole('alert')).toContainText('Your file is saved')
+  await slideResult.getByRole('button', { name: 'Retry topic matching' }).click()
+  await expect(
+    slideResult.getByText('Uploaded & linked to your course', { exact: true }),
+  ).toBeVisible()
+  expect(uploaded.filter((name) => name === 'slides.pptx')).toHaveLength(1)
+  await results.getByRole('button', { name: 'Retry upload', exact: true }).click()
+  await expect(results.getByRole('status')).toHaveText('Finished: 4 of 4 files uploaded')
+  expect(uploaded).toEqual([
+    'notes.txt',
+    'slides.pptx',
+    'older-slides.ppt',
+    'retry.txt',
+    'retry.txt',
+  ])
+  expect(legacyMappings).toBe(2)
+  await page.reload()
+  await page.getByRole('button', { name: 'Study materials', exact: true }).click()
+  await expect(
+    page.getByLabel('Uploaded course materials').getByText('slides.pptx', { exact: true }),
+  ).toBeVisible()
+})
+
 test('a saved day-by-day timetable restores selected days and keeps time fields hidden', async ({
   page,
 }) => {

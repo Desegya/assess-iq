@@ -548,13 +548,13 @@ export default function NewCoursePage() {
             <input
               id="outline"
               type="file"
-              accept=".pdf,.doc,.docx,.pptx,.txt"
+              accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               disabled={loading}
               className="text-sm"
             />
             <p className="text-xs text-slate-400 mt-1.5">
-              PDF, Word, PowerPoint or text. Only have a printout? Skip this and take a photo or
+              PDF, Word, PowerPoint (.ppt / .pptx) or text. Only have a printout? Skip this and take a photo or
               paste it on the next screen.
             </p>
           </div>

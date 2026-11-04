@@ -1,4 +1,6 @@
 import { FileValidator } from '@nestjs/common'
+import JSZip from 'jszip'
+import { documentMime } from './document-mime'
 
 // Nest's FileTypeValidator detects type from magic numbers, which plain text doesn't have and legacy .doc reports
 // as application/x-cfb, so both were always rejected. This checks binary formats by signature and text by content.
@@ -13,6 +15,7 @@ const BINARY_TYPES: Record<string, string[]> = {
     'application/zip',
   ],
   'application/msword': ['application/x-cfb'],
+  'application/vnd.ms-powerpoint': ['application/x-cfb'],
 }
 
 type DetectFileType = (buffer: Buffer) => Promise<{ mime: string } | undefined>
@@ -36,16 +39,22 @@ export class DocumentFileValidator extends FileValidator<Record<string, never>> 
   async isValid(file?: Express.Multer.File): Promise<boolean> {
     if (!file?.buffer?.length) return false
 
-    if (file.mimetype === 'text/plain') {
+    const mime = documentMime(file)
+    if (mime === 'text/plain') {
       // Text files have no signature: reject anything with NUL bytes in the first 8 KB (i.e. binary data)
       return !file.buffer.subarray(0, 8192).includes(0)
     }
 
-    const accepted = BINARY_TYPES[file.mimetype]
+    const accepted = BINARY_TYPES[mime]
     if (!accepted) return false
     try {
       const detected = await this.detect(file.buffer)
-      return !!detected && accepted.includes(detected.mime)
+      if (!detected || !accepted.includes(detected.mime)) return false
+      if (mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+        const zip = await JSZip.loadAsync(file.buffer)
+        return !!zip.file('ppt/presentation.xml') && Object.keys(zip.files).some(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+      }
+      return true
     } catch {
       return false
     }

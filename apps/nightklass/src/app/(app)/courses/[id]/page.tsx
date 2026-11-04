@@ -7,7 +7,7 @@ import { Icon } from '@/components/product/Icon'
 import { ReadingText } from '@/components/product/ReadingText'
 import { HelpTip } from '@/components/product/HelpTip'
 import { nextStudyDate } from '@/lib/study-date'
-import { useApi } from '@/hooks/use-api'
+import { ApiError, useApi } from '@/hooks/use-api'
 import { getSubjectColor } from '@/lib/subject-color'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { OutlineEditor } from '@/components/courses/OutlineEditor'
@@ -46,6 +46,21 @@ interface UploadedDocument {
   id: string
   status: string
   fileName: string
+}
+
+interface NoteUpload {
+  key: string
+  file: File
+  status:
+    | 'queued'
+    | 'waiting'
+    | 'uploading'
+    | 'mapping'
+    | 'ready'
+    | 'upload-failed'
+    | 'mapping-failed'
+  documentId?: string
+  error?: string
 }
 
 interface DocumentMap {
@@ -117,7 +132,8 @@ function CourseDetail({ id }: { id: string }) {
   const [uploadingNotes, setUploadingNotes] = useState(false)
   const [documentsVersion, setDocumentsVersion] = useState(0)
   const [notesError, setNotesError] = useState<string | null>(null)
-  const [notesMap, setNotesMap] = useState<DocumentMap | null>(null)
+  const [notesMaps, setNotesMaps] = useState<DocumentMap[]>([])
+  const [noteUploads, setNoteUploads] = useState<NoteUpload[]>([])
   const [addingNewTopics, setAddingNewTopics] = useState(false)
 
   const [days, setDays] = useState<DaySlot[]>(
@@ -265,36 +281,93 @@ function CourseDetail({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // Upload notes, then link them to the outline and surface topics they add (spec §16)
   async function handleNotesUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
+    const files = Array.from(e.target.files ?? [])
     e.target.value = ''
-    if (!file) return
+    if (!files.length) return
+    const uploads: NoteUpload[] = files.map((file) => ({
+      key: crypto.randomUUID(),
+      file,
+      status: 'queued',
+    }))
     setNotesError(null)
-    setNotesMap(null)
+    setNotesMaps([])
+    setNoteUploads(uploads)
+    await processNoteUploads(uploads)
+  }
+
+  async function processNoteUploads(uploads: NoteUpload[]) {
     setUploadingNotes(true)
+    const update = (key: string, patch: Partial<NoteUpload>) =>
+      setNoteUploads((current) =>
+        current.map((item) => (item.key === key ? { ...item, ...patch } : item)),
+      )
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('courseId', id)
-      const doc = await api.upload<UploadedDocument>('/documents/upload', formData)
-      setDocumentsVersion((version) => version + 1)
-      if (doc.status !== 'READY')
-        throw new Error("We couldn't read that file. Try a different one.")
-      setNotesMap(await api.post<DocumentMap>(`/learning/documents/${doc.id}/map`, {}))
-    } catch (err) {
-      setNotesError(err instanceof Error ? err.message : 'Upload failed')
+      for (const item of uploads) {
+        let documentId = item.documentId
+        async function withRateLimitRetry<T>(
+          stage: 'uploading' | 'mapping',
+          request: () => Promise<T>,
+        ): Promise<T> {
+          try {
+            return await request()
+          } catch (error) {
+            if (!(error instanceof ApiError) || error.status !== 429) throw error
+            const seconds = Math.min(60, Math.max(1, error.retryAfterSeconds ?? 1))
+            update(item.key, { status: 'waiting' })
+            await new Promise((resolve) => setTimeout(resolve, seconds * 1000))
+            update(item.key, { status: stage })
+            return request()
+          }
+        }
+        try {
+          update(item.key, { status: documentId ? 'mapping' : 'uploading', error: undefined })
+          if (!documentId) {
+            if (item.file.size > 20 * 1024 * 1024) throw new Error('File exceeds the 20 MB limit')
+            const formData = new FormData()
+            formData.append('file', item.file)
+            formData.append('courseId', id)
+            const doc = await withRateLimitRetry('uploading', () =>
+              api.upload<UploadedDocument>('/documents/upload', formData),
+            )
+            if (doc.status !== 'READY')
+              throw new Error("We couldn't read that file. Try a different one.")
+            documentId = doc.id
+            update(item.key, { documentId, status: 'mapping' })
+          }
+          const mapped = await withRateLimitRetry('mapping', () =>
+            api.post<DocumentMap>(`/learning/documents/${documentId}/map`, {}),
+          )
+          setNotesMaps((current) => [
+            ...current.filter((map) => map.documentId !== mapped.documentId),
+            mapped,
+          ])
+          update(item.key, { status: 'ready' })
+        } catch (err) {
+          update(item.key, {
+            documentId,
+            status: documentId ? 'mapping-failed' : 'upload-failed',
+            error: err instanceof Error ? err.message : 'Upload failed',
+          })
+        } finally {
+          setDocumentsVersion((version) => version + 1)
+        }
+      }
     } finally {
       setUploadingNotes(false)
     }
   }
 
-  async function handleAddNewTopics(topics: DocumentMap['newTopics']) {
+  async function handleAddNewTopics(topics: DocumentMap['newTopics'], documentId: string) {
     setAddingNewTopics(true)
     try {
       await api.post(`/courses/${id}/topics/bulk`, { source: 'MATERIAL', topics })
-      setNotesMap((m) =>
-        m ? { ...m, newTopics: m.newTopics.filter((t) => !topics.includes(t)) } : m,
+      setNotesMaps((current) =>
+        current.map((map) =>
+          map.documentId === documentId
+            ? { ...map, newTopics: map.newTopics.filter((topic) => !topics.includes(topic)) }
+            : map,
+        ),
       )
       load()
     } catch (err) {
@@ -739,9 +812,9 @@ function CourseDetail({ id }: { id: string }) {
           </summary>
           <div className="mt-4">
             <p className="text-slate-400 text-sm mb-4">
-              Upload notes, slides, handouts or a textbook (PDF, Word, PowerPoint or text).
-              Nightklass uses them for your study notes, quizzes and answers, so they match what
-              your lecturer teaches.
+              Upload notes, slides, handouts or a textbook (PDF, Word, PowerPoint .ppt / .pptx, or
+              text). Nightklass uses them for your study notes, quizzes and answers, so they match
+              what your lecturer teaches.
             </p>
             <CourseDocuments courseId={id} version={documentsVersion} />
             {notesError && (
@@ -755,7 +828,9 @@ function CourseDetail({ id }: { id: string }) {
             <div className="flex items-center gap-3 flex-wrap">
               <input
                 type="file"
-                accept=".pdf,.doc,.docx,.pptx,.txt"
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+                multiple
+                aria-describedby="notes-upload-help"
                 onChange={handleNotesUpload}
                 disabled={uploadingNotes}
                 className="text-sm"
@@ -765,64 +840,121 @@ function CourseDetail({ id }: { id: string }) {
                 <span className="text-sm text-slate-400">Uploading & reading…</span>
               )}
             </div>
-            {notesMap && !uploadingNotes && (
-              <div className="mt-4 rounded-xl bg-slate-50 p-4 space-y-3 text-sm">
-                <p className="text-emerald-700 font-semibold">✓ {notesMap.fileName} added</p>
-                {notesMap.covered.length > 0 ? (
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1.5">
-                      Linked to your outline. Lessons and quizzes for these topics will use it:
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {notesMap.covered.map((c) => (
-                        <span key={c.topicId} className="badge bg-emerald-50 text-emerald-700">
-                          {c.name} · {c.passages} passage{c.passages === 1 ? '' : 's'}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500">
-                    It didn&apos;t clearly match any topic in your outline yet.
-                  </p>
-                )}
-                {notesMap.newTopics.length > 0 && (
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1.5">
-                      It also covers topics that aren&apos;t in your outline:
-                    </p>
-                    <ul className="space-y-1.5">
-                      {notesMap.newTopics.map((t) => (
-                        <li key={t.name} className="flex items-center justify-between gap-3">
-                          <span>
-                            <span className="font-semibold text-slate-800">{t.name}</span>
-                            {t.description && (
-                              <span className="text-xs text-slate-500"> · {t.description}</span>
-                            )}
-                          </span>
-                          <button
-                            onClick={() => void handleAddNewTopics([t])}
-                            disabled={addingNewTopics}
-                            className="text-xs font-semibold text-violet-600 flex-shrink-0"
-                          >
-                            + Add
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                    {notesMap.newTopics.length > 1 && (
-                      <button
-                        onClick={() => void handleAddNewTopics(notesMap.newTopics)}
-                        disabled={addingNewTopics}
-                        className="btn-secondary !py-1.5 !px-3 text-xs mt-2"
-                      >
-                        {addingNewTopics ? 'Adding…' : `Add all ${notesMap.newTopics.length}`}
-                      </button>
-                    )}
-                  </div>
-                )}
+            <p id="notes-upload-help" className="mt-2 text-xs text-slate-500">
+              Select multiple files together. Up to 20 MB per file. Each file is uploaded
+              separately, so a failure won’t discard the others.
+            </p>
+            {noteUploads.length > 0 && (
+              <div className="mt-4 space-y-2" aria-label="Upload results">
+                <p role="status" className="text-sm font-semibold text-slate-700">
+                  {uploadingNotes ? 'Adding your files… ' : 'Finished: '}
+                  {noteUploads.filter((item) => item.documentId).length} of {noteUploads.length}{' '}
+                  files uploaded
+                </p>
+                <ul className="space-y-2">
+                  {noteUploads.map((item) => (
+                    <li key={item.key} className="rounded-xl border border-slate-200 p-3 text-sm">
+                      <p className="break-words font-medium text-slate-800">{item.file.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {
+                          {
+                            queued: 'Waiting',
+                            waiting: 'Waiting for the upload limit to reset…',
+                            uploading: 'Uploading & reading…',
+                            mapping: 'Uploaded · matching to topics…',
+                            ready: 'Uploaded & linked to your course',
+                            'upload-failed': 'Upload failed',
+                            'mapping-failed': 'Uploaded · topic matching needs a retry',
+                          }[item.status]
+                        }
+                      </p>
+                      {item.error && (
+                        <p role="alert" className="mt-1 text-xs text-red-700">
+                          {item.error}
+                          {item.documentId
+                            ? ' Your file is saved; retrying will only match its topics.'
+                            : ''}
+                        </p>
+                      )}
+                      {(item.status === 'upload-failed' || item.status === 'mapping-failed') && (
+                        <button
+                          type="button"
+                          className="mt-2 text-xs font-semibold text-violet-700"
+                          disabled={uploadingNotes}
+                          onClick={() => void processNoteUploads([item])}
+                        >
+                          {item.documentId ? 'Retry topic matching' : 'Retry upload'}
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
+            {!uploadingNotes &&
+              notesMaps.map((notesMap) => (
+                <div
+                  key={notesMap.documentId}
+                  className="mt-4 rounded-xl bg-slate-50 p-4 space-y-3 text-sm"
+                >
+                  <p className="text-emerald-700 font-semibold">✓ {notesMap.fileName} added</p>
+                  {notesMap.covered.length > 0 ? (
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1.5">
+                        Linked to your outline. Lessons and quizzes for these topics will use it:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {notesMap.covered.map((c) => (
+                          <span key={c.topicId} className="badge bg-emerald-50 text-emerald-700">
+                            {c.name} · {c.passages} passage{c.passages === 1 ? '' : 's'}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      It didn&apos;t clearly match any topic in your outline yet.
+                    </p>
+                  )}
+                  {notesMap.newTopics.length > 0 && (
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1.5">
+                        It also covers topics that aren&apos;t in your outline:
+                      </p>
+                      <ul className="space-y-1.5">
+                        {notesMap.newTopics.map((t) => (
+                          <li key={t.name} className="flex items-center justify-between gap-3">
+                            <span>
+                              <span className="font-semibold text-slate-800">{t.name}</span>
+                              {t.description && (
+                                <span className="text-xs text-slate-500"> · {t.description}</span>
+                              )}
+                            </span>
+                            <button
+                              onClick={() => void handleAddNewTopics([t], notesMap.documentId)}
+                              disabled={addingNewTopics}
+                              className="text-xs font-semibold text-violet-600 flex-shrink-0"
+                            >
+                              + Add
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      {notesMap.newTopics.length > 1 && (
+                        <button
+                          onClick={() =>
+                            void handleAddNewTopics(notesMap.newTopics, notesMap.documentId)
+                          }
+                          disabled={addingNewTopics}
+                          className="btn-secondary !py-1.5 !px-3 text-xs mt-2"
+                        >
+                          {addingNewTopics ? 'Adding…' : `Add all ${notesMap.newTopics.length}`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
           </div>
         </details>
 

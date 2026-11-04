@@ -94,6 +94,7 @@ export enum DocumentType {
   PDF = 'PDF',
   DOCX = 'DOCX',
   PPTX = 'PPTX',
+  PPT = 'PPT',
   TXT = 'TXT',
 }
 

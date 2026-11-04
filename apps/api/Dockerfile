@@ -11,7 +11,7 @@
 
 FROM node:24-slim AS base
 RUN apt-get update -y \
-  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && apt-get install -y --no-install-recommends openssl ca-certificates catdoc \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
