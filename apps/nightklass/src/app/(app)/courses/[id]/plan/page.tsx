@@ -26,6 +26,7 @@ interface StudyPlan {
   examDate: string
   startDate: string
   planType: 'EXAM_DATE' | 'DURATION'
+  weeklyMinutes?: number | null
   weeks: number | null
   changeLog: { at: string; reason: string }[]
   missedCount: number
@@ -171,6 +172,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
                 ? `Exam ${new Date(plan.examDate).toDateString()} · ${daysLeft} day${daysLeft === 1 ? '' : 's'} to go`
                 : `${plan.weeks ? `${plan.weeks}-week plan` : 'Plan'} · runs to ${new Date(plan.examDate).toDateString()}`}{' '}
               · {done}/{total} sessions done
+              {plan.weeklyMinutes ? ` · Up to ${plan.weeklyMinutes / 60} hours/week` : ''}
             </p>
           </div>
           <button onClick={handleAdapt} disabled={adapting} className="btn-secondary">

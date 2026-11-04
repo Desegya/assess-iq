@@ -769,6 +769,8 @@ model StudyPlan {
   // EXAM_DATE: plan runs to examDate; DURATION: a fixed 5/10/13-week (or custom) plan ending on examDate
   planType  PlanType        @default(EXAM_DATE)
   weeks     Int?
+  weeklyMinutes Int?
+  schedulingPreferences Json?
   // [{ at, reason }] — every automatic or manual adjustment, shown to the student
   changeLog Json            @default("[]")
   createdAt DateTime        @default(now())

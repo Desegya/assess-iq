@@ -171,7 +171,7 @@ describe('allocateSlots', () => {
     const topics = ['T1', 'T2', 'T3'].map(id => topic(id, { estimatedMinutes: 60, subtopicCount: 0 }))
     const { sessions } = buildPlan(topics, allocation.get('bio')!, { planStart: START, examDate: day(20) })
 
-    expect(sessions.every(s => s.startTime === '18:00' && s.endTime === '18:45')).toBe(true)
+    expect(sessions.every(s => s.startTime >= '18:00' && s.endTime <= '18:45' && toMinutes(s.endTime) - toMinutes(s.startTime) === s.estimatedMinutes)).toBe(true)
     expect(Math.max(...minutesPerDay(sessions))).toBeLessThanOrEqual(45)
   })
 })

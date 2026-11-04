@@ -6,6 +6,7 @@ import { TopicsService } from '../topics/topics.service'
 import { RetrievalService } from '../learning/retrieval.service'
 import { describeCourse, SEMESTER_LABEL } from '../courses/describe-course'
 import { allocateSlots, buildPlan, type PlanTopic } from './plan-builder'
+import { freeSlots, weeklyBudgetSlots, type BudgetPreferences } from './weekly-budget'
 import { defaultMarks, recommendDifficulty } from './quiz-scoring'
 import { extractTopicsHeuristically } from '../documents/topic-extraction-fallback'
 import {
@@ -188,6 +189,9 @@ export class StudyService {
     if (topicCount === 0) {
       throw new BadRequestException('This course has no topics yet — add topics before generating a plan')
     }
+    if (dto.weeklyHours !== undefined) {
+      return this.generateBudgetPlan(dto, user, end)
+    }
     if ((await this.datedSlots(user, today, end)).length === 0) {
       throw new BadRequestException(
         'No available study slots before the exam date — widen your availability or move the exam date',
@@ -222,6 +226,59 @@ export class StudyService {
     return this.getCurrentPlan(dto.courseId, user)
   }
 
+  private nextBudgetDay(preferences: BudgetPreferences) {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: preferences.timeZone ?? 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+    const value = (type: string) => parts.find(p => p.type === type)!.value
+    const date = new Date(`${value('year')}-${value('month')}-${value('day')}T00:00:00Z`)
+    date.setUTCDate(date.getUTCDate() + 1)
+    return date
+  }
+
+  private async budgetSlots(user: AuthUser, courseId: string, from: Date, end: Date, weeklyMinutes: number, preferences: BudgetPreferences, earliest = from, database: Pick<PrismaService, 'studySession'> = this.prisma) {
+    const busy = await database.studySession.findMany({
+      where: { studentId: user.id, scheduledDate: { gte: from, lt: end },
+        status: { in: ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'] },
+        OR: [{ studyPlan: { status: 'ACTIVE' }, courseId: { not: courseId } }, { status: { in: ['IN_PROGRESS', 'COMPLETED'] } }, { studyPlan: { status: 'ACTIVE' }, courseId, scheduledDate: { lt: earliest } }],
+      },
+      select: { scheduledDate: true, startTime: true, endTime: true, courseId: true },
+    })
+    const result = weeklyBudgetSlots(from, end, weeklyMinutes, preferences, busy, earliest, busy.filter(s => s.courseId === courseId))
+    if (result.shortages.length) throw new BadRequestException(
+      `Your weekly budget does not fit around your preferences and existing course sessions (${result.shortages[0]}). Reduce the hours or choose a wider study window.`,
+    )
+    return result.slots
+  }
+
+  private async generateBudgetPlan(dto: GeneratePlanDto, user: AuthUser, end: Date) {
+    const preferences: BudgetPreferences = {
+      studyPreference: dto.studyPreference ?? 'EVENINGS', avoidWorkHours: dto.avoidWorkHours ?? true,
+      workStart: dto.workStart ?? '09:00', workEnd: dto.workEnd ?? '17:00', timeZone: dto.timeZone ?? 'UTC',
+    }
+    if (preferences.avoidWorkHours && preferences.workStart >= preferences.workEnd)
+      throw new BadRequestException('Work end time must be after work start time')
+    const from = this.nextBudgetDay(preferences)
+    if (dto.weeks) end = new Date(from.getTime() + dto.weeks * 7 * 86400000)
+    const weeklyMinutes = Math.round(dto.weeklyHours! * 60 / 15) * 15
+    const topics = await this.planTopics(dto.courseId, user)
+    await this.prisma.$transaction(async (tx) => {
+      // Serialize budget creation for a student so concurrent course requests cannot claim the same time.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${user.id}))::text`
+      const slots = await this.budgetSlots(user, dto.courseId, from, end, weeklyMinutes, preferences, from, tx)
+      if (!slots.length) throw new BadRequestException('No study time fits before this plan ends. Extend the plan or change your preferences.')
+      const built = buildPlan(topics, slots, { planStart: from, examDate: end, fillPractice: true })
+      const version = await tx.studyPlan.count({ where: { studentId: user.id, courseId: dto.courseId } })
+      await tx.studyPlan.updateMany({ where: { studentId: user.id, courseId: dto.courseId, status: 'ACTIVE' }, data: { status: 'ABANDONED' } })
+      await tx.studyPlan.create({ data: {
+        studentId: user.id, courseId: dto.courseId, examDate: end, startDate: from,
+        version: version + 1, planType: dto.weeks ? 'DURATION' : 'EXAM_DATE', weeks: dto.weeks ?? null,
+        weeklyMinutes, schedulingPreferences: { ...preferences },
+        changeLog: [{ at: new Date().toISOString(), reason: `${weeklyMinutes / 60} hours/week; scheduled around your other courses${built.scaledDown ? '; shortened topics to fit your budget' : ''}${built.unscheduledTopics.length ? '; not enough time for ' + built.unscheduledTopics.join(', ') : ''}` }],
+        sessions: { create: built.sessions.map(s => ({ ...s, studentId: user.id, courseId: dto.courseId })) },
+      } })
+    })
+    return this.getCurrentPlan(dto.courseId, user)
+  }
+
   async getCurrentPlan(courseId: string, user: AuthUser) {
     const plan = await this.prisma.studyPlan.findFirst({
       where: { studentId: user.id, courseId, status: 'ACTIVE' },
@@ -252,7 +309,7 @@ export class StudyService {
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
 
     return this.prisma.studySession.findMany({
-      where: { studentId: user.id, scheduledDate: { gte: today, lt: tomorrow } },
+      where: { studentId: user.id, studyPlan: { status: 'ACTIVE' }, scheduledDate: { gte: today, lt: tomorrow } },
       include: { topic: true, course: { select: { id: true, title: true } } },
       orderBy: { startTime: 'asc' },
     })
@@ -291,7 +348,22 @@ export class StudyService {
     if (!plan || plan.studentId !== user.id || plan.status !== 'ACTIVE') throw new NotFoundException('Study plan not found')
     if (plan.examDate <= startOfDay(new Date())) throw new BadRequestException('This plan has ended — create a new one')
 
-    await this.rebalancePlans(user, { [plan.id]: reason }, 'Rebalanced with your other courses')
+    if (plan.weeklyMinutes && plan.schedulingPreferences) {
+      const preferences = plan.schedulingPreferences as unknown as BudgetPreferences
+      const from = this.nextBudgetDay(preferences)
+      const topics = await this.planTopics(plan.courseId, user)
+      await this.prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${user.id}))::text`
+        const slots = await this.budgetSlots(user, plan.courseId, startOfDay(plan.startDate), plan.examDate, plan.weeklyMinutes!, preferences, from, tx)
+        const built = buildPlan(topics, slots, { planStart: plan.startDate, examDate: plan.examDate, fillPractice: true })
+        await tx.studySession.updateMany({ where: { studyPlanId: plan.id, status: 'NOT_STARTED', scheduledDate: { lt: startOfDay(new Date()) } }, data: { status: 'MISSED' } })
+        await tx.studySession.deleteMany({ where: { studyPlanId: plan.id, status: 'NOT_STARTED', scheduledDate: { gte: from } } })
+        await tx.studySession.createMany({ data: built.sessions.map(s => ({ ...s, studyPlanId: plan.id, studentId: user.id, courseId: plan.courseId })) })
+        await tx.studyPlan.update({ where: { id: plan.id }, data: { changeLog: [...((plan.changeLog as object[]) ?? []), { at: new Date().toISOString(), reason: [reason, built.scaledDown && 'shortened topics to fit your budget', built.unscheduledTopics.length && 'not enough time for ' + built.unscheduledTopics.join(', ')].filter(Boolean).join('; ') }] } })
+      })
+    } else {
+      await this.rebalancePlans(user, { [plan.id]: reason }, 'Rebalanced with your other courses')
+    }
     return this.getCurrentPlan(plan.courseId, user)
   }
 
@@ -300,16 +372,22 @@ export class StudyService {
   // `reasons` holds the change-log line for plans the student acted on; other plans are only touched (and
   // logged with `otherReason`) if their schedule actually changes.
   private async rebalancePlans(user: AuthUser, reasons: Record<string, string>, otherReason: string) {
+    await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${user.id}))::text`
     const today = startOfDay(new Date())
-    const plans = await this.prisma.studyPlan.findMany({
-      where: { studentId: user.id, status: 'ACTIVE', examDate: { gt: today } },
+    const plans = await tx.studyPlan.findMany({
+      where: { studentId: user.id, status: 'ACTIVE', examDate: { gt: today }, weeklyMinutes: null },
       orderBy: { createdAt: 'asc' },
       include: { sessions: true, course: { select: { creditUnits: true } } },
     })
     if (plans.length === 0) return
 
     const lastEnd = new Date(Math.max(...plans.map(p => p.examDate.getTime())))
-    const slots = await this.datedSlots(user, today, lastEnd)
+    const reserved = await tx.studySession.findMany({ where: {
+      studentId: user.id, scheduledDate: { gte: today, lt: lastEnd },
+      OR: [{ studyPlan: { status: 'ACTIVE', weeklyMinutes: { not: null } }, status: 'NOT_STARTED' }, { status: { in: ['COMPLETED', 'IN_PROGRESS'] } }],
+    } })
+    const slots = freeSlots(await this.datedSlots(user, today, lastEnd), reserved)
     const DAY = 24 * 60 * 60 * 1000
     const allocation = allocateSlots(
       plans.map(p => ({
@@ -352,12 +430,12 @@ export class StudyService {
       ].filter(Boolean) as string[]
 
       ops.push(
-        this.prisma.studySession.updateMany({ where: { id: { in: missed.map(s => s.id) } }, data: { status: 'MISSED' } }),
-        this.prisma.studySession.deleteMany({ where: { id: { in: upcoming.map(s => s.id) } } }),
-        this.prisma.studySession.createMany({
+        tx.studySession.updateMany({ where: { id: { in: missed.map(s => s.id) } }, data: { status: 'MISSED' } }),
+        tx.studySession.deleteMany({ where: { id: { in: upcoming.map(s => s.id) } } }),
+        tx.studySession.createMany({
           data: built.sessions.map(s => ({ ...s, studyPlanId: plan.id, studentId: user.id, courseId: plan.courseId })),
         }),
-        this.prisma.studyPlan.update({
+        tx.studyPlan.update({
           where: { id: plan.id },
           data: {
             changeLog: [...((plan.changeLog as object[]) ?? []), { at: new Date().toISOString(), reason: summary.join('; ') }],
@@ -365,7 +443,8 @@ export class StudyService {
         }),
       )
     }
-    if (ops.length) await this.prisma.$transaction(ops)
+    if (ops.length) await Promise.all(ops)
+    }, { timeout: 30000 })
   }
 
   // Students often only learn the exam date mid-semester: set or change it, then re-plan the rest around it
@@ -375,6 +454,10 @@ export class StudyService {
     const date = startOfDay(new Date(examDate))
     if (date <= startOfDay(new Date())) throw new BadRequestException('Exam date must be in the future')
 
+    if (plan.weeklyMinutes && plan.schedulingPreferences) {
+      const preferences = plan.schedulingPreferences as unknown as BudgetPreferences
+      await this.budgetSlots(user, plan.courseId, startOfDay(plan.startDate), date, plan.weeklyMinutes, preferences, this.nextBudgetDay(preferences))
+    }
     const changed = plan.planType === 'EXAM_DATE'
     await this.prisma.studyPlan.update({
       where: { id: planId },
@@ -406,11 +489,7 @@ export class StudyService {
     if (scorePercent < 50) {
       // Poor score: re-plan so this topic gets extra revision time (weak topics are weighted up), sharing
       // time fairly with other courses rather than squeezing a session into someone else's slot
-      await this.rebalancePlans(
-        user,
-        { [plan.id]: `More time for ${topic.name} after a ${scorePercent}% quiz` },
-        'Rebalanced with your other courses',
-      )
+      await this.adaptPlan(plan.id, user, `More time for ${topic.name} after a ${scorePercent}% quiz`)
       const next = await this.prisma.studySession.findFirst({
         where: { studyPlanId: plan.id, topicId, status: 'NOT_STARTED', scheduledDate: { gte: today } },
         orderBy: { scheduledDate: 'asc' },

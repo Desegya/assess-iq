@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 
 const user = {
   id: 'visual-learner',
@@ -29,6 +29,101 @@ const content = {
   summary: ['Frequency is measured in hertz.'],
   examQuestions: [],
 }
+
+async function openFeedbackLesson(page: Page) {
+  const lesson = {
+    id: 'feedback-lesson',
+    version: 1,
+    mode: 'AI',
+    sources: [],
+    createdAt: '2026-10-30T08:00:00Z',
+    content: {
+      ...content,
+      sections: Array.from({ length: 12 }, (_, index) => ({
+        heading: `Wave property ${index + 1}`,
+        body: 'A wave carries energy. '.repeat(15),
+      })),
+    },
+  }
+  await page.route('**/learning/topics/feedback-topic/lesson', (route) =>
+    route.fulfill({
+      json: {
+        topic: {
+          id: 'feedback-topic',
+          name: 'Waves',
+          courseId: 'course',
+          courseTitle: 'Physics',
+          subtopics: [],
+        },
+        hasMaterial: false,
+        versions: [{ id: lesson.id, version: 1, mode: 'AI', createdAt: lesson.createdAt }],
+        lesson,
+      },
+    }),
+  )
+  await page.goto('/topics/feedback-topic/learn')
+}
+
+test('regeneration shows feedback limits and request errors beside the feedback field', async ({
+  page,
+}) => {
+  let submissions = 0
+  await page.route('**/learning/topics/feedback-topic/lesson/generate', async (route) => {
+    submissions++
+    expect(route.request().postDataJSON().feedback).toHaveLength(1000)
+    await route.fulfill({
+      status: 503,
+      json: { message: 'Could not regenerate. Please try again.' },
+    })
+  })
+  await openFeedbackLesson(page)
+  await page.getByRole('button', { name: 'Regenerate', exact: true }).click()
+  const panel = page.getByRole('region', { name: 'Lesson feedback' })
+  const feedback = panel.getByRole('textbox', { name: 'What should change' })
+  await feedback.fill('a'.repeat(1001))
+  await expect(panel.getByText(/1,001 \/ 1,000 characters/)).toBeVisible()
+  await expect(feedback).toHaveAttribute('aria-invalid', 'true')
+  await expect(panel.getByRole('button', { name: 'Generate new version' })).toBeDisabled()
+  expect(submissions).toBe(0)
+  await feedback.fill('a'.repeat(1000))
+  await panel.getByRole('button', { name: 'Generate new version' }).click()
+  const error = panel.getByRole('alert')
+  await expect(error).toHaveText('Could not regenerate. Please try again.')
+  await expect(error).toBeInViewport()
+  await expect(error).toBeFocused()
+  await expect(feedback).toHaveValue('a'.repeat(1000))
+  expect(submissions).toBe(1)
+  await feedback.fill('More worked examples please')
+  await expect(error).toHaveCount(0)
+})
+
+test('mistake reports keep errors and successful confirmation in the feedback panel', async ({
+  page,
+}) => {
+  let attempts = 0
+  await page.route('**/learning/lessons/feedback-lesson/report', (route) => {
+    attempts++
+    return attempts === 1
+      ? route.fulfill({ status: 503, json: { message: 'Could not send report. Try again.' } })
+      : route.fulfill({ json: {} })
+  })
+  await openFeedbackLesson(page)
+  await page.getByRole('button', { name: 'Report a mistake', exact: true }).click()
+  const panel = page.getByRole('region', { name: 'Lesson feedback' })
+  await panel.getByRole('textbox', { name: 'Describe the mistake' }).fill('b'.repeat(1001))
+  await expect(panel.getByRole('button', { name: 'Send report' })).toBeDisabled()
+  await panel
+    .getByRole('textbox', { name: 'Describe the mistake' })
+    .fill('The frequency explanation needs a correction.')
+  await panel.getByRole('button', { name: 'Send report' }).click()
+  await expect(panel.getByRole('alert')).toBeInViewport()
+  await expect(panel.getByRole('alert')).toHaveText('Could not send report. Try again.')
+  await panel.getByRole('button', { name: 'Send report' }).click()
+  await expect(panel.getByRole('status')).toContainText('Thanks, reported.')
+  await expect(panel.getByRole('textbox', { name: 'What should change' })).toHaveValue(
+    'The frequency explanation needs a correction.',
+  )
+})
 
 test.beforeEach(async ({ page, context }) => {
   await context.addCookies([{ name: 'nk_session', value: '1', url: 'http://127.0.0.1:3102' }])

@@ -60,7 +60,7 @@ export function learningNeed(t: PlanTopic): number {
 export function buildPlan(
   topics: PlanTopic[],
   slots: PlanSlot[],
-  options: { planStart: Date; examDate: Date },
+  options: { planStart: Date; examDate: Date; fillPractice?: boolean },
 ): { sessions: PlannedSession[]; scaledDown: boolean; unscheduledTopics: string[] } {
   const weekOf = (d: Date) => Math.floor((d.getTime() - options.planStart.getTime()) / (7 * DAY_MS)) + 1
   if (slots.length === 0) return { sessions: [], scaledDown: false, unscheduledTopics: topics.map(t => t.name) }
@@ -92,8 +92,10 @@ export function buildPlan(
 
   for (const slot of learnSlots) {
     let remaining = slot.capacityMinutes
-    const push = (s: Omit<PlannedSession, 'scheduledDate' | 'startTime' | 'endTime' | 'weekNumber'>) =>
-      sessions.push({ ...s, scheduledDate: slot.date, startTime: slot.startTime, endTime: slot.endTime, weekNumber: weekOf(slot.date) })
+    const push = (s: Omit<PlannedSession, 'scheduledDate' | 'startTime' | 'endTime' | 'weekNumber'>) => {
+      const startTime = addMinutes(slot.startTime, slot.capacityMinutes - remaining)
+      sessions.push({ ...s, scheduledDate: slot.date, startTime, endTime: addMinutes(startTime, s.estimatedMinutes), weekNumber: weekOf(slot.date) })
+    }
 
     // Due reviews first, weakest topics first, but never more than half the slot
     reviews.sort((a, b) => (a.topic.mastery ?? 50) - (b.topic.mastery ?? 50))
@@ -128,6 +130,11 @@ export function buildPlan(
         reviews.push({ topic: need.topic, due: new Date(slot.date.getTime() + REVIEW_GAP_DAYS * DAY_MS) })
         needIndex++
       }
+    }
+    if (options.fillPractice && remaining >= 15 && topics.length) {
+      const weakest = [...topics].sort((a, b) => (a.mastery ?? 40) - (b.mastery ?? 40))
+      const index = Math.floor((slot.date.getTime() - options.planStart.getTime()) / DAY_MS) % weakest.length
+      push({ topicId: weakest[index]!.id, kind: 'REVIEW', estimatedMinutes: remaining, note: 'Weekly practice and recall' })
     }
   }
 

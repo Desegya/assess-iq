@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useState, use as usePromise } from 'react'
+import { useEffect, useId, useRef, useState, use as usePromise } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import { SourceReader, type LessonSource } from '@/components/product/SourceReader'
@@ -166,6 +166,25 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
   const [generating, setGenerating] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [panelError, setPanelError] = useState<string | null>(null)
+  const panelErrorRef = useRef<HTMLParagraphElement>(null)
+  const feedbackLength = Array.from(feedback.trim()).length
+  const feedbackTooLong = feedbackLength > 1000
+
+  useEffect(() => {
+    if (panelError) panelErrorRef.current?.focus()
+  }, [panelError])
+
+  function togglePanel(next: 'regenerate' | 'report') {
+    setPanel(panel === next ? null : next)
+    setPanelError(null)
+    setNotice(null)
+  }
+
+  function updateFeedback(value: string) {
+    setFeedback(value)
+    setPanelError(null)
+  }
 
   function load() {
     return api
@@ -188,6 +207,11 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
   }, [id])
 
   async function generate(withFeedback?: string) {
+    setPanelError(null)
+    if (withFeedback !== undefined && Array.from(withFeedback.trim()).length > 1000) {
+      setPanelError('Please shorten your feedback to 1,000 characters or fewer.')
+      return
+    }
     setError(null)
     setNotice(null)
     setGenerating(true)
@@ -206,15 +230,18 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
           : 'smooth',
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate the lesson')
+      const message = err instanceof Error ? err.message : 'Failed to generate the lesson'
+      if (withFeedback !== undefined) setPanelError(message)
+      else setError(message)
     } finally {
       setGenerating(false)
     }
   }
 
   async function report() {
-    if (!lesson || feedback.trim().length < 5) return
-    setError(null)
+    if (!lesson || feedbackLength < 5 || feedbackTooLong) return
+    setPanelError(null)
+    setNotice(null)
     try {
       await api.post(`/learning/lessons/${lesson.id}/report`, { reason: feedback.trim() })
       setNotice(
@@ -222,7 +249,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
       )
       setPanel('regenerate')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send report')
+      setPanelError(err instanceof Error ? err.message : 'Failed to send report')
     }
   }
 
@@ -300,7 +327,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
           {error}
         </div>
       )}
-      {notice && (
+      {notice && !panel && (
         <div className="bg-violet-50 border border-violet-100 text-violet-800 text-sm rounded-xl px-4 py-3">
           {notice}
         </div>
@@ -536,14 +563,11 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
               <Icon name="target" />
               Quiz me on this
             </Link>
-            <button
-              onClick={() => setPanel(panel === 'regenerate' ? null : 'regenerate')}
-              className="btn-secondary"
-            >
+            <button onClick={() => togglePanel('regenerate')} className="btn-secondary">
               Regenerate
             </button>
             <button
-              onClick={() => setPanel(panel === 'report' ? null : 'report')}
+              onClick={() => togglePanel('report')}
               className="text-sm text-slate-500 font-semibold hover:text-red-600"
             >
               Report a mistake
@@ -551,7 +575,7 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
           </div>
 
           {panel && (
-            <section className="card p-5 space-y-3">
+            <section aria-label="Lesson feedback" className="card p-5 space-y-3">
               {panel === 'report' ? (
                 <>
                   <p className="text-sm font-semibold text-slate-800">
@@ -559,15 +583,17 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
                   </p>
                   <textarea
                     value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
+                    onChange={(e) => updateFeedback(e.target.value)}
                     rows={3}
                     placeholder="e.g. The variance formula in section 2 should divide by n − 1"
                     aria-label="Describe the mistake"
+                    aria-describedby="lesson-feedback-count"
+                    aria-invalid={feedbackTooLong || !!panelError}
                     className="input-base"
                   />
                   <button
                     onClick={() => void report()}
-                    disabled={feedback.trim().length < 5}
+                    disabled={feedbackLength < 5 || feedbackTooLong}
                     className="btn-secondary"
                   >
                     Send report
@@ -579,10 +605,12 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
                   {modePicker}
                   <textarea
                     value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
+                    onChange={(e) => updateFeedback(e.target.value)}
                     rows={2}
                     placeholder="What should change? (optional) e.g. more worked examples, simpler explanations"
                     aria-label="What should change"
+                    aria-describedby="lesson-feedback-count"
+                    aria-invalid={feedbackTooLong || !!panelError}
                     className="input-base"
                   />
                   <p className="text-xs text-slate-400">
@@ -590,12 +618,39 @@ export default function LearnPage({ params }: { params: Promise<{ id: string }> 
                   </p>
                   <button
                     onClick={() => void generate(feedback)}
-                    disabled={generating}
+                    disabled={generating || feedbackTooLong}
                     className="btn-primary"
                   >
                     {generating ? 'Writing…' : 'Generate new version'}
                   </button>
                 </>
+              )}
+              <p
+                id="lesson-feedback-count"
+                aria-live="polite"
+                className={`text-xs ${feedbackTooLong ? 'text-red-700' : 'text-slate-500'}`}
+              >
+                {feedbackLength.toLocaleString()} / 1,000 characters
+                {feedbackTooLong
+                  ? ' — Please shorten your feedback before sending.'
+                  : panel === 'report'
+                    ? ' · At least 5 characters required.'
+                    : ''}
+              </p>
+              {panelError && (
+                <p
+                  ref={panelErrorRef}
+                  tabIndex={-1}
+                  role="alert"
+                  className="rounded-xl bg-red-50 p-3 text-sm text-red-700"
+                >
+                  {panelError}
+                </p>
+              )}
+              {notice && (
+                <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">
+                  {notice}
+                </p>
               )}
             </section>
           )}

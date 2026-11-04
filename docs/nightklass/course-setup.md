@@ -14,6 +14,14 @@ The optional target exam date is saved on the course. It preselects the exam-dat
 
 ## Deployment and checks
 
+The course workspace keeps learning actions near the top. Outline, uploaded materials, and study setup are collapsible and accessible from the section shortcuts; topic readiness is also expandable. Uploaded files remain listed with their status, upload date, and an authenticated open/download action.
+
+Study setup defaults to a per-course weekly budget. Learners can prefer weekday evenings and weekends, weekends only, or flexible daytime/evening study, and protect configurable weekday work/class hours with an hour on either side. Scheduling starts tomorrow in the learner's timezone. Blocks last up to 60 minutes with 15-minute gaps, end by 22:00, and are limited to two hours per course and three hours across courses per day. Other courses' active sessions are reserved. Impossible budgets are rejected before replacing the current plan. Short final weeks receive a proportional budget; regular practice fills the budget after initial lessons. Updating a budget plan keeps its saved preferences, weekly boundaries, and time already committed in the current week.
+
+Exact-time scheduling remains available as an alternative. These windows are shared across courses using exact times; rebalancing excludes reservations belonging to weekly-budget plans. Plan writes use a per-student transaction lock when allocating sessions.
+
+Apply the additive `20261103120000_weekly_study_budget` migration before deploying this API, and regenerate Prisma. It adds nullable weekly-minute and scheduling-preference fields to study plans. Existing plans retain exact-time scheduling. No database migration has been applied by this implementation task.
+
 Apply the additive `20261030120000_course_target_exam_date` database migration **before running the new API**:
 
 ```sh

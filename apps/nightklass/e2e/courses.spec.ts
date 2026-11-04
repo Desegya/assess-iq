@@ -19,6 +19,94 @@ const course = (id: string, title: string) => ({
 })
 type Course = ReturnType<typeof course>
 
+test('study setup restores saved weekly hours, preferences and plan length', async ({ page }) => {
+  await setup(page, [course('biology', 'Biology')])
+  await page.route('**/api/v1/study/plans/current?*', route => route.fulfill({ json: {
+    planType: 'DURATION', weeks: 10, weeklyMinutes: 180,
+    schedulingPreferences: { studyPreference: 'WEEKENDS', avoidWorkHours: false, workStart: '08:00', workEnd: '16:00' },
+  } }))
+  await page.goto('/courses/biology')
+  await page.getByRole('button', { name: 'Study setup', exact: true }).click()
+  await expect(page.getByLabel('Hours per week for this course')).toHaveValue('3')
+  await expect(page.getByLabel('When do you prefer to study?')).toHaveValue('WEEKENDS')
+  await expect(page.getByLabel('Keep weekday work / class hours free')).not.toBeChecked()
+  await expect(page.getByRole('button', { name: '10 weeks', exact: true })).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('course sections collapse and weekly budgets do not overwrite exact-time availability', async ({
+  page,
+}) => {
+  await setup(page, [course('biology', 'Biology')])
+  const availabilityWrites: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/study/availability'))
+      availabilityWrites.push(request.url())
+  })
+  await page.route('**/api/v1/study/plans/generate', (route) => route.fulfill({ json: {} }))
+  await page.goto('/courses/biology')
+  await expect(page.getByLabel('Lecture notes or slides')).toBeHidden()
+  await expect(page.getByLabel('Hours per week for this course')).toBeHidden()
+  await page.getByRole('button', { name: 'Study setup', exact: true }).click()
+  await expect(page.getByLabel('Hours per week for this course')).toHaveValue('4')
+  await expect(page.getByLabel('Mon study start time')).toBeHidden()
+  await page.getByLabel('Hours per week for this course').fill('3')
+  await page.getByLabel('When do you prefer to study?').selectOption('WEEKENDS')
+  await page.locator('#setup > summary').click()
+  await expect(page.getByLabel('Hours per week for this course')).toBeHidden()
+  await page.getByRole('button', { name: 'Study setup', exact: true }).click()
+  await expect(page.getByLabel('Hours per week for this course')).toHaveValue('3')
+  const request = page.waitForRequest(
+    (request) => request.url().includes('/study/plans/generate') && request.method() === 'POST',
+  )
+  await page.getByRole('button', { name: 'Generate study plan', exact: true }).click()
+  expect((await request).postDataJSON()).toMatchObject({
+    courseId: 'biology',
+    weeklyHours: 3,
+    studyPreference: 'WEEKENDS',
+    avoidWorkHours: true,
+    weeks: 13,
+  })
+  await expect(page).toHaveURL(/\/courses\/biology\/plan$/)
+  expect(availabilityWrites).toEqual([])
+})
+
+test('course uploads remain visible after revisiting and can be opened', async ({ page }) => {
+  await setup(page, [course('biology', 'Biology')])
+  await page
+    .context()
+    .route('https://files.example.test/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: 'Uploaded course file' }),
+    )
+  await page.route('**/api/v1/documents?*', async (route) => {
+    expect(new URL(route.request().url()).searchParams.get('courseId')).toBe('biology')
+    await route.fulfill({
+      json: [
+        {
+          id: 'notes',
+          fileName: 'Cell biology.pdf',
+          status: 'READY',
+          createdAt: '2026-10-01T12:00:00Z',
+        },
+      ],
+    })
+  })
+  await page.route('**/api/v1/documents/notes/download-url', (route) =>
+    route.fulfill({ json: { url: 'https://files.example.test/cell-biology.pdf' } }),
+  )
+  await page.goto('/courses/biology')
+  await page.getByRole('button', { name: 'Study materials', exact: true }).click()
+  const materials = page.getByLabel('Uploaded course materials')
+  await expect(materials.getByText('Cell biology.pdf')).toBeVisible()
+  await page.reload()
+  await page.getByRole('button', { name: 'Study materials', exact: true }).click()
+  await expect(materials.getByText('Cell biology.pdf')).toBeVisible()
+  const popup = page.waitForEvent('popup')
+  await materials.getByRole('button', { name: 'Open Cell biology.pdf' }).click()
+  await expect
+    .poll(() => popup.then((tab) => tab.url()))
+    .toBe('https://files.example.test/cell-biology.pdf')
+})
+
 async function setup(page: Page, initial: Course[] = []) {
   const courses = [...initial]
   const created: string[] = []
@@ -180,10 +268,11 @@ test('guided example is optional and saves an optional exam date for the next st
   await expect(
     page.getByRole('heading', { name: 'Introduction to Biology', exact: true }),
   ).toBeVisible()
+  await page.getByRole('button', { name: 'Study setup', exact: true }).click()
   await expect(page.getByLabel('Exam date', { exact: true })).toHaveValue('2099-06-15')
   expect(state.courses[0]?.targetExamDate).toBe('2099-06-15')
   await page.getByText('What does a study plan do?', { exact: true }).click()
-  await expect(page.getByText(/It schedules your reviewed topics/)).toBeVisible()
+  await expect(page.getByText(/It spreads your topics and revision/)).toBeVisible()
   await page.getByRole('button', { name: 'Edit course', exact: true }).click()
   await page.getByLabel('Exam date (optional)', { exact: true }).fill('')
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
