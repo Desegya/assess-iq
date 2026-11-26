@@ -15,8 +15,9 @@ import { LoginDto } from './dto/login.dto'
 import { RegisterOrgDto } from './dto/register-org.dto'
 import { JoinOrgDto } from './dto/join-org.dto'
 import { RegisterStudentDto } from './dto/register-student.dto'
+import { RegisterLecturerDto } from './dto/register-lecturer.dto'
 import { AuthUser, UserRole } from '@assessiq/types'
-import { EmailService } from '../email/email.service'
+import { EmailService, ProductApp } from '../email/email.service'
 import { LoginAttemptLimiter } from './login-attempt-limiter'
 
 export interface TokenPair {
@@ -110,6 +111,50 @@ export class AuthService {
     })
 
     return { user: this.sanitizeUser(user), organization, ...tokens }
+  }
+
+  // ─── Lecturer sign-up (KwikEval) ────────────────────────────────────────────
+
+  /**
+   * A lecturer gets a private one-person workspace instead of a school. Everything they
+   * create is scoped to it, so lecturers never see each other's classes or results.
+   */
+  async registerLecturer(dto: RegisterLecturerDto) {
+    const email = dto.email.trim().toLowerCase()
+    const existing = await this.prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } })
+    if (existing) throw new ConflictException('An account with this email already exists')
+
+    const passwordHash = await hashPassword(dto.password)
+    const user = await this.prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.create({
+        data: {
+          name: dto.institution?.trim() ? `${dto.name.trim()} · ${dto.institution.trim()}` : dto.name.trim(),
+          slug: `lecturer-${randomUUID()}`,
+          joinCode: `L-${randomBytes(9).toString('base64url')}`, // unused: students join classes, not workspaces
+          type: 'INDIVIDUAL',
+          plan: 'FREE_TRIAL',
+        },
+      })
+      return tx.user.create({
+        data: {
+          name: dto.name.trim(),
+          email,
+          passwordHash,
+          role: 'ORG_ADMIN',
+          status: 'ACTIVE',
+          organizationId: organization.id,
+        },
+      })
+    })
+    await this.sendVerification(user.id, user.email, user.name, 'kwikeval')
+
+    const tokens = await this.generateTokenPair({
+      id: user.id,
+      email: user.email,
+      role: user.role as UserRole,
+      organizationId: user.organizationId,
+    })
+    return { user: this.sanitizeUser(user), ...tokens }
   }
 
   // ─── Login ────────────────────────────────────────────────────────────────
@@ -303,7 +348,7 @@ export class AuthService {
           : {}),
       },
     })
-    await this.sendVerification(user.id, user.email, user.name)
+    await this.sendVerification(user.id, user.email, user.name, dto.app)
 
     const tokens = await this.generateTokenPair({
       id: user.id,
@@ -334,7 +379,7 @@ export class AuthService {
   }
 
   /** Always resolves with the same message so the response never reveals whether an account exists. */
-  async requestPasswordReset(email: string) {
+  async requestPasswordReset(email: string, app: ProductApp = 'nightklass') {
     const generic = {
       message: 'If an account exists for that email, a reset link has been sent. It expires in 30 minutes.',
     }
@@ -348,7 +393,7 @@ export class AuthService {
     })
     if (recent >= 3) return generic
     const token = await this.issueEmailToken(user.id, 'PASSWORD_RESET')
-    await this.email.sendPasswordReset(user.email, user.name, token).catch((err) =>
+    await this.email.sendPasswordReset(user.email, user.name, token, app).catch((err) =>
       this.logger.error(`event=password_reset_email_failed userId=${user.id} reason=${err instanceof Error ? err.message : 'unknown'}`),
     )
     return generic
@@ -378,23 +423,23 @@ export class AuthService {
     return { message: 'Your password has been reset. Sign in with your new password.' }
   }
 
-  private async sendVerification(userId: string, email: string, name: string) {
+  private async sendVerification(userId: string, email: string, name: string, app: ProductApp = 'nightklass') {
     try {
       const token = await this.issueEmailToken(userId, 'EMAIL_VERIFICATION')
-      await this.email.sendEmailVerification(email, name, token)
+      await this.email.sendEmailVerification(email, name, token, app)
     } catch (err) {
       // Verification is not required to sign in, so a delivery failure must not block registration.
       this.logger.error(`event=verification_email_failed userId=${userId} reason=${err instanceof Error ? err.message : 'unknown'}`)
     }
   }
 
-  async resendVerification(userId: string) {
+  async resendVerification(userId: string, app: ProductApp = 'nightklass') {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } })
     if (user.emailVerifiedAt) return { message: 'Your email is already verified.' }
     const recent = await this.prisma.emailToken.count({
       where: { userId, purpose: 'EMAIL_VERIFICATION', createdAt: { gt: new Date(Date.now() - 3600_000) } },
     })
-    if (recent < 3) await this.sendVerification(user.id, user.email, user.name)
+    if (recent < 3) await this.sendVerification(user.id, user.email, user.name, app)
     return { message: 'If your email is not yet verified, a new link has been sent.' }
   }
 

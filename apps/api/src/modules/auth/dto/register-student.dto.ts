@@ -1,4 +1,5 @@
 import { IsEmail, IsIn, IsOptional, IsString, MinLength, MaxLength } from 'class-validator'
+import { PRODUCT_APPS, ProductApp } from '../../email/email.service'
 import { ApiProperty } from '@nestjs/swagger'
 
 /** Must match PRIVACY_NOTICE_VERSION in apps/nightklass/src/lib/privacy.ts. */
@@ -24,4 +25,9 @@ export class RegisterStudentDto {
   @IsOptional()
   @IsIn([PRIVACY_NOTICE_VERSION], { message: 'Please review the current privacy notice' })
   privacyNoticeVersion?: string
+
+  /** Which product's links and name to use in emails. Defaults to Nightklass. */
+  @IsOptional()
+  @IsIn(PRODUCT_APPS)
+  app?: ProductApp
 }

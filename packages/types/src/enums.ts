@@ -22,6 +22,7 @@ export enum OrgType {
   TRAINING_INSTITUTION = 'TRAINING_INSTITUTION',
   EXAM_BODY = 'EXAM_BODY',
   OTHER = 'OTHER',
+  INDIVIDUAL = 'INDIVIDUAL',
 }
 
 export enum SubscriptionPlan {

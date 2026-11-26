@@ -6,7 +6,8 @@ import { RegisterOrgDto } from './dto/register-org.dto'
 import { JoinOrgDto } from './dto/join-org.dto'
 import { RegisterStudentDto } from './dto/register-student.dto'
 import { RefreshTokenDto } from './dto/refresh-token.dto'
-import { EmailTokenDto, ForgotPasswordDto, ResetPasswordDto } from './dto/account-recovery.dto'
+import { EmailTokenDto, ForgotPasswordDto, ResendVerificationDto, ResetPasswordDto } from './dto/account-recovery.dto'
+import { RegisterLecturerDto } from './dto/register-lecturer.dto'
 import { Public } from './decorators/public.decorator'
 import { AnonymousCredentialThrottle } from './throttle'
 import { CurrentUser } from './decorators/current-user.decorator'
@@ -24,6 +25,15 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new organisation and admin account' })
   register(@Body() dto: RegisterOrgDto) {
     return this.authService.registerOrg(dto)
+  }
+
+  // KwikEval: a lecturer signs up on their own, with no school account
+  @Public()
+  @Post('register-lecturer')
+  @AnonymousCredentialThrottle(20)
+  @ApiOperation({ summary: 'Register a lecturer with a personal KwikEval workspace' })
+  registerLecturer(@Body() dto: RegisterLecturerDto) {
+    return this.authService.registerLecturer(dto)
   }
 
   // Sized for a class signing in from one school or carrier network; password
@@ -98,7 +108,7 @@ export class AuthController {
   @AnonymousCredentialThrottle(100)
   @ApiOperation({ summary: 'Email a single-use password reset link (response never reveals whether the account exists)' })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.requestPasswordReset(dto.email)
+    return this.authService.requestPasswordReset(dto.email, dto.app)
   }
 
   @Public()
@@ -121,7 +131,7 @@ export class AuthController {
   @Post('verify-email/resend')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
-  resendVerification(@CurrentUser() user: AuthUser) {
-    return this.authService.resendVerification(user.id)
+  resendVerification(@CurrentUser() user: AuthUser, @Body() dto: ResendVerificationDto) {
+    return this.authService.resendVerification(user.id, dto.app)
   }
 }
