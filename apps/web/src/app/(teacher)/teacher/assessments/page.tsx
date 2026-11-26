@@ -63,9 +63,14 @@ export default function AssessmentsPage() {
     title: '', description: '', courseId: '', durationMinutes: 60,
   })
 
+  // Opened from a class page: /teacher/assessments?courseId=…
+  const [classFilter, setClassFilter] = useState<string | null>(null)
   useEffect(() => {
+    const courseId = new URLSearchParams(window.location.search).get('courseId')
+    setClassFilter(courseId)
+    if (courseId) setForm(f => ({ ...f, courseId }))
     void apiRef.current
-      .get<Assessment[]>('/assessments')
+      .get<Assessment[]>(courseId ? `/assessments?courseId=${encodeURIComponent(courseId)}` : '/assessments')
       .then(setAssessments)
       .catch(() => undefined)
       .finally(() => setLoading(false))
@@ -78,7 +83,7 @@ export default function AssessmentsPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.courseId) { setCreateError('Please select a course'); return }
+    if (!form.courseId) { setCreateError('Choose the class this test is for'); return }
     setCreating(true); setCreateError(null)
     try {
       const created = await api.post<Assessment>('/assessments', {
@@ -104,8 +109,16 @@ export default function AssessmentsPage() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-slate-900">Assessments</h1>
-          <p className="text-slate-500 text-sm mt-1">Create and manage tests for your students.</p>
+          <h1 className="font-heading text-2xl font-bold text-slate-900">Tests</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Build a test from a class&rsquo;s question bank, then publish it to that class.
+            {classFilter && (
+              <>
+                {' '}Showing one class.{' '}
+                <a href="/teacher/assessments" className="font-medium text-violet-700 hover:underline">Show all</a>
+              </>
+            )}
+          </p>
         </div>
         <button
           onClick={() => void openModal()}
@@ -257,13 +270,13 @@ export default function AssessmentsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Course</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Class</label>
                 <select
                   value={form.courseId}
                   onChange={e => setForm(f => ({ ...f, courseId: e.target.value }))}
                   className={inputClass}
                 >
-                  <option value="">— Select a course —</option>
+                  <option value="">— Choose a class —</option>
                   {courses.map(c => (
                     <option key={c.id} value={c.id}>{c.title}</option>
                   ))}
