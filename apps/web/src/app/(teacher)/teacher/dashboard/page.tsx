@@ -22,8 +22,8 @@ interface Question {
   id: string; status: string
 }
 
-interface Student {
-  id: string; name: string; email: string; status: string
+interface Overview {
+  totalStudents: number
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ export default function TeacherDashboard() {
   const [courses,     setCourses]     = useState<Course[]>([])
   const [assessments, setAssessments] = useState<Assessment[]>([])
   const [questions,   setQuestions]   = useState<Question[]>([])
-  const [students,    setStudents]    = useState<Student[]>([])
+  const [studentCount, setStudentCount] = useState(0)
   const [loading,     setLoading]     = useState(true)
 
   useEffect(() => {
@@ -85,9 +85,9 @@ export default function TeacherDashboard() {
       apiRef.current.get<Course[]>('/courses').catch(() => []),
       apiRef.current.get<Assessment[]>('/assessments').catch(() => []),
       apiRef.current.get<Question[]>('/questions').catch(() => []),
-      apiRef.current.get<Student[]>('/users/students').catch(() => []),
-    ]).then(([c, a, q, s]) => {
-      setCourses(c); setAssessments(a); setQuestions(q); setStudents(s)
+      apiRef.current.get<Overview>('/analytics/overview').catch(() => ({ totalStudents: 0 })),
+    ]).then(([c, a, q, o]) => {
+      setCourses(c); setAssessments(a); setQuestions(q); setStudentCount(o.totalStudents)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -125,7 +125,7 @@ export default function TeacherDashboard() {
         ) : (
           <>
             <StatCard
-              label="Courses" value={courses.length} sub="Active subjects"
+              label="Classes" value={courses.length} sub="Each with its own link"
               iconBg="bg-violet-50" href="/teacher/courses" delay={0}
               icon={
                 <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -157,8 +157,8 @@ export default function TeacherDashboard() {
               }
             />
             <StatCard
-              label="Students" value={students.length}
-              sub={`${students.filter(s => s.status === 'ACTIVE').length} active`}
+              label="Students" value={studentCount}
+              sub="In your classes"
               iconBg="bg-sky-50" href="/teacher/students" delay={225}
               icon={
                 <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -279,27 +279,27 @@ export default function TeacherDashboard() {
               {[
                 {
                   n: '1', done: courses.length > 0,
-                  title: 'Create a course',
+                  title: 'Create a class',
                   href: '/teacher/courses',
                   cta: courses.length > 0 ? `${courses.length} created` : 'Create →',
                 },
                 {
-                  n: '2', done: questions.length > 0,
-                  title: 'Generate questions from notes',
-                  href: '/teacher/documents',
-                  cta: questions.length > 0 ? `${questions.length} in bank` : 'Upload notes →',
+                  n: '2', done: studentCount > 0,
+                  title: 'Share the class link',
+                  href: '/teacher/courses',
+                  cta: studentCount > 0 ? `${studentCount} joined` : 'Get the link →',
                 },
                 {
-                  n: '3', done: publishedAssessments.length > 0,
-                  title: 'Publish an assessment',
+                  n: '3', done: questions.length > 0,
+                  title: 'Add questions',
+                  href: '/teacher/questions',
+                  cta: questions.length > 0 ? `${questions.length} in bank` : 'Write, import or generate →',
+                },
+                {
+                  n: '4', done: publishedAssessments.length > 0,
+                  title: 'Publish a test',
                   href: '/teacher/assessments',
                   cta: publishedAssessments.length > 0 ? `${publishedAssessments.length} live` : 'Build one →',
-                },
-                {
-                  n: '4', done: students.length > 0,
-                  title: 'Add students',
-                  href: '/teacher/students',
-                  cta: students.length > 0 ? `${students.length} added` : 'Add students →',
                 },
               ].map(step => (
                 <a

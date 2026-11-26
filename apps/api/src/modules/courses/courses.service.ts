@@ -75,7 +75,15 @@ export class CoursesService {
       orderBy: { createdAt: 'desc' },
       include: {
         teacher: { select: { id: true, name: true } },
-        _count: { select: { documents: true, questions: true, assessments: true } },
+        _count: {
+          select: {
+            documents: true,
+            questions: true,
+            assessments: true,
+            // KwikEval: students currently in the class
+            enrollments: { where: { status: 'ACTIVE' } },
+          },
+        },
       },
     })
   }
@@ -143,6 +151,10 @@ export class CoursesService {
 
     if (await this.prisma.examGoalSubject.count({ where: { courseId: id } })) {
       throw new ConflictException('This subject is part of an exam goal. Remove it from your exam subject choices before deleting its study workspace.')
+    }
+    // Tests keep students' results; never delete them as a side effect of deleting a class
+    if (await this.prisma.assessment.count({ where: { courseId: id } })) {
+      throw new ConflictException('This class has tests, so deleting it would erase students\' results. Delete its draft tests first, or close joining instead.')
     }
     const lessons = await this.prisma.topicLesson.findMany({ where: { topic: { courseId: id } }, select: { content: true } })
     await this.prisma.course.delete({ where: { id } })

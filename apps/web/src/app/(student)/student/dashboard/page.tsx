@@ -166,6 +166,9 @@ export default function StudentDashboard() {
               </div>
               <p className="text-sm font-medium text-slate-600">All caught up!</p>
               <p className="text-xs text-slate-400 mt-1">No pending tests right now.</p>
+              <a href="/student/classes" className="mt-3 inline-flex text-xs font-medium text-violet-700 hover:underline">
+                Join a class with its link or code →
+              </a>
             </div>
           ) : (
             <div className="divide-y divide-slate-50">
