@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useApi } from '@/hooks/use-api'
+import { ImportPaperDialog, WriteQuestionDialog } from '@/components/questions/QuestionDialogs'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,13 @@ function Skeleton({ className }: { className?: string }) {
     <div className={`bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200
       bg-[length:200%_100%] animate-shimmer rounded-lg ${className ?? ''}`} />
   )
+}
+
+// Created questions come back without the list's joined fields
+function withDefaults(q: unknown, courses: Course[]): Question {
+  const x = q as Question & { courseId?: string | null }
+  const course = x.course ?? courses.find(c => c.id === x.courseId) ?? null
+  return { ...x, createdBy: x.createdBy ?? { id: '', name: 'You' }, course, sourceDocument: null }
 }
 
 // ─── Question row ─────────────────────────────────────────────────────────────
@@ -191,6 +199,13 @@ export default function QuestionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [courseFilter, setCourseFilter] = useState<string>('ALL')
   const [search,       setSearch]       = useState('')
+  const [dialog,       setDialog]       = useState<'write' | 'import' | null>(null)
+
+  // Opened from a class page: /teacher/questions?courseId=…
+  useEffect(() => {
+    const courseId = new URLSearchParams(window.location.search).get('courseId')
+    if (courseId) setCourseFilter(courseId)
+  }, [])
 
   useEffect(() => {
     Promise.all([
@@ -231,25 +246,36 @@ export default function QuestionsPage() {
   return (
     <div className="max-w-5xl mx-auto">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-8">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-slate-900">Question Bank</h1>
+          <h1 className="font-heading text-2xl font-bold text-slate-900">Question bank</h1>
           <p className="text-slate-500 text-sm mt-1">
             {counts.all} total · {counts.approved} approved · {counts.draft} awaiting review
           </p>
         </div>
-        <a
-          href="/teacher/documents"
-          className="bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white
-                     font-semibold px-5 py-2.5 rounded-xl text-sm transition-all duration-150
-                     shadow-sm flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Generate more
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setDialog('write')} className="btn-primary">Write a question</button>
+          <button onClick={() => setDialog('import')} className="btn-secondary">Import a paper</button>
+          <a href="/teacher/documents" className="btn-secondary">Generate from notes</a>
+        </div>
       </div>
+
+      {dialog === 'write' && (
+        <WriteQuestionDialog
+          courses={courses}
+          defaultCourseId={courseFilter === 'ALL' ? '' : courseFilter}
+          onClose={() => setDialog(null)}
+          onSaved={q => setQuestions(prev => [withDefaults(q, courses), ...prev])}
+        />
+      )}
+      {dialog === 'import' && (
+        <ImportPaperDialog
+          courses={courses}
+          defaultCourseId={courseFilter === 'ALL' ? '' : courseFilter}
+          onClose={() => setDialog(null)}
+          onImported={qs => setQuestions(prev => [...qs.map(q => withDefaults(q, courses)), ...prev])}
+        />
+      )}
 
       {/* ── Filters ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-card mb-4">
