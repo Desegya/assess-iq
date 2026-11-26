@@ -12,8 +12,8 @@ export function Logo({ size = 'md', iconOnly = false, theme = 'dark' }: LogoProp
   const px = SIZES[size]
   const id = `logo-grad-${size}`
 
-  const wordColor   = theme === 'white' ? 'text-white'        : 'text-slate-900'
-  const iqColor     = theme === 'white' ? 'text-violet-300'   : 'text-violet-600'
+  const wordColor   = theme === 'white' ? 'text-white'        : 'text-[#241f2e]'
+  const iqColor     = theme === 'white' ? 'text-violet-200'   : 'text-[#7545cf]'
   const fontSizeMap = { sm: 'text-sm', md: 'text-base', lg: 'text-xl' }
 
   return (
@@ -29,8 +29,8 @@ export function Logo({ size = 'md', iconOnly = false, theme = 'dark' }: LogoProp
       >
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-            <stop offset="0%"   stopColor="#8b5cf6" />
-            <stop offset="100%" stopColor="#4c1d95" />
+            <stop offset="0%"   stopColor="#a477ff" />
+            <stop offset="100%" stopColor="#6436b9" />
           </linearGradient>
         </defs>
 
@@ -58,7 +58,7 @@ export function Logo({ size = 'md', iconOnly = false, theme = 'dark' }: LogoProp
         <circle cx="25" cy="7" r="3" fill="white" opacity="0.9" />
         <path
           d="M25 5.5 V8.5 M23.5 7 H26.5"
-          stroke="#7c3aed"
+          stroke="#7545cf"
           strokeWidth="1.2"
           strokeLinecap="round"
         />
@@ -66,7 +66,7 @@ export function Logo({ size = 'md', iconOnly = false, theme = 'dark' }: LogoProp
 
       {/* ── Wordmark ── */}
       {!iconOnly && (
-        <span className={`font-heading font-bold ${fontSizeMap[size]} ${wordColor} tracking-tight`}>
+        <span className={`font-semibold ${fontSizeMap[size]} ${wordColor} tracking-tight`}>
           Kwik<span className={iqColor}>Eval</span>
         </span>
       )}

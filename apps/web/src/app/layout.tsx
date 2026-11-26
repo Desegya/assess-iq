@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
-import { Inter, Plus_Jakarta_Sans } from 'next/font/google'
+import { Inter, Space_Grotesk } from 'next/font/google'
 import { Providers } from '@/components/providers'
+import { ProductTheme } from '@/components/product/ProductTheme'
 import '../styles/globals.css'
 
 const inter = Inter({
@@ -9,26 +10,29 @@ const inter = Inter({
   display: 'swap',
 })
 
-const jakarta = Plus_Jakarta_Sans({
+const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
-  variable: '--font-jakarta',
+  variable: '--font-heading',
   display: 'swap',
-  weight: ['400', '500', '600', '700', '800'],
+  weight: ['500', '600', '700'],
 })
 
 export const metadata: Metadata = {
   title: {
     template: '%s | KwikEval',
-    default: 'KwikEval — Assess Smarter, Teach Better',
+    default: 'KwikEval — Quick, fair tests for your class',
   },
-  description: 'AI-powered assessment platform for schools across Nigeria',
+  description:
+    'KwikEval helps lecturers set tests from their own notes or question papers, share one class link, and see results the moment students finish.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jakarta.variable}`}>
-      <body className="font-sans antialiased bg-brand-bg">
-        <Providers>{children}</Providers>
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
+      <body className="font-sans antialiased bg-[#fcfbfe]">
+        <Providers>
+          <ProductTheme>{children}</ProductTheme>
+        </Providers>
       </body>
     </html>
   )

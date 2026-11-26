@@ -1,19 +1,26 @@
-import { StudentSidebar } from '@/components/student/StudentSidebar'
 import { AuthGuard } from '@/components/auth/AuthGuard'
+import { AppShell, ICONS, type NavSection } from '@/components/layout/AppShell'
+import { EmailConfirmationBanner } from '@/components/auth/EmailConfirmationBanner'
+
+const SECTIONS: NavSection[] = [
+  {
+    label: 'Main',
+    items: [
+      { href: '/student/dashboard', label: 'Home', icon: ICONS.home, mobile: true },
+      { href: '/student/classes', label: 'My classes', icon: ICONS.classes, mobile: true },
+      { href: '/student/assessments', label: 'Tests', icon: ICONS.tests, mobile: true },
+      { href: '/student/results', label: 'Results', icon: ICONS.results, mobile: true },
+    ],
+  },
+]
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AuthGuard>
-      <div className="flex h-screen bg-[#F7F8FC]">
-        <StudentSidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <main className="flex-1 overflow-auto p-6 lg:p-8">
-            <div className="animate-fade-in">
-              {children}
-            </div>
-          </main>
-        </div>
-      </div>
+    <AuthGuard allow={['STUDENT']}>
+      <AppShell home="/student/dashboard" tagline="Your tests and results" roleLabel="Student" sections={SECTIONS}>
+        <EmailConfirmationBanner />
+        {children}
+      </AppShell>
     </AuthGuard>
   )
 }

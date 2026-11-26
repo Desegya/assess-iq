@@ -1,0 +1,279 @@
+/* Shared look with Nightklass (apps/nightklass/src/components/product/product.css). Keep in sync. */
+.kwik-product {
+  --kwik-purple: #7545cf;
+  --kwik-tint: #f3edff;
+  --kwik-border: #eae6ef;
+  font-family: var(--product-sans), sans-serif;
+  color: #241f2e;
+  background: #fcfbfe;
+  min-height: 100dvh;
+}
+.kwik-product .font-heading {
+  font-family: var(--product-sans), sans-serif;
+}
+.kwik-product h1,
+.kwik-product h1.font-heading,
+.kwik-product .product-display {
+  font-family: var(--product-serif), Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(2.25rem, 3.8vw, 3.25rem);
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+}
+.kwik-product :focus-visible {
+  outline: 2px solid var(--kwik-purple);
+  outline-offset: 4px;
+}
+.kwik-product .btn-primary {
+  background: var(--kwik-purple);
+  color: white;
+  border: 1px solid transparent;
+  min-height: 44px;
+  border-radius: 14px;
+  font-weight: 600;
+  box-shadow: none;
+}
+.kwik-product .btn-primary:hover {
+  background: #6436b9;
+  box-shadow: 0 4px 12px #7545cf1a;
+}
+.kwik-product .btn-secondary {
+  border: 1px solid #ded7e8;
+  color: #51475f;
+  background: white;
+  min-height: 44px;
+  border-radius: 14px;
+  font-weight: 500;
+}
+.kwik-product .btn-secondary:hover {
+  border-color: #b69adf;
+  background: #f8f5ff;
+}
+.kwik-product .card {
+  border: 1px solid var(--kwik-border);
+  border-radius: 20px;
+  box-shadow: 0 2px 6px #241f2e03;
+  background: white;
+}
+.kwik-product .card:hover {
+  box-shadow: 0 2px 6px #241f2e03;
+}
+.kwik-product .input-base {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 46px;
+  border: 1px solid #ded7e8;
+  border-radius: 12px;
+  color: #302a3c;
+  font-size: 14px;
+  box-shadow: none;
+}
+.kwik-product .input-base:focus {
+  border-color: #9060ef;
+  box-shadow: 0 0 0 3px #a477ff1c;
+}
+.kwik-product .input-base:disabled {
+  background: #f6f4f8;
+  color: #847a91;
+}
+/* Keep native select behavior, with a consistently inset product chevron. */
+.kwik-product select:not([multiple]):not([size]),
+.kwik-product select[size='1']:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 44px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236d6378' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 20px 20px;
+  cursor: pointer;
+}
+.kwik-product select:disabled {
+  cursor: not-allowed;
+}
+@media (forced-colors: active) {
+  .kwik-product select:not([multiple]):not([size]),
+  .kwik-product select[size='1']:not([multiple]) {
+    appearance: auto;
+    -webkit-appearance: auto;
+    background-image: none;
+  }
+}
+.kwik-product input[type='checkbox'],
+.kwik-product input[type='radio'] {
+  accent-color: var(--kwik-purple);
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.kwik-product input[type='file'] {
+  max-width: 100%;
+  min-height: 44px;
+  color: #71667f;
+}
+.kwik-product input[type='file']::file-selector-button {
+  background: #f3edff;
+  color: #7545cf;
+  padding: 12px 16px;
+  border: 1px solid #e5d8fb;
+  border-radius: 12px;
+  margin-right: 12px;
+  cursor: pointer;
+}
+.kwik-product .badge {
+  font-weight: 500;
+}
+.kwik-product .text-slate-400 {
+  color: #6d6378;
+}
+.kwik-product .text-slate-500 {
+  color: #716778;
+}
+.kwik-product .text-slate-900 {
+  color: #241f2e;
+}
+.kwik-product .bg-slate-50 {
+  background-color: #faf8fd;
+}
+.kwik-product .bg-slate-100 {
+  background-color: #f1edf5;
+}
+.kwik-product .border-slate-100 {
+  border-color: var(--kwik-border);
+}
+.kwik-product .skeleton {
+  background-image: linear-gradient(90deg, #f1edf5 25%, #e7dff0 37%, #f1edf5 63%);
+}
+.kwik-product button:not(:disabled),
+.kwik-product summary {
+  touch-action: manipulation;
+}
+.kwik-product main {
+  overflow-wrap: anywhere;
+}
+.kwik-product main > div > h1 {
+  margin-bottom: 12px;
+}
+.kwik-product .product-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.kwik-product .lesson-section {
+  padding: 28px 0;
+  border-bottom: 1px solid var(--kwik-border);
+}
+.kwik-product .lesson-section h2 {
+  font-size: 23px;
+  font-weight: 600;
+}
+.kwik-product .lesson-section > div {
+  font-size: 16px;
+  line-height: 1.9;
+}
+.kwik-product .lesson-section pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.kwik-product .lesson-section code {
+  overflow-wrap: anywhere;
+}
+.kwik-product .lesson-section dt {
+  margin-top: 18px;
+}
+.kwik-product .compact-action {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+@media (max-width: 639px) {
+  .kwik-product .card.p-8,
+  .kwik-product .card.p-10 {
+    padding: 24px 20px;
+  }
+  .kwik-product .card.p-6 {
+    padding: 20px;
+  }
+  .kwik-product .input-base {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kwik-product *,
+  .kwik-product *::before,
+  .kwik-product *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Course accents and semantic statuses keep their meaning at readable contrast. */
+.kwik-product .text-cyan-600 {
+  color: #0e7490;
+}
+.kwik-product .text-orange-600 {
+  color: #c2410c;
+}
+.kwik-product .text-lime-600 {
+  color: #4d7c0f;
+}
+.kwik-product .text-amber-600 {
+  color: #92400e;
+}
+.kwik-product .text-emerald-600 {
+  color: #047857;
+}
+.kwik-product .text-red-500 {
+  color: #b91c1c;
+}
+
+/* Long study content uses a reading measure and type size, independently of compact UI labels. */
+.kwik-product .reading-text {
+  width: 100%;
+  max-width: 70ch;
+  margin-inline: auto;
+  font-size: var(--reading-font-size, 1rem);
+  line-height: 1.85;
+  color: #334155;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+.kwik-product .study-prose p {
+  margin-bottom: 1em;
+}
+.kwik-product .study-prose :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: 1.5em;
+  margin-bottom: 0.6em;
+  font-size: 1.15em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.kwik-product .study-prose li + li {
+  margin-top: 0.5em;
+}
+.kwik-product .study-prose blockquote {
+  margin-block: 1.25em;
+  border-left: 3px solid #c4b5fd;
+  padding-left: 1em;
+  color: #475569;
+}
+.kwik-product .study-prose pre,
+.kwik-product .reading-text .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.25em;
+}
+.source-reader::backdrop {
+  background: rgb(15 23 42 / 55%);
+}
+
+.kwik-product [data-study-focus='true'] [data-app-navigation],
+.kwik-product [data-study-focus='true'] [data-focus-distraction] {
+  display: none !important;
+}
+.kwik-product [data-study-focus='true'] [data-study-ask-launcher],
+.kwik-product [data-study-focus='true'] [data-study-question-panel] {
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+}
