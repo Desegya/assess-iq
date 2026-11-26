@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from 'react'
 import { useAuth } from '@/contexts/auth-context'
+import { toApiError } from '@/lib/api/client'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1'
 
@@ -50,10 +51,7 @@ export function useApi() {
         }
       }
 
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({ message: `HTTP ${res.status}` }))
-        throw new Error((error as { message?: string }).message ?? `HTTP ${res.status}`)
-      }
+      if (!res.ok) throw await toApiError(res)
 
       // 204 No Content
       if (res.status === 204) return undefined as T

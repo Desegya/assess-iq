@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server'
 
 // Route prefixes and their access requirements
 const PROTECTED_PREFIXES = ['/teacher', '/student', '/admin']
-const AUTH_ONLY_ROUTES = ['/login', '/register']
+const AUTH_ONLY_ROUTES = ['/login', '/register', '/signup']
 
 // Role → home page mapping (must match LoginForm.tsx ROLE_REDIRECTS)
 const ROLE_HOME: Record<string, string> = {

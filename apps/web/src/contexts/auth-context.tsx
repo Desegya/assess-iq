@@ -19,6 +19,7 @@ export interface AuthUser {
   email: string
   role: UserRole
   organizationId: string | null
+  emailVerifiedAt?: string | null
 }
 
 interface AuthState {
