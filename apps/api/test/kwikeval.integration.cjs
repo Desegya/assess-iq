@@ -269,3 +269,104 @@ test('KwikEval account emails link to KwikEval', async () => {
   assert.match(reset.subject, /KwikEval/)
   assert.match(reset.text, /https:\/\/kwikeval\.test\/reset-password#token=/)
 })
+
+test('the lecturer decides when, and how much of, the result students see', async () => {
+  const L = await lecturer('release')
+  const { code, quizId, questions } = await classWithQuiz(L, {
+    questions: [
+      { questionText: 'Chlorophyll is green.', questionType: 'TRUE_FALSE', correctAnswer: 'True', difficulty: 'EASY' },
+      { questionText: 'Pick A.', questionType: 'MCQ', options: [{ key: 'A', text: 'A' }, { key: 'B', text: 'B' }], correctAnswer: 'A', difficulty: 'EASY' },
+    ],
+  })
+  const S = await student('release-student', 'mail.test', { confirm: false })
+  await call(`/classes/join/${code}`, S.token, {})
+  expectStatus(await call(`/assessments/${quizId}/result-settings`, S.token, { released: true }, 'PATCH'), 403)
+  expectStatus(await call(`/assessments/${quizId}/result-settings`, await lecturer('release-other', 'other.test'), { released: true }, 'PATCH'), 404)
+
+  // Withhold results, even though the test is already published
+  const held = await call(`/assessments/${quizId}/result-settings`, L, { showResultsImmediately: false }, 'PATCH')
+  expectStatus(held, 200)
+  assert.equal(held.body.resultVisibility, 'HIDDEN')
+
+  const attempt = await call('/attempts', S.token, { assessmentId: quizId })
+  for (const q of questions) await call(`/attempts/${attempt.body.id}/answers`, S.token, { questionId: q.id, selectedAnswer: q.questionType === 'MCQ' ? 'A' : 'True' })
+  const submitted = await call(`/attempts/${attempt.body.id}/submit`, S.token, {})
+  assert.equal(submitted.body.percentageScore, null, 'score must not be in the submit response')
+  assert.equal(submitted.body.resultVisibility, 'HIDDEN')
+  const view = async () => (await call(`/attempts/${attempt.body.id}`, S.token)).body
+  let v = await view()
+  assert.equal(v.percentageScore, null)
+  assert.ok(v.answers.every(a => a.isCorrect === null && a.score === null))
+  assert.ok(!JSON.stringify(v).includes('"correctAnswer"'))
+  assert.equal((await call('/attempts/my', S.token)).body.find(a => a.id === attempt.body.id).percentageScore, null)
+  assert.equal((await call(`/attempts/${attempt.body.id}`, L)).body.percentageScore, 100, 'lecturer always sees the score')
+
+  // Release the score only
+  await call(`/assessments/${quizId}/result-settings`, L, { released: true, allowReview: false }, 'PATCH')
+  v = await view()
+  assert.equal(v.resultVisibility, 'SCORE')
+  assert.equal(v.percentageScore, 100)
+  assert.ok(v.answers.every(a => a.isCorrect === null))
+  assert.ok(!JSON.stringify(v).includes('"correctAnswer"'))
+
+  // Then allow corrections
+  await call(`/assessments/${quizId}/result-settings`, L, { allowReview: true }, 'PATCH')
+  v = await view()
+  assert.equal(v.resultVisibility, 'FULL')
+  assert.ok(v.answers.every(a => a.isCorrect === true))
+  assert.ok(v.assessment.questions.every(q => typeof q.question.correctAnswer === 'string'))
+
+  // And withhold again
+  await call(`/assessments/${quizId}/result-settings`, L, { released: false }, 'PATCH')
+  assert.equal((await view()).percentageScore, null)
+})
+
+async function download(path, token) {
+  const res = await fetch(base + path, { headers: { Authorization: `Bearer ${token}` } })
+  return { status: res.status, type: res.headers.get('content-type'), disposition: res.headers.get('content-disposition'), bytes: Buffer.from(await res.arrayBuffer()) }
+}
+
+test('lecturers export results as CSV, Excel and PDF', async () => {
+  const L = await lecturer('export')
+  const { code, quizId, courseId, questions } = await classWithQuiz(L, {
+    questions: [{ questionText: 'Chlorophyll is green.', questionType: 'TRUE_FALSE', correctAnswer: 'True', difficulty: 'EASY' }],
+  })
+  const sat = await student('export-sat', 'mail.test', { confirm: false })
+  const r = await call('/auth/register-student', null, { name: '=HYPERLINK("http://evil.test")', email: `export-evil-${suffix}@mail.test`, password: PASSWORD, app: 'kwikeval' })
+  const evil = { token: r.body.accessToken }
+  const absent = await student('export-absent', 'mail.test', { confirm: false })
+  for (const s of [sat, evil, absent]) await call(`/classes/join/${code}`, s.token, {})
+  for (const s of [sat, evil]) {
+    const a = await call('/attempts', s.token, { assessmentId: quizId })
+    await call(`/attempts/${a.body.id}/answers`, s.token, { questionId: questions[0].id, selectedAnswer: 'True' })
+    await call(`/attempts/${a.body.id}/submit`, s.token, {})
+  }
+
+  const csv = await download(`/assessments/${quizId}/results/export?format=csv`, L)
+  expectStatus(csv, 200)
+  assert.match(csv.type, /text\/csv/)
+  assert.match(csv.disposition, /attachment; filename=".+-results-\d{4}-\d{2}-\d{2}\.csv"/)
+  const text = csv.bytes.toString('utf8')
+  assert.match(text, /^﻿Student,Email,Status,Score,Out of,Percentage,Grade/)
+  assert.match(text, new RegExp(`export-sat,export-sat-${suffix}@mail.test,Marked,1,1,100,A`))
+  assert.match(text, /export-absent,.*,Not attempted/)
+  assert.match(text, /"'=HYPERLINK\(""http:\/\/evil.test""\)"/, 'formula must be neutralised')
+
+  const xlsx = await download(`/assessments/${quizId}/results/export?format=xlsx`, L)
+  expectStatus(xlsx, 200)
+  assert.equal(xlsx.bytes.subarray(0, 2).toString(), 'PK')
+  const pdf = await download(`/assessments/${quizId}/results/export?format=pdf`, L)
+  expectStatus(pdf, 200)
+  assert.equal(pdf.bytes.subarray(0, 4).toString(), '%PDF')
+
+  const book = await download(`/classes/${courseId}/results/export?format=csv`, L)
+  expectStatus(book, 200)
+  assert.match(book.bytes.toString('utf8'), /Student,Email,Quiz,Tests taken,Average,Grade/)
+  for (const format of ['xlsx', 'pdf']) expectStatus(await download(`/classes/${courseId}/results/export?format=${format}`, L), 200)
+
+  expectStatus(await download(`/assessments/${quizId}/results/export?format=doc`, L), 400)
+  expectStatus(await download(`/assessments/${quizId}/results/export`, sat.token), 403)
+  const other = await lecturer('export-other', 'other.test')
+  expectStatus(await download(`/assessments/${quizId}/results/export`, other), 404)
+  expectStatus(await download(`/classes/${courseId}/results/export`, other), 404)
+})

@@ -9,6 +9,8 @@ import { AuthUser, UserRole } from '@assessiq/types'
 import { CreateAssessmentDto } from './dto/create-assessment.dto'
 import { AddQuestionsDto } from './dto/add-questions.dto'
 import { UpdateAssessmentDto } from './dto/update-assessment.dto'
+import { ResultSettingsDto } from './dto/result-settings.dto'
+import { resultVisibility } from '../attempts/result-visibility'
 import { orgScope } from '../../common/org-scope'
 
 // Default assessment settings applied on creation
@@ -298,6 +300,30 @@ export class AssessmentsService {
     await this.prisma.assessment.delete({ where: { id } })
 
     return { message: 'Assessment deleted' }
+  }
+
+  // ─── Result visibility (any status) ──────────────────────────────────────
+
+  async updateResultSettings(id: string, dto: ResultSettingsDto, user: AuthUser) {
+    const assessment = await this.findOne(id, user)
+    this.assertCanEdit(assessment, user)
+
+    const settings = { ...((assessment.settings as Record<string, unknown>) ?? {}) }
+    if (dto.showResultsImmediately !== undefined) settings.showResultsImmediately = dto.showResultsImmediately
+    if (dto.allowReview !== undefined) settings.allowReview = dto.allowReview
+    if (dto.released === true) settings.resultsReleasedAt = new Date().toISOString()
+    if (dto.released === false) {
+      // Withholding also stops new submissions from showing results straight away
+      settings.resultsReleasedAt = null
+      settings.showResultsImmediately = false
+    }
+
+    const updated = await this.prisma.assessment.update({
+      where: { id },
+      data: { settings: settings as never },
+      select: { id: true, settings: true },
+    })
+    return { ...updated, resultVisibility: resultVisibility(updated.settings) }
   }
 
   // ─── Archive ──────────────────────────────────────────────────────────────

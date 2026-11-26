@@ -11,6 +11,7 @@ import { StartAttemptDto } from './dto/start-attempt.dto'
 import { SubmitAnswerDto } from './dto/submit-answer.dto'
 import { GradeAnswersDto } from './dto/grade-answers.dto'
 import { attemptDeadline, isPastDeadline, orgScope } from '../../common/org-scope'
+import { resultVisibility, type ResultVisibility } from './result-visibility'
 
 /** Question types a teacher marks by hand. Everything else is auto-marked on submit. */
 const WRITTEN_TYPES = new Set(['SHORT_ANSWER', 'THEORY'])
@@ -136,14 +137,14 @@ export class AttemptsService {
 
     const finished = await this.finalize(attemptId, isPastDeadline(deadlineOf(attempt)))
     if (!finished) throw new BadRequestException('Attempt already submitted')
-    return finished
+    return withheld(finished, resultVisibility(attempt.assessment.settings))
   }
 
   // ─── My attempts (student) ────────────────────────────────────────────────
 
   async findMyAttempts(user: AuthUser) {
     await this.expireStale({ studentId: user.id })
-    return this.prisma.attempt.findMany({
+    const attempts = await this.prisma.attempt.findMany({
       where: { studentId: user.id },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -153,12 +154,16 @@ export class AttemptsService {
             title: true,
             durationMinutes: true,
             totalQuestions: true,
+            settings: true,
             course: { select: { id: true, title: true } },
           },
         },
         _count: { select: { answers: true } },
       },
     })
+    return attempts.map(({ assessment: { settings, ...assessment }, ...a }) =>
+      withheld({ ...a, assessment }, resultVisibility(settings)),
+    )
   }
 
   // ─── Single attempt (with answers) ───────────────────────────────────────
@@ -230,28 +235,27 @@ export class AttemptsService {
     const deadline = deadlineOf(attempt)
     const timingInfo = { deadline: deadline?.toISOString() ?? null, serverNow: new Date().toISOString() }
 
-    // Students never see the answer key mid-attempt, nor afterwards when the teacher turned review off
-    const allowReview = (attempt.assessment.settings as { allowReview?: boolean } | null)?.allowReview !== false
-    if (isStudent && (attempt.status === 'IN_PROGRESS' || !allowReview)) {
-      return {
-        ...attempt,
-        ...timingInfo,
-        assessment: {
-          ...attempt.assessment,
-          questions: attempt.assessment.questions.map(aq => ({
-            ...aq,
-            question: { ...aq.question, correctAnswer: undefined, explanation: undefined },
-          })),
-        },
-        // Mid-attempt, per-answer marks would reveal the key too
-        answers:
-          attempt.status === 'IN_PROGRESS'
-            ? attempt.answers.map(a => ({ ...a, isCorrect: null, score: null }))
-            : attempt.answers,
-      }
-    }
+    if (!isStudent) return { ...attempt, ...timingInfo, resultVisibility: 'FULL' as ResultVisibility }
 
-    return { ...attempt, ...timingInfo }
+    // Students see only what the lecturer allows. Mid-attempt nothing about marks or answers;
+    // afterwards: nothing until released, then the score, then (if allowed) corrections.
+    const visibility: ResultVisibility =
+      attempt.status === 'IN_PROGRESS' ? 'HIDDEN' : resultVisibility(attempt.assessment.settings)
+    const { settings: _settings, ...assessment } = attempt.assessment
+    const showKey = visibility === 'FULL'
+    return {
+      ...withheld(attempt, visibility),
+      ...timingInfo,
+      assessment: {
+        ...assessment,
+        questions: assessment.questions.map(aq => ({
+          ...aq,
+          question: showKey ? aq.question : { ...aq.question, correctAnswer: undefined, explanation: undefined },
+        })),
+      },
+      // Per-question marks would reveal the key, so they go with corrections
+      answers: showKey ? attempt.answers : attempt.answers.map(a => ({ ...a, isCorrect: null, score: null })),
+    }
   }
 
   // ─── Teacher: list attempts for an assessment ─────────────────────────────
@@ -329,7 +333,7 @@ export class AttemptsService {
   private async assertAttemptOwner(attemptId: string, user: AuthUser) {
     const attempt = await this.prisma.attempt.findFirst({
       where: { id: attemptId, studentId: user.id },
-      include: { assessment: { select: { durationMinutes: true, endTime: true } } },
+      include: { assessment: { select: { durationMinutes: true, endTime: true, settings: true } } },
     })
     if (!attempt) throw new NotFoundException('Attempt not found')
     return attempt
@@ -430,4 +434,14 @@ export class AttemptsService {
       if (isPastDeadline(deadlineOf(attempt))) await this.finalize(attempt.id, true)
     }
   }
+}
+
+/** Removes the score from what a student receives until the lecturer releases results. */
+function withheld<T extends { score?: number | null; percentageScore?: number | null }>(
+  attempt: T,
+  visibility: ResultVisibility,
+): T & { resultVisibility: ResultVisibility } {
+  return visibility === 'HIDDEN'
+    ? { ...attempt, score: null, percentageScore: null, resultVisibility: visibility }
+    : { ...attempt, resultVisibility: visibility }
 }

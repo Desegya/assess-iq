@@ -14,6 +14,7 @@ import { AssessmentsService } from './assessments.service'
 import { CreateAssessmentDto } from './dto/create-assessment.dto'
 import { AddQuestionsDto } from './dto/add-questions.dto'
 import { UpdateAssessmentDto } from './dto/update-assessment.dto'
+import { ResultSettingsDto } from './dto/result-settings.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Roles } from '../auth/decorators/roles.decorator'
 import { RolesGuard } from '../auth/guards/roles.guard'
@@ -104,6 +105,13 @@ export class AssessmentsController {
   @ApiOperation({ summary: 'Publish a draft assessment' })
   publish(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.assessmentsService.publish(id, user)
+  }
+
+  @Patch(':id/result-settings')
+  @Roles(UserRole.ORG_ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Choose when students see results and whether they see corrections' })
+  updateResultSettings(@Param('id') id: string, @Body() dto: ResultSettingsDto, @CurrentUser() user: AuthUser) {
+    return this.assessmentsService.updateResultSettings(id, dto, user)
   }
 
   @Patch(':id/archive')
