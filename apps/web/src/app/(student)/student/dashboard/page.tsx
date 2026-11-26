@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
 import { useApi } from '@/hooks/use-api'
+import { greetingName } from '@/lib/names'
 
 interface Assessment {
   id: string
@@ -60,7 +61,7 @@ export default function StudentDashboard() {
     ? completed.reduce((sum, a) => sum + (a.percentageScore ?? 0), 0) / completed.length
     : null
 
-  const firstName = user?.name?.split(' ')[0] ?? 'there'
+  const firstName = greetingName(user?.name, 'there')
 
   return (
     <div className="max-w-4xl mx-auto">

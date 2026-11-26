@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
 import { useApi } from '@/hooks/use-api'
+import { greetingName } from '@/lib/names'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ export default function TeacherDashboard() {
   const draftQuestions    = questions.filter(q => q.status === 'DRAFT')
   const recentAssessments = assessments.slice(0, 5)
 
-  const firstName = user?.name?.split(' ')[0] ?? 'Teacher'
+  const firstName = greetingName(user?.name, 'Teacher')
 
   return (
     <div className="max-w-6xl mx-auto">
