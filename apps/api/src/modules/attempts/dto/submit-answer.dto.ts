@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, Min } from 'class-validator'
+import { IsString, IsOptional, IsInt, Min, MaxLength } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
 
 export class SubmitAnswerDto {
@@ -14,6 +14,7 @@ export class SubmitAnswerDto {
   @ApiProperty({ example: 'Photosynthesis is...', description: 'Short answer / theory text', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(20_000)
   textAnswer?: string
 
   @ApiProperty({ example: 45, description: 'Seconds spent on this question', required: false })

@@ -51,8 +51,10 @@ export class AssessmentsController {
     return this.assessmentsService.findAll(user, { courseId, status })
   }
 
+  // Returns the answer key: never available to students (they get questions via POST /attempts)
   @Get(':id')
-  @ApiOperation({ summary: 'Get a single assessment with questions' })
+  @Roles(UserRole.ORG_ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Get a single assessment with questions and answer key (staff only)' })
   findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.assessmentsService.findOne(id, user)
   }

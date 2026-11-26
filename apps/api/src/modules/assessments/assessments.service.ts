@@ -9,6 +9,7 @@ import { AuthUser, UserRole } from '@assessiq/types'
 import { CreateAssessmentDto } from './dto/create-assessment.dto'
 import { AddQuestionsDto } from './dto/add-questions.dto'
 import { UpdateAssessmentDto } from './dto/update-assessment.dto'
+import { orgScope } from '../../common/org-scope'
 
 // Default assessment settings applied on creation
 const DEFAULT_SETTINGS = {
@@ -124,12 +125,12 @@ export class AssessmentsService {
 
   // ─── Single ───────────────────────────────────────────────────────────────
 
+  // Includes the answer key, so it is staff-only (see controller) and always
+  // scoped to the caller's organisation. A missing organisation never widens
+  // the filter: only a super-admin may read across organisations.
   async findOne(id: string, user: AuthUser) {
     const assessment = await this.prisma.assessment.findFirst({
-      where: {
-        id,
-        organizationId: user.organizationId ?? undefined,
-      },
+      where: { id, ...orgScope(user, 'Assessment not found') },
       include: {
         course: { select: { id: true, title: true } },
         createdBy: { select: { id: true, name: true } },
@@ -154,11 +155,11 @@ export class AssessmentsService {
       throw new BadRequestException('Only DRAFT assessments can be modified')
     }
 
-    // Verify all questions belong to this org
+    // Verify all questions belong to the assessment's organisation
     const questions = await this.prisma.question.findMany({
       where: {
         id: { in: dto.questionIds },
-        organizationId: user.organizationId ?? undefined,
+        organizationId: assessment.organizationId,
       },
       select: { id: true },
     })
