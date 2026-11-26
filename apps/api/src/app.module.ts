@@ -9,6 +9,7 @@ import { UsersModule } from './modules/users/users.module'
 import { OrganizationsModule } from './modules/organizations/organizations.module'
 import { CoursesModule } from './modules/courses/courses.module'
 import { ClassesModule } from './modules/classes/classes.module'
+import { ResultsModule } from './modules/results/results.module'
 import { TopicsModule } from './modules/topics/topics.module'
 import { QuestionsModule } from './modules/questions/questions.module'
 import { AssessmentsModule } from './modules/assessments/assessments.module'
@@ -52,6 +53,7 @@ import { RuntimeSettingsModule } from './modules/operations/runtime-settings.mod
     OrganizationsModule,
     CoursesModule,
     ClassesModule,
+    ResultsModule,
     TopicsModule,
     QuestionsModule,
     AssessmentsModule,
