@@ -16,6 +16,7 @@ interface Question {
   correctAnswer: string
   difficulty: string
   status: string
+  course?: { id: string; title: string } | null
 }
 
 interface AssessmentQuestion {
@@ -160,7 +161,9 @@ export default function AssessmentDetailPage({
     try {
       const qs = await api.get<Question[]>('/questions?status=APPROVED')
       const addedIds = new Set(assessment?.questions.map(aq => aq.question.id) ?? [])
-      setBankQuestions(qs.filter(q => !addedIds.has(q.id)))
+      // This class's questions, plus ones not filed under any class (e.g. generated from unfiled notes)
+      const classId = assessment?.course.id
+      setBankQuestions(qs.filter(q => !addedIds.has(q.id) && (!q.course || q.course.id === classId)))
     } catch {
       setBankQuestions([])
     } finally {
@@ -710,7 +713,7 @@ export default function AssessmentDetailPage({
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
               <div>
                 <h3 className="font-heading font-bold text-slate-900">Question Bank</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Select approved questions to add</p>
+                <p className="text-xs text-slate-400 mt-0.5">Approved questions for this class, and ones not filed under a class</p>
               </div>
               <button
                 onClick={() => { setShowBank(false); setSelected(new Set()) }}
@@ -745,9 +748,9 @@ export default function AssessmentDetailPage({
                     </svg>
                   </div>
                   <p className="text-sm font-medium text-slate-600">No approved questions found</p>
-                  <a href="/teacher/questions/generate"
+                  <a href={`/teacher/questions?courseId=${assessment?.course.id ?? ''}`}
                      className="text-sm text-violet-600 hover:underline mt-2 inline-block font-medium">
-                    Generate or simulate questions →
+                    Write, import or generate questions →
                   </a>
                 </div>
               ) : (
