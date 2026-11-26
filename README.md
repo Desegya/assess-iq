@@ -76,7 +76,8 @@ printf '%s\n' 'NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1' > apps/web/.env
 | `API_URL_INTERNAL` | Nightklass server | Optional server-side API base URL; falls back to `NEXT_PUBLIC_API_URL` |
 | `OPENAI_API_KEY` | API | AI learning and assessment workflows |
 | `R2_*` | API | Private object storage (required in production; `R2_PUBLIC_URL` must be unset) |
-| `RESEND_API_KEY`, `EMAIL_FROM` | API | Password-reset and verification email |
+| `RESEND_API_KEY`, `EMAIL_FROM` | API | Password-reset and verification email; `EMAIL_FROM` is the Nightklass sender, e.g. `Nightklass <no-reply@nightklass.com>`, on a domain verified in Resend |
+| `KWIKEVAL_EMAIL_FROM` | API | KwikEval sender, e.g. `KwikEval <no-reply@kwikeval.com>`; falls back to `EMAIL_FROM` |
 | `PASSWORD_RESET_URL` | API | Nightklass reset page, e.g. `https://nightklass.com/reset-password` |
 | `KWIKEVAL_URL` | API | KwikEval origin for its account emails; defaults to `https://www.kwikeval.com` in production |
 | `TRUST_PROXY` | API | Reverse-proxy hop count (Railway: `1`) for per-address rate limits |
