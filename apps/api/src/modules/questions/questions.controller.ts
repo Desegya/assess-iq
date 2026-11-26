@@ -15,15 +15,33 @@ import { QuestionsService } from './questions.service'
 import { GenerateQuestionsDto } from './dto/generate-questions.dto'
 import { UpdateQuestionDto } from './dto/update-question.dto'
 import { SimulateQuestionsDto } from './dto/simulate-questions.dto'
+import { BulkCreateQuestionsDto, CreateQuestionDto } from './dto/create-question.dto'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Roles } from '../auth/decorators/roles.decorator'
 import { AuthUser, UserRole } from '@assessiq/types'
 
+// The question bank holds answer keys: staff only. Students receive questions
+// (without answers) through POST /attempts.
 @ApiTags('Questions')
 @ApiBearerAuth()
+@Roles(UserRole.TEACHER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
 @Controller('questions')
 export class QuestionsController {
   constructor(private readonly questionsService: QuestionsService) {}
+
+  // ─── Write / import ───────────────────────────────────────────────────────
+
+  @Post()
+  @ApiOperation({ summary: 'Add a question written by the teacher' })
+  create(@Body() dto: CreateQuestionDto, @CurrentUser() user: AuthUser) {
+    return this.questionsService.create(dto, user)
+  }
+
+  @Post('bulk')
+  @ApiOperation({ summary: 'Import a question paper (up to 200 questions, all-or-nothing)' })
+  createMany(@Body() dto: BulkCreateQuestionsDto, @CurrentUser() user: AuthUser) {
+    return this.questionsService.createMany(dto, user)
+  }
 
   // ─── Generate ─────────────────────────────────────────────────────────────
 

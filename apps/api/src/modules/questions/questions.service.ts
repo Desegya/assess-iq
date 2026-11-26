@@ -10,6 +10,7 @@ import { AuthUser, UserRole, QuestionType } from '@assessiq/types'
 import { GenerateQuestionsDto } from './dto/generate-questions.dto'
 import { UpdateQuestionDto } from './dto/update-question.dto'
 import { SimulateQuestionsDto } from './dto/simulate-questions.dto'
+import { BulkCreateQuestionsDto, CreateQuestionDto } from './dto/create-question.dto'
 import { QUESTION_BANK, scoreQuestion, buildTemplateQuestions } from './question-bank'
 
 @Injectable()
@@ -141,6 +142,64 @@ export class QuestionsService {
     return { count: saved.length, questions: saved }
   }
 
+  // ─── Teacher-written questions ────────────────────────────────────────────
+
+  async create(dto: CreateQuestionDto, user: AuthUser) {
+    const { count, questions } = await this.createMany({ questions: [dto] }, user)
+    return count === 1 ? questions[0] : questions
+  }
+
+  /**
+   * Save teacher-written questions (typed in, or rows of an imported question paper).
+   * All rows are validated first and saved together, so a bad row never leaves half a paper behind.
+   * The teacher wrote them, so they are saved as APPROVED and ready to add to an assessment.
+   */
+  async createMany(dto: BulkCreateQuestionsDto, user: AuthUser) {
+    if (!user.organizationId) {
+      throw new ForbiddenException('You must belong to an organisation')
+    }
+    const organizationId = user.organizationId
+
+    const problems: string[] = []
+    const rows = dto.questions.map((q, i) => {
+      const problem = questionProblem(q)
+      if (problem) problems.push(`Question ${i + 1}: ${problem}`)
+      return { ...q, courseId: q.courseId ?? dto.courseId ?? null }
+    })
+    if (problems.length) throw new BadRequestException(problems.slice(0, 20))
+
+    const courseIds = [...new Set(rows.map(r => r.courseId).filter((id): id is string => !!id))]
+    if (courseIds.length) {
+      const found = await this.prisma.course.count({ where: { id: { in: courseIds }, organizationId } })
+      if (found !== courseIds.length) throw new BadRequestException('Course not found')
+    }
+
+    const questions = await this.prisma.$transaction(
+      rows.map(q =>
+        this.prisma.question.create({
+          data: {
+            organizationId,
+            createdById: user.id,
+            courseId: q.courseId,
+            questionText: q.questionText.trim(),
+            questionType: q.questionType,
+            options:
+              q.questionType === QuestionType.MCQ
+                ? q.options!.map(o => ({ key: o.key.trim().toUpperCase(), text: o.text.trim() }))
+                : undefined,
+            correctAnswer: normaliseAnswer(q),
+            explanation: q.explanation?.trim() || null,
+            difficulty: q.difficulty,
+            status: 'APPROVED',
+            isAiGenerated: false,
+            tags: [],
+          },
+        }),
+      ),
+    )
+    return { count: questions.length, questions }
+  }
+
   // ─── List ─────────────────────────────────────────────────────────────────
 
   async findAll(
@@ -237,4 +296,29 @@ export class QuestionsService {
     }
     return map[raw] ?? QuestionType.MCQ
   }
+}
+
+// ─── Validation for teacher-written questions ───────────────────────────────
+
+function questionProblem(q: CreateQuestionDto): string | null {
+  if (q.questionType === QuestionType.MCQ) {
+    const options = q.options ?? []
+    if (options.length < 2) return 'a multiple-choice question needs at least two options'
+    const keys = options.map(o => o.key.trim().toUpperCase())
+    if (new Set(keys).size !== keys.length) return 'option letters must be different'
+    if (!keys.includes(q.correctAnswer.trim().toUpperCase()))
+      return `the correct answer "${q.correctAnswer}" is not one of the options (${keys.join(', ')})`
+    return null
+  }
+  if (q.questionType === QuestionType.TRUE_FALSE) {
+    return /^(true|false)$/i.test(q.correctAnswer.trim()) ? null : 'the answer to a true/false question must be True or False'
+  }
+  return null
+}
+
+function normaliseAnswer(q: Pick<CreateQuestionDto, 'questionType' | 'correctAnswer'>): string {
+  const answer = q.correctAnswer.trim()
+  if (q.questionType === QuestionType.MCQ) return answer.toUpperCase()
+  if (q.questionType === QuestionType.TRUE_FALSE) return /^true$/i.test(answer) ? 'True' : 'False'
+  return answer
 }
