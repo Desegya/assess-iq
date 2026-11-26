@@ -37,6 +37,21 @@ enum OrgType {
   TRAINING_INSTITUTION
   EXAM_BODY
   OTHER
+  INDIVIDUAL // a lecturer's personal KwikEval workspace
+}
+
+// How students get into a KwikEval class
+enum ClassJoinPolicy {
+  EMAIL_DOMAIN // confirmed email at one of the lecturer's school domains (default)
+  EMAIL_LIST   // confirmed email on the lecturer's list
+  APPROVAL     // anyone with the link asks; the lecturer approves
+  OPEN_LINK    // anyone with the link joins
+}
+
+enum EnrollmentStatus {
+  PENDING
+  ACTIVE
+  REMOVED
 }
 
 enum SubscriptionPlan {
@@ -294,6 +309,7 @@ model User {
   examCohort     ExamCohortMember?
   questionExposures ExamQuestionExposure[]
   questionReports ExamQuestionReport[]
+  enrollments    CourseEnrollment[]
 
   @@index([organizationId])
   @@index([email])
@@ -348,6 +364,12 @@ model Course {
   // The original course outline exactly as provided (uploaded, pasted or photographed), never modified by AI
   outlineText    String?      @db.Text
   outlineSource  OutlineSource?
+  // KwikEval class access (unused for Nightklass personal courses)
+  joinCode            String?         @unique
+  joinPolicy          ClassJoinPolicy @default(EMAIL_DOMAIN)
+  allowedEmailDomains String[]        @default([])
+  allowedEmails       String[]        @default([])
+  joiningOpen         Boolean         @default(true)
   isActive       Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -364,12 +386,31 @@ model Course {
   studySessions  StudySession[]
   flashcards     Flashcard[]
   outlineRevisions OutlineRevision[]
+  enrollments    CourseEnrollment[]
 
   @@index([organizationId])
   @@index([teacherId])
   @@index([ownerId])
   @@unique([ownerId, examSubjectKey])
   @@map("courses")
+}
+
+// A student's place in a KwikEval class. Students only see and take assessments
+// for classes where their enrollment is ACTIVE.
+model CourseEnrollment {
+  id        String           @id @default(cuid())
+  courseId  String
+  studentId String
+  status    EnrollmentStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, studentId])
+  @@index([studentId, status])
+  @@map("course_enrollments")
 }
 
 // ─── Topic ────────────────────────────────────────────────────────────────────
