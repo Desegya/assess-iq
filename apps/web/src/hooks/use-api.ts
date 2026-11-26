@@ -8,6 +8,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1
 
 interface ApiOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
+  /** Return the Response itself (for file downloads) instead of parsed JSON */
+  raw?: boolean
 }
 
 /**
@@ -19,7 +21,7 @@ export function useApi() {
 
   const request = useCallback(
     async <T>(path: string, options: ApiOptions = {}): Promise<T> => {
-      const { body, headers: extraHeaders, ...rest } = options
+      const { body, headers: extraHeaders, raw, ...rest } = options
 
       async function doFetch(token: string | null): Promise<Response> {
         const headers: Record<string, string> = {
@@ -53,6 +55,8 @@ export function useApi() {
 
       if (!res.ok) throw await toApiError(res)
 
+      if (raw) return res as unknown as T
+
       // 204 No Content
       if (res.status === 204) return undefined as T
 
@@ -77,6 +81,18 @@ export function useApi() {
 
       del: <T>(path: string, opts?: ApiOptions) =>
         request<T>(path, { method: 'DELETE', ...opts }),
+
+      /** Fetch a file with the user's token and hand it to the browser as a download */
+      download: async (path: string, fallbackName = 'download') => {
+        const res = await request<Response>(path, { method: 'GET', raw: true })
+        const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? fallbackName
+        const url = URL.createObjectURL(await res.blob())
+        const a = Object.assign(document.createElement('a'), { href: url, download: name })
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      },
 
       /** For multipart/form-data uploads */
       upload: <T>(path: string, formData: FormData, opts?: ApiOptions) =>

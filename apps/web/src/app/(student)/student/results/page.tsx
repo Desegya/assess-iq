@@ -49,8 +49,10 @@ export default function StudentResultsPage() {
     a => a.status === 'SUBMITTED' || a.status === 'GRADED' || a.status === 'AUTO_SUBMITTED',
   )
 
-  const avgScore = completed.length > 0
-    ? completed.reduce((s, a) => s + (a.percentageScore ?? 0), 0) / completed.length
+  // Only results the lecturer has released carry a score
+  const scored = completed.filter(a => a.percentageScore != null)
+  const avgScore = scored.length > 0
+    ? scored.reduce((s, a) => s + (a.percentageScore ?? 0), 0) / scored.length
     : null
 
   return (
@@ -98,12 +100,14 @@ export default function StudentResultsPage() {
         <div className="space-y-3">
           {completed.map((a, idx) => {
             const pct = a.percentageScore ?? 0
+            const pending = a.percentageScore == null
             const isPass = pct >= 70
             const isFair = pct >= 50
 
-            const scoreColor = isPass ? 'text-emerald-600' : isFair ? 'text-amber-600' : 'text-red-600'
+            const scoreColor = pending ? 'text-slate-500' : isPass ? 'text-emerald-600' : isFair ? 'text-amber-600' : 'text-red-600'
             const barColor   = isPass ? 'bg-emerald-500'  : isFair ? 'bg-amber-500'  : 'bg-red-500'
-            const scoreBoxBg = isPass ? 'bg-emerald-50 border-emerald-200' :
+            const scoreBoxBg = pending ? 'bg-slate-50 border-slate-200' :
+                               isPass ? 'bg-emerald-50 border-emerald-200' :
                                isFair ? 'bg-amber-50 border-amber-200'    : 'bg-red-50 border-red-200'
 
             return (
@@ -146,9 +150,9 @@ export default function StudentResultsPage() {
                   <div className={`flex-shrink-0 w-14 h-14 rounded-2xl border flex flex-col
                                    items-center justify-center ${scoreBoxBg}`}>
                     <span className={`text-lg font-heading font-bold leading-none ${scoreColor}`}>
-                      {Math.round(pct)}
+                      {pending ? '—' : Math.round(pct)}
                     </span>
-                    <span className={`text-xs font-semibold ${scoreColor}`}>%</span>
+                    <span className={`text-xs font-semibold ${scoreColor}`}>{pending ? 'pending' : '%'}</span>
                   </div>
                 </div>
               </div>

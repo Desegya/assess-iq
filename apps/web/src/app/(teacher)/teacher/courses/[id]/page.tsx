@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useApi } from '@/hooks/use-api'
 import { Notice } from '@/components/auth/FormParts'
+import { ExportButtons } from '@/components/assessments/ExportButtons'
 import { POLICY_OPTIONS, classLink, parseEmails, type JoinPolicy } from '@/lib/classes'
 
 interface Access {
@@ -179,6 +180,9 @@ function ClassDetail({ id }: { id: string }) {
       <section className="card p-6">
         <h2 className="product-section-title">Tests and questions</h2>
         <p className="mt-1 text-sm text-slate-500">Build a test from this class&rsquo;s question bank, then publish it to the class.</p>
+        <div className="mt-4">
+          <ExportButtons path={`/classes/${id}/results/export`} label="Download gradebook" />
+        </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <Link href={`/teacher/questions?courseId=${id}`} className="btn-secondary">Question bank</Link>
           <Link href={`/teacher/assessments?courseId=${id}`} className="btn-primary">Tests for this class</Link>

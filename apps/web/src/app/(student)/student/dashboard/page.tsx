@@ -57,8 +57,10 @@ export default function StudentDashboard() {
   const completed = attempts.filter(
     a => a.status === 'SUBMITTED' || a.status === 'GRADED' || a.status === 'AUTO_SUBMITTED',
   )
-  const avgScore = completed.length > 0
-    ? completed.reduce((sum, a) => sum + (a.percentageScore ?? 0), 0) / completed.length
+  // Only results the lecturer has released carry a score
+  const scored = completed.filter(a => a.percentageScore != null)
+  const avgScore = scored.length > 0
+    ? scored.reduce((sum, a) => sum + (a.percentageScore ?? 0), 0) / scored.length
     : null
 
   const firstName = greetingName(user?.name, 'there')
@@ -241,7 +243,8 @@ export default function StudentDashboard() {
             <div className="divide-y divide-slate-50">
               {completed.slice(0, 4).map(a => {
                 const pct = a.percentageScore ?? 0
-                const scoreColor = pct >= 70 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-600'
+                const withheld = a.percentageScore == null
+                const scoreColor = withheld ? 'text-slate-500' : pct >= 70 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-600'
                 const barColor   = pct >= 70 ? 'bg-emerald-500'  : pct >= 50 ? 'bg-amber-500'  : 'bg-red-500'
                 return (
                   <div
@@ -260,7 +263,7 @@ export default function StudentDashboard() {
                       </div>
                     </div>
                     <span className={`flex-shrink-0 text-base font-heading font-bold ${scoreColor}`}>
-                      {Math.round(pct)}%
+                      {withheld ? <span className="text-xs font-medium">Results pending</span> : `${Math.round(pct)}%`}
                     </span>
                   </div>
                 )

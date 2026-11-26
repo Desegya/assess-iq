@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApi } from '@/hooks/use-api'
+import { ResultSettingsCard } from '@/components/assessments/ResultSettingsCard'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -225,7 +226,8 @@ export default function AssessmentDetailPage({
         durationMinutes: editForm.durationMinutes,
         startTime:       editForm.startTime ? new Date(editForm.startTime).toISOString() : undefined,
         endTime:         editForm.endTime   ? new Date(editForm.endTime).toISOString()   : undefined,
-        settings,
+        // Result visibility is saved by its own card; never overwrite it from this form
+        settings: { shuffleQuestions: settings.shuffleQuestions, shuffleOptions: settings.shuffleOptions, maxAttempts: settings.maxAttempts },
       })
       setAssessment(updated)
       setShowEdit(false)
@@ -529,6 +531,11 @@ export default function AssessmentDetailPage({
         )}
       </div>
 
+      {/* ── Result visibility ── */}
+      <div className="mb-6">
+        <ResultSettingsCard key={assessment.id} assessmentId={assessment.id} settings={assessment.settings} />
+      </div>
+
       {/* ── Results link ── */}
       {!isDraft && assessment._count.attempts > 0 && (
         <div className="mt-5 text-center">
@@ -655,16 +662,6 @@ export default function AssessmentDetailPage({
                     checked={settings.shuffleOptions}
                     onChange={v => setSettings(p => ({ ...p, shuffleOptions: v }))}
                     label="Shuffle MCQ options"
-                  />
-                  <Toggle
-                    checked={settings.showResultsImmediately}
-                    onChange={v => setSettings(p => ({ ...p, showResultsImmediately: v }))}
-                    label="Show results immediately after submit"
-                  />
-                  <Toggle
-                    checked={settings.allowReview}
-                    onChange={v => setSettings(p => ({ ...p, allowReview: v }))}
-                    label="Allow students to review their answers"
                   />
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">

@@ -34,6 +34,8 @@ interface Answer {
 interface AttemptResult {
   id: string
   status: string
+  /** What the lecturer lets students see: nothing yet, the score, or score with corrections */
+  resultVisibility?: 'HIDDEN' | 'SCORE' | 'FULL'
   score?: number
   percentageScore?: number
   submittedAt?: string
@@ -184,6 +186,32 @@ export default function ResultsPage({
     )
   }
 
+  const visibility = attempt.resultVisibility ?? 'FULL'
+  if (visibility === 'HIDDEN') {
+    return (
+      <div className="max-w-xl mx-auto">
+        <h1 className="font-heading text-2xl font-bold text-slate-900">Test submitted</h1>
+        <p className="text-slate-500 text-sm mt-1">{attempt.assessment.title}</p>
+        <div className="card p-8 mt-6 text-center">
+          <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <p className="font-semibold text-slate-900">Your answers have been received.</p>
+          <p className="text-sm text-slate-500 mt-2">
+            Your lecturer will release the results. Check back here later.
+            {attempt.status === 'AUTO_SUBMITTED' && ' Your test was submitted automatically when time ran out.'}
+          </p>
+        </div>
+        <div className="mt-6 text-center">
+          <a href="/student/results" className="text-sm font-semibold text-violet-600 hover:text-violet-700">All results →</a>
+        </div>
+      </div>
+    )
+  }
+  const withCorrections = visibility === 'FULL'
+
   const answerMap       = new Map(attempt.answers.map(a => [a.questionId, a]))
   const questions       = attempt.assessment.questions
   const autoGradedTypes = ['MCQ', 'TRUE_FALSE']
@@ -195,7 +223,6 @@ export default function ResultsPage({
     : null
 
   const awaitingMarks = attempt.status === 'SUBMITTED' || attempt.status === 'AUTO_SUBMITTED'
-  const reviewHidden  = questions.every(aq => aq.question.correctAnswer === undefined)
   const isPass = !awaitingMarks && percent >= 70
 
   return (
@@ -240,14 +267,18 @@ export default function ResultsPage({
           <ScoreRing percent={percent} />
 
           <div className="flex-1 grid grid-cols-2 gap-3 w-full">
-            <div className="bg-slate-50 rounded-2xl p-4 text-center">
-              <p className="text-2xl font-heading font-bold text-slate-900">{correctCount}</p>
-              <p className="text-xs text-slate-500 mt-1 font-medium">Correct answers</p>
-            </div>
-            <div className="bg-slate-50 rounded-2xl p-4 text-center">
-              <p className="text-2xl font-heading font-bold text-slate-900">{autoGraded.length}</p>
-              <p className="text-xs text-slate-500 mt-1 font-medium">Auto-graded</p>
-            </div>
+            {withCorrections && (
+              <>
+                <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                  <p className="text-2xl font-heading font-bold text-slate-900">{correctCount}</p>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">Correct answers</p>
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                  <p className="text-2xl font-heading font-bold text-slate-900">{autoGraded.length}</p>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">Auto-graded</p>
+                </div>
+              </>
+            )}
             {timeTaken != null && (
               <div className="bg-slate-50 rounded-2xl p-4 text-center">
                 <p className="text-2xl font-heading font-bold text-slate-900">{timeTaken}m</p>
@@ -264,7 +295,7 @@ export default function ResultsPage({
 
       {awaitingMarks && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-5 py-4 mb-6 text-sm">
-          <p className="font-semibold">Your teacher is still marking your written answers.</p>
+          <p className="font-semibold">Your lecturer is still marking your written answers.</p>
           <p className="mt-1">
             The score above counts only the questions marked so far. It will update when marking is finished.
             {attempt.status === 'AUTO_SUBMITTED' && ' Your test was submitted automatically when time ran out.'}
@@ -272,13 +303,14 @@ export default function ResultsPage({
         </div>
       )}
 
-      {reviewHidden && (
+      {!withCorrections && (
         <div className="bg-slate-50 border border-slate-200 text-slate-600 rounded-2xl px-5 py-4 mb-6 text-sm">
-          Your teacher has not released the answers for this assessment.
+          Your lecturer is sharing scores only for this test, so the answers are not shown.
         </div>
       )}
 
       {/* ── Question review ── */}
+      {withCorrections && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden
                       animate-slide-up" style={{ animationDelay: '150ms', animationFillMode: 'both' }}>
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -431,6 +463,7 @@ export default function ResultsPage({
           })}
         </div>
       </div>
+      )}
 
       {/* ── Actions ── */}
       <div className="mt-6 flex items-center justify-center gap-6 animate-fade-in"

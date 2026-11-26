@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useApi } from '@/hooks/use-api'
+import { ExportButtons } from '@/components/assessments/ExportButtons'
+import { ResultSettingsCard } from '@/components/assessments/ResultSettingsCard'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +25,7 @@ interface Assessment {
   totalQuestions: number
   durationMinutes: number
   course: { title: string }
+  settings?: { showResultsImmediately?: boolean; allowReview?: boolean; resultsReleasedAt?: string | null } | null
 }
 
 function Skeleton({ className }: { className?: string }) {
@@ -137,6 +140,9 @@ export default function AssessmentResultsPage() {
               <span className="font-semibold text-slate-700">{assessment?.title}</span>
               {assessment?.course && ` · ${assessment.course.title}`}
             </p>
+            <div className="mt-4">
+              <ExportButtons path={`/assessments/${id}/results/export`} />
+            </div>
           </>
         )}
       </div>
@@ -220,6 +226,12 @@ export default function AssessmentResultsPage() {
              style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
           <h2 className="font-heading font-semibold text-slate-800 mb-4 text-sm">Score Distribution</h2>
           <ScoreDistribution attempts={submitted} />
+        </div>
+      )}
+
+      {assessment && (
+        <div className="mb-8">
+          <ResultSettingsCard key={assessment.id} assessmentId={assessment.id} settings={assessment.settings} />
         </div>
       )}
 
