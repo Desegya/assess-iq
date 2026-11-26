@@ -1,5 +1,6 @@
 import { AuthGuard } from '@/components/auth/AuthGuard'
-import { AppShell, ICONS, type NavSection } from '@/components/layout/AppShell'
+import { AppShell, type NavSection } from '@/components/layout/AppShell'
+import { ICONS } from '@/components/layout/icons'
 import { EmailConfirmationBanner } from '@/components/auth/EmailConfirmationBanner'
 
 const SECTIONS: NavSection[] = [

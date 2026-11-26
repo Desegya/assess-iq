@@ -4,7 +4,7 @@ export const POLICY_OPTIONS: { value: JoinPolicy; label: string; help: string }[
   {
     value: 'EMAIL_DOMAIN',
     label: 'School email only',
-    help: 'Students join with a confirmed school email, for example @ug.edu.gh. Recommended.',
+    help: 'Students join with a confirmed email at your school\'s domain. Recommended.',
   },
   { value: 'EMAIL_LIST', label: 'Only emails on my list', help: 'You paste the student emails; only those can join.' },
   { value: 'APPROVAL', label: 'I approve each student', help: 'Anyone with the link can ask; you let them in.' },

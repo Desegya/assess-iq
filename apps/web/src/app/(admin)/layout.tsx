@@ -1,5 +1,6 @@
 import { AuthGuard } from '@/components/auth/AuthGuard'
-import { AppShell, ICONS, type NavSection } from '@/components/layout/AppShell'
+import { AppShell, type NavSection } from '@/components/layout/AppShell'
+import { ICONS } from '@/components/layout/icons'
 
 const SECTIONS: NavSection[] = [
   { label: 'Platform', items: [{ href: '/admin/dashboard', label: 'Overview', icon: ICONS.chart }] },

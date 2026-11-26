@@ -281,7 +281,7 @@ export default function TakeTestPage({
 
   if (!attemptId) {
     return (
-      <div className="min-h-screen bg-[#F7F8FC] flex items-center justify-center">
+      <div className="min-h-screen bg-[#fcfbfe] flex items-center justify-center">
         <div className="text-center">
           <p className="text-slate-500 font-medium">No attempt ID.</p>
           <a href="/student/assessments" className="text-violet-600 hover:underline text-sm mt-2 inline-block">
@@ -294,7 +294,7 @@ export default function TakeTestPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F7F8FC] flex items-center justify-center">
+      <div className="min-h-screen bg-[#fcfbfe] flex items-center justify-center">
         <div className="relative w-16 h-16">
           <div className="absolute inset-0 rounded-full border-4 border-violet-100" />
           <div className="absolute inset-0 rounded-full border-4 border-violet-600 border-t-transparent animate-spin" />
@@ -305,7 +305,7 @@ export default function TakeTestPage({
 
   if (!attempt) {
     return (
-      <div className="min-h-screen bg-[#F7F8FC] flex items-center justify-center">
+      <div className="min-h-screen bg-[#fcfbfe] flex items-center justify-center">
         <div className="text-center">
           <p className="text-slate-500 font-medium">Attempt not found.</p>
           <a href="/student/assessments" className="text-violet-600 hover:underline text-sm mt-2 inline-block">
@@ -323,13 +323,13 @@ export default function TakeTestPage({
   const totalQ        = questions.length
 
   if (!q) {
-    return <div className="min-h-screen bg-[#F7F8FC] flex items-center justify-center text-slate-500">No questions found.</div>
+    return <div className="min-h-screen bg-[#fcfbfe] flex items-center justify-center text-slate-500">No questions found.</div>
   }
 
   const currentAnswer = answers[q.id] ?? {}
 
   return (
-    <div className="min-h-screen bg-[#F7F8FC] flex flex-col">
+    <div className="min-h-screen bg-[#fcfbfe] flex flex-col">
       {/* ── Top progress bar ── */}
       <div className="h-1 bg-slate-200 sticky top-0 z-20">
         <div
@@ -340,16 +340,15 @@ export default function TakeTestPage({
 
       {/* ── Header bar ── */}
       <header
-        className="sticky top-1 z-10 px-6 py-3 flex items-center justify-between shadow-lg"
-        style={{ background: '#1E1145' }}
+        className="sticky top-1 z-10 px-4 sm:px-6 py-3 flex items-center justify-between gap-3 border-b border-[#eae6ef] bg-white/95 backdrop-blur-sm"
       >
         <div className="flex items-center gap-4">
-          <Logo size="sm" theme="white" iconOnly />
+          <Logo size="sm" iconOnly />
           <div className="hidden sm:block">
-            <p className="text-white font-heading font-semibold text-sm truncate max-w-xs">
+            <p className="text-slate-900 font-semibold text-sm truncate max-w-xs">
               {attempt.assessment.title}
             </p>
-            <p className="text-white/50 text-xs">
+            <p className="text-slate-500 text-xs">
               {answeredCount} of {totalQ} answered
             </p>
           </div>
@@ -358,7 +357,7 @@ export default function TakeTestPage({
         <div className="flex items-center gap-3">
           {/* Violation badge */}
           {violations > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-red-500/20 text-red-400 text-xs font-bold">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-red-50 text-red-700 text-xs font-bold">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
@@ -367,7 +366,7 @@ export default function TakeTestPage({
             </div>
           )}
           {violations === 0 && (
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/10 text-white/50 text-xs font-semibold">
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-xs font-semibold">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -380,8 +379,8 @@ export default function TakeTestPage({
           <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-mono text-sm
                           font-bold transition-all ${
             isLow
-              ? 'bg-red-500/20 text-red-400 animate-pulse'
-              : 'bg-white/10 text-white'
+              ? 'bg-red-50 text-red-700 animate-pulse'
+              : 'bg-violet-50 text-violet-800'
           }`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="10" strokeWidth="1.8" />
@@ -393,8 +392,7 @@ export default function TakeTestPage({
           <button
             onClick={() => void handleSubmit(false)}
             disabled={submitting}
-            className="bg-emerald-500 hover:bg-emerald-600 active:scale-[0.97] disabled:opacity-60
-                       text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all shadow-sm"
+            className="btn-primary !min-h-10 !px-4 !py-2"
           >
             {submitting ? 'Submitting…' : 'Submit Test'}
           </button>
@@ -451,7 +449,7 @@ export default function TakeTestPage({
                 <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
                   <circle cx="24" cy="24" r="20" fill="none" stroke="#e2e8f0" strokeWidth="4" />
                   <circle cx="24" cy="24" r="20" fill="none"
-                          stroke={isLow ? '#ef4444' : '#7c3aed'}
+                          stroke={isLow ? '#ef4444' : '#7545cf'}
                           strokeWidth="4"
                           strokeDasharray={`${2 * Math.PI * 20}`}
                           strokeDashoffset={`${2 * Math.PI * 20 * (1 - timePct / 100)}`}

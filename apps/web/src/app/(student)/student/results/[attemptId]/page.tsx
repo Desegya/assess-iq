@@ -226,7 +226,7 @@ export default function ResultsPage({
                 key={i}
                 className="absolute w-2 h-2 rounded-full opacity-30 animate-fade-in"
                 style={{
-                  background: ['#7c3aed','#10b981','#f59e0b','#3b82f6'][i % 4],
+                  background: ['#7545cf','#10b981','#f59e0b','#3b82f6'][i % 4],
                   left: `${10 + i * 12}%`,
                   top: `${5 + (i % 3) * 15}%`,
                   animationDelay: `${i * 100}ms`,

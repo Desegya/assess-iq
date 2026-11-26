@@ -257,7 +257,7 @@ export default function AnalyticsPage() {
               <MiniRing
                 value={overview?.passRate ?? null}
                 label="Pass Rate"
-                color="#7c3aed"
+                color="#7545cf"
               />
             </div>
           )}
