@@ -12,7 +12,7 @@ interface Question {
   questionText: string
   questionType: 'MCQ' | 'TRUE_FALSE' | 'SHORT_ANSWER' | 'THEORY'
   options?: McqOption[]
-  correctAnswer: string
+  correctAnswer?: string   // withheld when the teacher turns off answer review
   explanation?: string
   difficulty: string
 }
@@ -194,7 +194,9 @@ export default function ResultsPage({
     ? Math.round((new Date(attempt.submittedAt).getTime() - new Date(attempt.startedAt).getTime()) / 60000)
     : null
 
-  const isPass = percent >= 70
+  const awaitingMarks = attempt.status === 'SUBMITTED' || attempt.status === 'AUTO_SUBMITTED'
+  const reviewHidden  = questions.every(aq => aq.question.correctAnswer === undefined)
+  const isPass = !awaitingMarks && percent >= 70
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -259,6 +261,22 @@ export default function ResultsPage({
           </div>
         </div>
       </div>
+
+      {awaitingMarks && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-5 py-4 mb-6 text-sm">
+          <p className="font-semibold">Your teacher is still marking your written answers.</p>
+          <p className="mt-1">
+            The score above counts only the questions marked so far. It will update when marking is finished.
+            {attempt.status === 'AUTO_SUBMITTED' && ' Your test was submitted automatically when time ran out.'}
+          </p>
+        </div>
+      )}
+
+      {reviewHidden && (
+        <div className="bg-slate-50 border border-slate-200 text-slate-600 rounded-2xl px-5 py-4 mb-6 text-sm">
+          Your teacher has not released the answers for this assessment.
+        </div>
+      )}
 
       {/* ── Question review ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden
@@ -386,9 +404,11 @@ export default function ResultsPage({
                             <span className="font-semibold">Your answer: </span>{ans.textAnswer}
                           </div>
                         )}
-                        <div className="text-sm bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-3 py-2.5">
-                          <span className="font-semibold">Model answer: </span>{q.correctAnswer}
-                        </div>
+                        {q.correctAnswer !== undefined && (
+                          <div className="text-sm bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-3 py-2.5">
+                            <span className="font-semibold">Model answer: </span>{q.correctAnswer}
+                          </div>
+                        )}
                       </div>
                     )}
 

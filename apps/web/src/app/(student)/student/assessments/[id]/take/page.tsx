@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, use } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, use } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useApi } from '@/hooks/use-api'
 import { Logo } from '@/components/ui/Logo'
@@ -114,6 +114,8 @@ interface AssessmentQuestion {
 interface AttemptWithAssessment {
   id: string
   status: string
+  deadline: string | null
+  serverNow: string
   assessment: {
     id: string
     title: string
@@ -131,24 +133,46 @@ interface AttemptWithAssessment {
 
 // ─── Timer hook ───────────────────────────────────────────────────────────────
 
-function useTimer(durationMinutes: number, onExpire: () => void) {
-  const [secondsLeft, setSecondsLeft] = useState(durationMinutes * 60)
+function useTimer(
+  durationMinutes: number,
+  deadline: string | null | undefined,
+  serverNow: string | null | undefined,
+  onExpire: () => void,
+) {
+  // Count down to the server's deadline, corrected for this device's clock skew,
+  // so reloading the page never restarts the clock.
+  const endAt = useMemo(() => {
+    if (!deadline) return null
+    const skew = serverNow ? Date.now() - new Date(serverNow).getTime() : 0
+    return new Date(deadline).getTime() + skew
+  }, [deadline, serverNow])
+
+  const [now, setNow] = useState(() => Date.now())
   const onExpireRef = useRef(onExpire)
   onExpireRef.current = onExpire
+  const expiredRef = useRef(false)
+
+  const secondsLeft = endAt === null ? null : Math.max(0, Math.ceil((endAt - now) / 1000))
 
   useEffect(() => {
-    if (secondsLeft <= 0) {
+    if (endAt === null) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [endAt])
+
+  useEffect(() => {
+    if (secondsLeft === 0 && !expiredRef.current) {
+      expiredRef.current = true
       onExpireRef.current()
-      return
     }
-    const t = setTimeout(() => setSecondsLeft(s => s - 1), 1000)
-    return () => clearTimeout(t)
   }, [secondsLeft])
+
+  if (secondsLeft === null) return { display: '--:--', isLow: false, pct: 100 }
 
   const mm     = String(Math.floor(secondsLeft / 60)).padStart(2, '0')
   const ss     = String(secondsLeft % 60).padStart(2, '0')
   const isLow  = secondsLeft < 120
-  const pct    = durationMinutes > 0 ? (secondsLeft / (durationMinutes * 60)) * 100 : 0
+  const pct    = durationMinutes > 0 ? Math.min(100, (secondsLeft / (durationMinutes * 60)) * 100) : 100
 
   return { display: `${mm}:${ss}`, isLow, pct }
 }
@@ -190,6 +214,11 @@ export default function TakeTestPage({
       await apiRef.current.post(`/attempts/${attemptId}/submit`, {})
       router.push(`/student/results/${attemptId}`)
     } catch (err) {
+      // The server closes attempts whose time ran out; the work is saved, so show the result
+      if (err instanceof Error && /already (been )?submitted/i.test(err.message)) {
+        router.push(`/student/results/${attemptId}`)
+        return
+      }
       setError(err instanceof Error ? err.message : 'Submission failed. Please try again.')
       submittedRef.current = false
       setSubmitting(false)
@@ -201,6 +230,10 @@ export default function TakeTestPage({
     void apiRef.current
       .get<AttemptWithAssessment>(`/attempts/${attemptId}`)
       .then(data => {
+        if (data.status !== 'IN_PROGRESS') {
+          router.replace(`/student/results/${attemptId}`)
+          return
+        }
         setAttempt(data)
         const seed: Record<string, { selected?: string; text?: string }> = {}
         data.answers.forEach(a => {
@@ -210,10 +243,12 @@ export default function TakeTestPage({
       })
       .catch(() => undefined)
       .finally(() => setLoading(false))
-  }, [attemptId])
+  }, [attemptId, router])
 
   const { display: timeDisplay, isLow, pct: timePct } = useTimer(
-    attempt?.assessment.durationMinutes ?? 60,
+    attempt?.assessment.durationMinutes ?? 0,
+    attempt?.deadline,
+    attempt?.serverNow,
     () => void handleSubmit(true),
   )
 
@@ -232,7 +267,16 @@ export default function TakeTestPage({
         selectedAnswer: value.selected ?? undefined,
         textAnswer: value.text ?? undefined,
       })
-      .catch(() => undefined)
+      .then(() => setError(null))
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : ''
+        if (/time is up|already been submitted/i.test(message)) {
+          submittedRef.current = true
+          router.push(`/student/results/${attemptId}`)
+          return
+        }
+        setError('Your last answer was not saved. Check your connection and select it again.')
+      })
   }
 
   if (!attemptId) {
