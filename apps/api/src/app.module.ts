@@ -8,6 +8,7 @@ import { THROTTLERS } from './modules/auth/throttle'
 import { UsersModule } from './modules/users/users.module'
 import { OrganizationsModule } from './modules/organizations/organizations.module'
 import { CoursesModule } from './modules/courses/courses.module'
+import { ClassesModule } from './modules/classes/classes.module'
 import { TopicsModule } from './modules/topics/topics.module'
 import { QuestionsModule } from './modules/questions/questions.module'
 import { AssessmentsModule } from './modules/assessments/assessments.module'
@@ -50,6 +51,7 @@ import { RuntimeSettingsModule } from './modules/operations/runtime-settings.mod
     ExamCalendarModule,
     OrganizationsModule,
     CoursesModule,
+    ClassesModule,
     TopicsModule,
     QuestionsModule,
     AssessmentsModule,

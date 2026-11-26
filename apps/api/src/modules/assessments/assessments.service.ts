@@ -104,12 +104,11 @@ export class AssessmentsService {
   // ─── Get published assessments for students ───────────────────────────────
 
   async findPublished(user: AuthUser) {
-    if (!user.organizationId) return []
-
+    // Students see assessments only for classes they are in (ACTIVE enrollment)
     return this.prisma.assessment.findMany({
       where: {
-        organizationId: user.organizationId,
         status: { in: ['PUBLISHED', 'ACTIVE'] },
+        course: { enrollments: { some: { studentId: user.id, status: 'ACTIVE' } } },
       },
       orderBy: { createdAt: 'desc' },
       select: {

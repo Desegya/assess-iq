@@ -31,14 +31,12 @@ export class AttemptsService {
   // ─── Start an attempt ──────────────────────────────────────────────────────
 
   async start(dto: StartAttemptDto, user: AuthUser) {
-    // Students only ever take their own organisation's assessments
-    if (!user.organizationId) throw new NotFoundException('Assessment not found or not published')
-
+    // Students only take assessments for classes they are in
     const assessment = await this.prisma.assessment.findFirst({
       where: {
         id: dto.assessmentId,
-        organizationId: user.organizationId,
         status: { in: ['PUBLISHED', 'ACTIVE'] },
+        course: { enrollments: { some: { studentId: user.id, status: 'ACTIVE' } } },
       },
       select: { id: true, totalQuestions: true, startTime: true, endTime: true, settings: true },
     })

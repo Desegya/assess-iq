@@ -21,9 +21,13 @@ export class AnalyticsService {
       totalQuestions,
       totalCourses,
     ] = await Promise.all([
-      // Students in org
+      // Students on this lecturer's/org's class lists (students no longer belong to the org)
       this.prisma.user.count({
-        where: { ...orgFilter, role: 'STUDENT', status: 'ACTIVE' },
+        where: {
+          role: 'STUDENT',
+          status: 'ACTIVE',
+          enrollments: { some: { status: 'ACTIVE', course: orgFilter } },
+        },
       }),
       // Assessments (teacher-scoped if teacher)
       this.prisma.assessment.count({
@@ -236,5 +240,31 @@ export class AnalyticsService {
     )
 
     return rows.sort((a, b) => b.attemptCount - a.attemptCount)
+  }
+
+  // ── KwikEval platform totals (super-admin console) ────────────────────────
+
+  async getPlatformOverview() {
+    const kwikevalOrg = { organizationId: { not: null } }
+    const [lecturers, students, classes, assessments, attempts, ai] = await Promise.all([
+      this.prisma.user.count({ where: { role: { in: ['ORG_ADMIN', 'TEACHER'] }, status: 'ACTIVE' } }),
+      this.prisma.user.count({ where: { role: 'STUDENT', enrollments: { some: { status: 'ACTIVE' } } } }),
+      this.prisma.course.count({ where: kwikevalOrg }),
+      this.prisma.assessment.count({ where: { status: { not: 'DRAFT' } } }),
+      this.prisma.attempt.count({ where: { status: { not: 'IN_PROGRESS' } } }),
+      this.prisma.aIUsageLog.aggregate({
+        where: kwikevalOrg,
+        _sum: { inputTokens: true, outputTokens: true, costUsd: true },
+      }),
+    ])
+    return {
+      lecturers,
+      students,
+      classes,
+      assessments,
+      attempts,
+      aiTokens: (ai._sum.inputTokens ?? 0) + (ai._sum.outputTokens ?? 0),
+      aiCostUsd: Number((ai._sum.costUsd ?? 0).toFixed(2)),
+    }
   }
 }

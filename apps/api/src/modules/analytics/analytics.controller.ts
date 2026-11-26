@@ -14,6 +14,13 @@ import { UserRole, AuthUser } from '@assessiq/types'
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
+  @Get('platform')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'KwikEval platform totals (super-admin)' })
+  getPlatform() {
+    return this.analyticsService.getPlatformOverview()
+  }
+
   @Get('overview')
   @ApiOperation({ summary: 'Org/teacher overview stats' })
   getOverview(@CurrentUser() user: AuthUser) {
