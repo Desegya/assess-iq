@@ -83,7 +83,7 @@ export class ResultsExportService {
     const classLabel = [assessment.course.courseCode, assessment.course.title].filter(Boolean).join(' · ')
     return render(format, {
       title: assessment.title,
-      subtitle: `${classLabel} · ${rows.length} students · exported ${today()}`,
+      subtitle: `${classLabel} · ${plural(rows.length, 'student')} · exported ${today()}`,
       filename: `${slug(assessment.title)}-results-${today()}`,
       columns: [
         { header: 'Student', width: 26 },
@@ -149,7 +149,7 @@ export class ResultsExportService {
     const label = [course.courseCode, course.title].filter(Boolean).join(' · ')
     return render(format, {
       title: `${label} gradebook`,
-      subtitle: `${tests.length} tests · ${rows.length} students · percentages; blank = not attempted · exported ${today()}`,
+      subtitle: `${plural(tests.length, 'test')} · ${plural(rows.length, 'student')} · percentages; blank = not attempted · exported ${today()}`,
       filename: `${slug(course.courseCode || course.title)}-gradebook-${today()}`,
       columns: [
         { header: 'Student', width: 26 },
@@ -267,5 +267,6 @@ function toPdf(table: Table): Promise<Buffer> {
   })
 }
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const today = () => new Date().toISOString().slice(0, 10)
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'results'

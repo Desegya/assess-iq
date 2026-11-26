@@ -50,7 +50,8 @@ export function configureApp(app: NestExpressApplication, corsOrigins = allowedO
   app.useBodyParser('json', { limit: '2mb' })
   app.setGlobalPrefix('api', { exclude: ['health', 'health/ready'] })
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })
-  app.enableCors({ origin: corsOrigins, credentials: true })
+  // Content-Disposition carries export file names to the browser
+  app.enableCors({ origin: corsOrigins, credentials: true, exposedHeaders: ['Content-Disposition'] })
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
